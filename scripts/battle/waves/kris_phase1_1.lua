@@ -1,5 +1,6 @@
 local KrisPhase1_1, super = Class(Wave)
 local ShaderFX = require("src.engine.drawfx.shaderfx")
+local Rectangle = require("src.engine.objects.rectangle")
 
 local function makeHardCircle(size, scale, inner_radius)
     scale = scale or { 1, 1 }
@@ -106,6 +107,7 @@ function KrisPhase1_1:onStart()
         radius  = 1.0,
     }, false, 2)
 
+    -- 圆
     local texture = makeHardCircle(size, { 0.05, 1 }, 40)
     local circle = Sprite(texture, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
     circle:setOrigin(0.5, 0.5)
@@ -116,12 +118,35 @@ function KrisPhase1_1:onStart()
     circle.scale_x = 2.5
     circle.scale_y = 2.5
 
-    circle.color = { 1, 0, 0 }
-    Game.battle.timer:tween(15. / 60, circle, { scale_x = 0 })
-    -- Game.battle.timer:tween(15 / 60, self.distort_fx.vars, { yamp = 0  })
+    -- 竖线
+    local line_h = circle.height * circle.scale_y
+    local line = Rectangle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 1, line_h)
+    line:setOrigin(0.5, 0.5)
+    line.color = { 1, 1, 1 }
+    line.alpha = 0
+    line.layer = -1
+    self:addChild(line)
 
-    self.timer:after(4. / 60, function()
+    -- 圆形缩小
+    circle.color = { 1, 0, 0 }
+    Game.battle.timer:tween(15 / 60, circle, { scale_x = 0 })
+
+    -- 圆形快消失时线以白色出现
+    self.timer:after(10 / 60, function()
+        Game.battle.timer:tween(5 / 60, line, { alpha = 1 }, "out-quad")
+    end)
+
+    self.timer:after(4 / 60, function()
         circle.color = { 1, 1, 1 }
+    end)
+
+    -- 15/60 后，线变红 → 再0.5秒渐变消失+下移
+    self.timer:after(15 / 60, function()
+        line.color = { 1, 0, 0 }
+        Game.battle.timer:tween(0.5, line, {
+            alpha = 0,
+            y     = line.y + line_h,
+        }, "out-quad")
     end)
 end
 
