@@ -1,27 +1,19 @@
 local KrisPhase1_1, super = Class(Wave)
 local ShaderFX = require("src.engine.drawfx.shaderfx")
 
-local function makeSoftCircle(size, blur, scale)
-    scale = scale or {1, 1}
+local function makeHardCircle(size, scale, inner_radius)
+    scale = scale or { 1, 1 }
+    inner_radius = inner_radius or 0
     local sx, sy = scale[1], scale[2]
     local imagedata = love.image.newImageData(size, size)
     local cx, cy = (size - 1) / 2, (size - 1) / 2
     local radius = cx
-    local inner = radius - blur
     for y = 0, size - 1 do
         for x = 0, size - 1 do
             local dx = (x - cx) / sx
             local dy = (y - cy) / sy
             local dist = math.sqrt(dx * dx + dy * dy)
-            local alpha
-            if dist <= inner then
-                alpha = 1
-            elseif dist >= radius then
-                alpha = 0
-            else
-                local t = (dist - inner) / blur
-                alpha = 1 - t * t * (3 - 2 * t)
-            end
+            local alpha = (dist > inner_radius and dist <= radius) and 1 or 0
             imagedata:setPixel(x, y, 1, 1, 1, alpha)
         end
     end
@@ -35,8 +27,10 @@ end
 
 function KrisPhase1_1:onStart()
     local size = 200
+    local ts = { size, size }
 
-    self.fx = ShaderFX(love.graphics.newShader([[
+    -- 1. 形变 shader（先运行）
+    self.distort_fx = ShaderFX(love.graphics.newShader([[
         extern float phase;
         extern float yspace;
         extern float xspace;
@@ -58,15 +52,77 @@ function KrisPhase1_1:onStart()
         yamp    = -3.0 * 0.08,
         xspace  = 20.0,
         xamp    = -10.0,
-        texSize = {size, size},
-    })
+        texSize = ts,
+    }, false, 0)
 
-    local texture = makeSoftCircle(size, 25, {0.05, 1})
+    -- 2-3. 水平+垂直高斯模糊（在形变之后）
+    self.hblur_fx = ShaderFX(love.graphics.newShader([[
+        extern vec2 texSize;
+        extern float radius;
+
+        vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+            vec2 d = vec2(radius / texSize.x, 0.0);
+            float w0 = 0.227, w1 = 0.194, w2 = 0.121, w3 = 0.054, w4 = 0.016;
+            vec4 c = Texel(tex, uv) * w0;
+            c += Texel(tex, uv - d    ) * w1;
+            c += Texel(tex, uv + d    ) * w1;
+            c += Texel(tex, uv - d*2.0) * w2;
+            c += Texel(tex, uv + d*2.0) * w2;
+            c += Texel(tex, uv - d*3.0) * w3;
+            c += Texel(tex, uv + d*3.0) * w3;
+            c += Texel(tex, uv - d*4.0) * w4;
+            c += Texel(tex, uv + d*4.0) * w4;
+            return c * color;
+        }
+    ]]), {
+        texSize = function()
+            local w, h = love.graphics.getDimensions(); return { w, h }
+        end,
+        radius  = 1.0,
+    }, false, 1)
+
+    self.vblur_fx = ShaderFX(love.graphics.newShader([[
+        extern vec2 texSize;
+        extern float radius;
+
+        vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+            vec2 d = vec2(0.0, radius / texSize.y);
+            float w0 = 0.227, w1 = 0.194, w2 = 0.121, w3 = 0.054, w4 = 0.016;
+            vec4 c = Texel(tex, uv) * w0;
+            c += Texel(tex, uv - d    ) * w1;
+            c += Texel(tex, uv + d    ) * w1;
+            c += Texel(tex, uv - d*2.0) * w2;
+            c += Texel(tex, uv + d*2.0) * w2;
+            c += Texel(tex, uv - d*3.0) * w3;
+            c += Texel(tex, uv + d*3.0) * w3;
+            c += Texel(tex, uv - d*4.0) * w4;
+            c += Texel(tex, uv + d*4.0) * w4;
+            return c * color;
+        }
+    ]]), {
+        texSize = function()
+            local w, h = love.graphics.getDimensions(); return { w, h }
+        end,
+        radius  = 1.0,
+    }, false, 2)
+
+    local texture = makeHardCircle(size, { 0.05, 1 }, 40)
     local circle = Sprite(texture, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
     circle:setOrigin(0.5, 0.5)
-    circle:addFX(self.fx)
-
+    circle:addFX(self.distort_fx)
+    circle:addFX(self.hblur_fx)
+    circle:addFX(self.vblur_fx)
     self:addChild(circle)
+    circle.scale_x = 2.5
+    circle.scale_y = 2.5
+
+    circle.color = { 1, 0, 0 }
+    Game.battle.timer:tween(15. / 60, circle, { scale_x = 0 })
+    -- Game.battle.timer:tween(15 / 60, self.distort_fx.vars, { yamp = 0  })
+
+    self.timer:after(4. / 60, function()
+        circle.color = { 1, 1, 1 }
+    end)
 end
 
 function KrisPhase1_1:update()
