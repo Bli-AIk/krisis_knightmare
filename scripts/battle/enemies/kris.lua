@@ -50,11 +50,15 @@ function Kris:init()
     self:registerAct("Smile")
     -- Register party act with Ralsei called "Tell Story"
     -- (second argument is description, usually empty)
-    self:registerAct("Tell Story", "", {"ralsei"})
+    self:registerAct("Tell Story", "", { "ralsei" })
 end
 
 function Kris:selectWave()
     local turn = Game.battle.turn_count
+
+    ---[[ 临时强制设置
+    do return "kris_phase1_" .. 1 end
+    --]]
 
     if turn <= 5 then
         self.selected_wave = "kris_phase1_" .. turn
@@ -75,7 +79,6 @@ function Kris:onAct(battler, name)
             "* You smile.[wait:5]\n* The dummy smiles back.",
             "* It seems the dummy just wanted\nto see you happy."
         }
-
     elseif name == "Tell Story" then
         -- Loop through all enemies
         for _, enemy in ipairs(Game.battle.enemies) do
@@ -83,7 +86,6 @@ function Kris:onAct(battler, name)
             enemy:setTired(true)
         end
         return "* You and Ralsei told the dummy\na bedtime story.\n* The enemies became [color:blue]TIRED[color:reset]..."
-
     elseif name == "Standard" then --X-Action
         -- Give the enemy 50% mercy
         self:addMercy(50)
@@ -96,7 +98,7 @@ function Kris:onAct(battler, name)
             return
         else
             -- Text for any other character (like Noelle)
-            return "* "..battler.chara:getName().." straightened the\ndummy's hat."
+            return "* " .. battler.chara:getName() .. " straightened the\ndummy's hat."
         end
     end
 
