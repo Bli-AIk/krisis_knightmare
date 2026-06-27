@@ -1,10 +1,9 @@
-local Dummy, super = Class(EnemyBattler)
+local Kris, super = Class(EnemyBattler)
 
-function Dummy:init()
+function Kris:init()
     super.init(self)
 
-    -- Enemy name
-    self.name = "Dummy"
+    self.name = "Kris"
     -- Sets the actor, which handles the enemy's sprites (see scripts/data/actors/dummy.lua)
     self:setActor("dummy")
 
@@ -23,9 +22,11 @@ function Dummy:init()
 
     -- List of possible wave ids, randomly picked each turn
     self.waves = {
-        "basic",
-        "aiming",
-        "movingarena"
+        "kris_phase1_1",
+        "kris_phase1_2",
+        "kris_phase1_3",
+        "kris_phase1_4",
+        "kris_phase1_5",
     }
 
     -- Dialogue randomly displayed in the enemy's speech bubble
@@ -52,7 +53,18 @@ function Dummy:init()
     self:registerAct("Tell Story", "", {"ralsei"})
 end
 
-function Dummy:onAct(battler, name)
+function Kris:selectWave()
+    local turn = Game.battle.turn_count
+
+    if turn <= 5 then
+        self.selected_wave = "kris_phase1_" .. turn
+        return self.selected_wave
+    end
+
+    return super.selectWave(self)
+end
+
+function Kris:onAct(battler, name)
     if name == "Smile" then
         -- Give the enemy 100% mercy
         self:addMercy(100)
@@ -93,4 +105,4 @@ function Dummy:onAct(battler, name)
     return super.onAct(self, battler, name)
 end
 
-return Dummy
+return Kris

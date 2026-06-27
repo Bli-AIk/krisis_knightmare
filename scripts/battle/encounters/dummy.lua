@@ -12,7 +12,7 @@ function Dummy:init()
     self.background = true
 
     -- Add the dummy enemy to the encounter
-    self:addEnemy("dummy")
+    self:addEnemy("kris")
 
     --- Uncomment this line to add another!
     --self:addEnemy("dummy")
