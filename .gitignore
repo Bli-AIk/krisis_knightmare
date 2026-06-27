@@ -1,0 +1,4 @@
+.vscode/
+*.tiled-session
+/.DS_Store
+/target
