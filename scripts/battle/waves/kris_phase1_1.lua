@@ -107,19 +107,29 @@ function KrisPhase1_1:onStart()
         radius  = 1.0,
     }, false, 2)
 
-    -- 圆
-    local texture = makeHardCircle(size, { 0.05, 1 }, 40)
-    local circle = Sprite(texture, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
-    circle:setOrigin(0.5, 0.5)
-    circle:addFX(self.distort_fx)
-    circle:addFX(self.hblur_fx)
-    circle:addFX(self.vblur_fx)
-    self:addChild(circle)
-    circle.scale_x = 2.5
-    circle.scale_y = 2.5
+    -- 圆（实心 + 空心）
+    local tex_solid = makeHardCircle(size, { 0.05, 1 }, 0)
+    local tex_donut = makeHardCircle(size, { 0.05, 1 }, 40)
+
+    local function makeCircle(tex, alpha)
+        local c = Sprite(tex, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+        c:setOrigin(0.5, 0.5)
+        c:addFX(self.distort_fx)
+        c:addFX(self.hblur_fx)
+        c:addFX(self.vblur_fx)
+        c.scale_x = 3
+        c.scale_y = 2.5
+        c.color = { 1, 0, 0 }
+        c.alpha = alpha
+        self:addChild(c)
+        return c
+    end
+
+    local circle_solid = makeCircle(tex_solid, 1)  -- 初始可见
+    local circle_donut = makeCircle(tex_donut, 0)  -- 初始隐藏
 
     -- 竖线
-    local line_h = circle.height * circle.scale_y
+    local line_h = circle_solid.height * circle_solid.scale_y
     local line = Rectangle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 1, line_h)
     line:setOrigin(0.5, 0.5)
     line.color = { 1, 1, 1 }
@@ -127,22 +137,27 @@ function KrisPhase1_1:onStart()
     line.layer = -1
     self:addChild(line)
 
-    -- 圆形缩小
-    circle.color = { 1, 0, 0 }
-    Game.battle.timer:tween(15 / 60, circle, { scale_x = 0 })
+    -- 圆形缩小（两个一起）
+    Game.battle.timer:tween(15 / 60, circle_solid, { scale_x = 0 })
+    Game.battle.timer:tween(15 / 60, circle_donut, { scale_x = 0 })
 
     -- 圆形快消失时线以白色出现
     self.timer:after(10 / 60, function()
         Game.battle.timer:tween(5 / 60, line, { alpha = 1 }, "out-quad")
     end)
 
+    -- 变白时：实心换空心
     self.timer:after(4 / 60, function()
-        circle.color = { 1, 1, 1 }
+        circle_solid.alpha = 0
+        circle_donut.alpha = 1
+        circle_solid.color = { 1, 1, 1 }
+        circle_donut.color = { 1, 1, 1 }
     end)
 
     -- 15/60 后，线变红 → 再0.5秒渐变消失+下移
     self.timer:after(15 / 60, function()
         line.color = { 1, 0, 0 }
+        circle_donut.color = { 1, 0, 0 }
         Game.battle.timer:tween(0.5, line, {
             alpha = 0,
             y     = line.y + line_h,
