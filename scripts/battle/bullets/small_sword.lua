@@ -24,10 +24,13 @@ end
 
 function SmallSword:update()
     self.elapsed = self.elapsed + DT
-    local t = math.min(self.elapsed / self.duration, 1.0)
+    local t = self.duration > 0 and math.min(self.elapsed / self.duration, 1.0) or 1.0
     self.physics.speed = self.min_speed + (self.max_speed - self.min_speed) * t * t
 
     super.update(self)
+
+    -- 贴图剑尖朝上，需要 +π/2 才能指向飞行方向
+    self.rotation = self.physics.direction + math.pi / 2
 end
 
 return SmallSword

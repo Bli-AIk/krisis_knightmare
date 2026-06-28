@@ -329,23 +329,20 @@ function KrisPhase1_1:spawnSlash(x, y, rotation)
             y     = line.y + slide_y,
         }, "out-quad")
     end)
+
+    -- 垂直于红线方向飞出；贴图剑尖朝上，bullet内部 +π/2 转正
+    local offsets = { -100, -50, 0, 50, 100 }
+    local bullet_dir = rotation
+    for _, d in ipairs(offsets) do
+        local bx = x - math.sin(rotation) * d
+        local by = y + math.cos(rotation) * d
+        self:spawnBullet("small_sword", bx, by, bullet_dir, 5, 20, 1.5)
+    end
 end
 
 function KrisPhase1_1:onStart()
-    -- rotation 使用弧度；需要角度时传 math.rad(角度)
-    self:spawnSlash(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, math.rad(45))
-
-    self.timer:every(1 / 3, function()
-        -- Our X position is offscreen, to the right
-        local x = SCREEN_WIDTH + 20
-        -- Get a random Y position between the top and the bottom of the arena
-        local y = MathUtils.random(Game.battle.arena.top, Game.battle.arena.bottom)
-
-        -- Spawn small_sword going left, accelerating from min to max speed over duration
-        local bullet = self:spawnBullet("small_sword", x, y, math.rad(180), 5, 20, 0)
-
-        -- Dont remove the bullet offscreen, because we spawn it offscreen
-        bullet.remove_offscreen = false
+    self.timer:every(0.5, function()
+        self:spawnSlash(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, math.rad(45))
     end)
 end
 
