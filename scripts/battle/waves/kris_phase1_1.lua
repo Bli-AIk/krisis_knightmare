@@ -330,26 +330,41 @@ function KrisPhase1_1:spawnSlash(x, y, rotation)
         }, "out-quad")
     end)
 
+    local basic = 40
     -- 垂直于红线方向飞出；贴图剑尖朝上，bullet内部 +π/2 转正
-    local offsets = { -100, -50, 0, 50, 100 }
+    local offsets = { -basic * 2, -basic, 0, basic, basic * 2 }
     local bullet_dir = rotation
     for _, d in ipairs(offsets) do
         local bx = x - math.sin(rotation) * d
         local by = y + math.cos(rotation) * d
         -- 1111在这里调速度
-        self:spawnBullet("small_sword", bx, by, bullet_dir, 20, 100, 1.5)
+        self:spawnBullet("small_sword", bx, by, bullet_dir, 5, 20, 0.75)
     end
 end
 
 function KrisPhase1_1:onStart()
-    self.timer:every(1., function()
-        self:spawnSlash(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, math.rad(45))
+    -- 对轴参考图
+    self.ref_image = Assets.getTexture("debug/ref_mpv")
+
+    self.timer:every(50. / 60., function()
+        self:spawnSlash(480 + 50 - 15, 105, math.rad(360 - 199))
     end)
 end
 
 function KrisPhase1_1:update()
     -- self.fx.vars.phase = self.fx.vars.phase + 25 * DT
     super.update(self)
+end
+
+function KrisPhase1_1:draw()
+    super.draw(self)
+    if self.ref_image then
+        local r, g, b, a = love.graphics.getColor()
+        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.draw(self.ref_image, 0, 0, 0, SCREEN_WIDTH / self.ref_image:getWidth(),
+            SCREEN_HEIGHT / self.ref_image:getHeight())
+        love.graphics.setColor(r, g, b, a)
+    end
 end
 
 return KrisPhase1_1
