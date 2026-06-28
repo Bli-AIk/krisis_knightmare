@@ -45,13 +45,13 @@ function SlashParticles:init(x, y, rotation)
     -- 接近垂直的角度：只有这些方向允许长拉伸、飞很远
     self.vertical_angles = {
         -1.66, -1.60, -1.55, -1.49,
-         1.48,  1.54,  1.59,  1.66,
-         4.62,  4.70,  4.78,
+        1.48, 1.54, 1.59, 1.66,
+        4.62, 4.70, 4.78,
     }
     -- 点缀角度：保持短粒子，避免效果变成均匀圆形
     self.accent_angles = {
         -0.72, -0.38, 0.42, 0.78,
-         2.32,  2.70, 3.44, 3.86,
+        2.32, 2.70, 3.44, 3.86,
     }
 end
 
@@ -280,8 +280,8 @@ function KrisPhase1_1:spawnSlash(x, y, rotation)
         return c
     end
 
-    local circle_solid = makeCircle(self.slash_assets.solid, 1)  -- 初始可见
-    local circle_donut = makeCircle(self.slash_assets.donut, 0)  -- 初始隐藏
+    local circle_solid = makeCircle(self.slash_assets.solid, 1) -- 初始可见
+    local circle_donut = makeCircle(self.slash_assets.donut, 0) -- 初始隐藏
 
     local slash_particles = SlashParticles(x, y, rotation)
     slash_particles.layer = 5
@@ -334,6 +334,19 @@ end
 function KrisPhase1_1:onStart()
     -- rotation 使用弧度；需要角度时传 math.rad(角度)
     self:spawnSlash(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, math.rad(45))
+
+    self.timer:every(1 / 3, function()
+        -- Our X position is offscreen, to the right
+        local x = SCREEN_WIDTH + 20
+        -- Get a random Y position between the top and the bottom of the arena
+        local y = MathUtils.random(Game.battle.arena.top, Game.battle.arena.bottom)
+
+        -- Spawn small_sword going left, accelerating from min to max speed over duration
+        local bullet = self:spawnBullet("small_sword", x, y, math.rad(180), 5, 20, 0)
+
+        -- Dont remove the bullet offscreen, because we spawn it offscreen
+        bullet.remove_offscreen = false
+    end)
 end
 
 function KrisPhase1_1:update()
