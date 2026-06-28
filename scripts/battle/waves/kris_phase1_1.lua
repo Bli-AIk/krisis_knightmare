@@ -343,28 +343,32 @@ function KrisPhase1_1:spawnSlash(x, y, rotation)
 end
 
 function KrisPhase1_1:onStart()
-    -- 对轴参考图
-    self.ref_image = Assets.getTexture("debug/ref_mpv")
+    self.slashes = {
+        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 199) },
+        { x = 480 + 50 - 20, y = 220 + 25,  r = math.rad(360 - 167) },
+        { x = 480 + 50,      y = 105 + 40,  r = math.rad(360 - 199) },
+        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173) },
+        { x = 480 + 50 - 15, y = 105 + 40,  r = math.rad(360 - 205) },
+        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173) },
+        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 212) },
+    }
+    self.slash_index = 0
 
     self.timer:every(50. / 60., function()
-        self:spawnSlash(480 + 50 - 15, 105, math.rad(360 - 199))
+        self.slash_index = self.slash_index + 1
+        local s = self.slashes[self.slash_index]
+        if s then
+            self:spawnSlash(s.x, s.y, s.r)
+        end
     end)
 end
 
 function KrisPhase1_1:update()
-    -- self.fx.vars.phase = self.fx.vars.phase + 25 * DT
     super.update(self)
 end
 
 function KrisPhase1_1:draw()
     super.draw(self)
-    if self.ref_image then
-        local r, g, b, a = love.graphics.getColor()
-        love.graphics.setColor(1, 1, 1, 0.3)
-        love.graphics.draw(self.ref_image, 0, 0, 0, SCREEN_WIDTH / self.ref_image:getWidth(),
-            SCREEN_HEIGHT / self.ref_image:getHeight())
-        love.graphics.setColor(r, g, b, a)
-    end
 end
 
 return KrisPhase1_1

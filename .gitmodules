@@ -1,3 +1,6 @@
 [submodule ".helix"]
 	path = .helix
 	url = git@github.com:Bli-AIk/kristal-helix-config.git
+[submodule "libraries/wave-video-debug"]
+	path = libraries/wave-video-debug
+	url = git@github.com:Bli-AIk/kristal-wave-video-visuals-debug.git
