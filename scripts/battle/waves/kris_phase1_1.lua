@@ -336,12 +336,13 @@ function KrisPhase1_1:spawnSlash(x, y, rotation)
     for _, d in ipairs(offsets) do
         local bx = x - math.sin(rotation) * d
         local by = y + math.cos(rotation) * d
-        self:spawnBullet("small_sword", bx, by, bullet_dir, 5, 20, 1.5)
+        -- 1111在这里调速度
+        self:spawnBullet("small_sword", bx, by, bullet_dir, 20, 100, 1.5)
     end
 end
 
 function KrisPhase1_1:onStart()
-    self.timer:every(0.5, function()
+    self.timer:every(1., function()
         self:spawnSlash(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, math.rad(45))
     end)
 end
