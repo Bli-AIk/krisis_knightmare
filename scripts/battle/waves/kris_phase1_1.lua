@@ -2,6 +2,10 @@ local KrisPhase1_1, super = Class(Wave)
 local ShaderFX = require("src.engine.drawfx.shaderfx")
 local Rectangle = require("src.engine.objects.rectangle")
 
+local function randomBetween(min, max)
+    return min + (max - min) * love.math.random()
+end
+
 local function makeHardCircle(size, scale, inner_radius)
     scale = scale or { 1, 1 }
     inner_radius = inner_radius or 0
@@ -19,6 +23,134 @@ local function makeHardCircle(size, scale, inner_radius)
         end
     end
     return love.graphics.newImage(imagedata)
+end
+
+local SlashParticles, slash_super = Class(Object)
+
+function SlashParticles:init(x, y)
+    slash_super.init(self, x, y)
+
+    self.visible = false
+    self.emit_time = 0
+    self.emit_duration = 11 / 60
+    self.hide_time = 0
+    self.emitting = false
+    self.rx = 10
+    self.ry = 152
+    self.next_emit = 0
+    self.particles = {}
+    -- 接近垂直的角度：只有这些方向允许长拉伸、飞很远
+    self.vertical_angles = {
+        -1.66, -1.60, -1.55, -1.49,
+         1.48,  1.54,  1.59,  1.66,
+         4.62,  4.70,  4.78,
+    }
+    -- 点缀角度：保持短粒子，避免效果变成均匀圆形
+    self.accent_angles = {
+        -0.72, -0.38, 0.42, 0.78,
+         2.32,  2.70, 3.44, 3.86,
+    }
+end
+
+function SlashParticles:startEmission()
+    self.visible = true
+    self.emitting = true
+    self.emit_time = 0
+    self.hide_time = 0
+    self.next_emit = 0
+    self.particles = {}
+
+    -- 初始爆发数量
+    for _ = 1, 4 * 4 do
+        self:spawnParticle()
+    end
+end
+
+function SlashParticles:stopEmission()
+    self.emitting = false
+    self.hide_time = 0
+end
+
+function SlashParticles:spawnParticle()
+    local angle_pool = love.math.random() < 0.8 and self.vertical_angles or self.accent_angles
+    local theta = angle_pool[love.math.random(1, #angle_pool)] + randomBetween(-0.08, 0.08)
+    local dx, dy = math.cos(theta), math.sin(theta)
+    local vertical_degrees = math.deg(math.asin(math.min(math.abs(dy), 1)))
+    -- 设多少度以上使用长拉伸、远飞参数
+    local vertical_amount = vertical_degrees >= 85 and 1 or 0
+    local speed = randomBetween(120, 260) + randomBetween(520, 820) * vertical_amount
+    local lifetime = randomBetween(0.12, 0.28) + randomBetween(0.55, 0.95) * vertical_amount
+    local length = randomBetween(16, 34) + randomBetween(78, 150) * vertical_amount
+    local width = vertical_amount > 0.5 and (love.math.random() < 0.55 and 2 or 1) or 1
+    local base_x = dx * self.rx
+    local base_y = dy * self.ry
+
+    table.insert(self.particles, {
+        x = base_x,
+        y = base_y,
+        dx = dx,
+        dy = dy,
+        speed = speed,
+        lifetime = lifetime,
+        length = length,
+        width = width,
+        age = 0,
+    })
+end
+
+function SlashParticles:update()
+    if self.emitting then
+        self.emit_time = self.emit_time + DT
+        self.next_emit = self.next_emit - DT
+        while self.next_emit <= 0 do
+            self:spawnParticle()
+            -- 持续发射间隔；数值越小，粒子越多
+            self.next_emit = self.next_emit + randomBetween(0.01, 0.024)
+        end
+        if self.emit_time >= self.emit_duration then
+            self:stopEmission()
+        end
+    else
+        self.hide_time = self.hide_time + DT
+        if self.hide_time > 0.24 and #self.particles == 0 then
+            self.visible = false
+        end
+    end
+
+    for i = #self.particles, 1, -1 do
+        local particle = self.particles[i]
+        particle.age = particle.age + DT
+        if particle.age >= particle.lifetime then
+            table.remove(self.particles, i)
+        end
+    end
+
+    slash_super.update(self)
+end
+
+function SlashParticles:draw()
+    local old_width = love.graphics.getLineWidth()
+
+    for _, particle in ipairs(self.particles) do
+        local t = particle.age / particle.lifetime
+        local dist = particle.speed * particle.age
+        local x = particle.x + particle.dx * dist
+        local y = particle.y + particle.dy * dist
+        local half_length = particle.length * (1 - t * 0.35) / 2
+
+        love.graphics.setLineWidth(particle.width)
+        Draw.setColor(1, 1, 1, (1 - t) * (1 - t * 0.35))
+        love.graphics.line(
+            x - particle.dx * half_length,
+            y - particle.dy * half_length,
+            x + particle.dx * half_length,
+            y + particle.dy * half_length
+        )
+    end
+
+    love.graphics.setLineWidth(old_width)
+    Draw.setColor(1, 1, 1, 1)
+    slash_super.draw(self)
 end
 
 function KrisPhase1_1:init()
@@ -128,6 +260,10 @@ function KrisPhase1_1:onStart()
     local circle_solid = makeCircle(tex_solid, 1)  -- 初始可见
     local circle_donut = makeCircle(tex_donut, 0)  -- 初始隐藏
 
+    local slash_particles = SlashParticles(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+    slash_particles.layer = 5
+    self:addChild(slash_particles)
+
     -- 竖线
     local line_h = circle_solid.height * circle_solid.scale_y
     local line = Rectangle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 1, line_h)
@@ -152,10 +288,12 @@ function KrisPhase1_1:onStart()
         circle_donut.alpha = 1
         circle_solid.color = { 1, 1, 1 }
         circle_donut.color = { 1, 1, 1 }
+        slash_particles:startEmission()
     end)
 
     -- 15/60 后，线变红 → 再0.5秒渐变消失+下移
     self.timer:after(15 / 60, function()
+        slash_particles:stopEmission()
         line.color = { 1, 0, 0 }
         circle_donut.color = { 1, 0, 0 }
         Game.battle.timer:tween(0.5, line, {
