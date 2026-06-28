@@ -6,6 +6,8 @@ local function randomBetween(min, max)
     return min + (max - min) * love.math.random()
 end
 
+local SLASH_CIRCLE_SIZE = 200
+
 local function makeHardCircle(size, scale, inner_radius)
     scale = scale or { 1, 1 }
     inner_radius = inner_radius or 0
@@ -27,9 +29,10 @@ end
 
 local SlashParticles, slash_super = Class(Object)
 
-function SlashParticles:init(x, y)
+function SlashParticles:init(x, y, rotation)
     slash_super.init(self, x, y)
 
+    self.rotation = rotation or 0
     self.visible = false
     self.emit_time = 0
     self.emit_duration = 11 / 60
@@ -158,11 +161,16 @@ function KrisPhase1_1:init()
     self.time = 8
 end
 
-function KrisPhase1_1:onStart()
-    local size = 200
+function KrisPhase1_1:setupSlashAssets()
+    if self.slash_assets then
+        return
+    end
+
+    local size = SLASH_CIRCLE_SIZE
     local ts = { size, size }
 
     -- 1. 形变 shader（先运行）
+    -- 使用 transformed=true：先在劈砍本地坐标里做形变，再整体旋转，避免角度改变时形变方向跟屏幕轴互相干扰。
     self.distort_fx = ShaderFX(love.graphics.newShader([[
         extern float phase;
         extern float yspace;
@@ -186,9 +194,10 @@ function KrisPhase1_1:onStart()
         xspace  = 20.0,
         xamp    = -10.0,
         texSize = ts,
-    }, false, 0)
+    }, true, 0)
 
     -- 2-3. 水平+垂直高斯模糊（在形变之后）
+    -- 同样放在本地坐标处理，保持不同 rotation 下的视觉一致。
     self.hblur_fx = ShaderFX(love.graphics.newShader([[
         extern vec2 texSize;
         extern float radius;
@@ -212,7 +221,7 @@ function KrisPhase1_1:onStart()
             local w, h = love.graphics.getDimensions(); return { w, h }
         end,
         radius  = 1.0,
-    }, false, 1)
+    }, true, 1)
 
     self.vblur_fx = ShaderFX(love.graphics.newShader([[
         extern vec2 texSize;
@@ -237,37 +246,52 @@ function KrisPhase1_1:onStart()
             local w, h = love.graphics.getDimensions(); return { w, h }
         end,
         radius  = 1.0,
-    }, false, 2)
+    }, true, 2)
 
     -- 圆（实心 + 空心）
     local tex_solid = makeHardCircle(size, { 0.05, 1 }, 0)
     local tex_donut = makeHardCircle(size, { 0.05, 1 }, 40)
 
+    self.slash_assets = {
+        solid = tex_solid,
+        donut = tex_donut,
+    }
+end
+
+function KrisPhase1_1:spawnSlash(x, y, rotation)
+    self:setupSlashAssets()
+
+    x = x or SCREEN_WIDTH / 2
+    y = y or SCREEN_HEIGHT / 2
+    rotation = rotation or 0
+
     local function makeCircle(tex, alpha)
-        local c = Sprite(tex, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+        local c = Sprite(tex, x, y)
         c:setOrigin(0.5, 0.5)
         c:addFX(self.distort_fx)
         c:addFX(self.hblur_fx)
         c:addFX(self.vblur_fx)
         c.scale_x = 3
         c.scale_y = 2.5
+        c.rotation = rotation
         c.color = { 1, 0, 0 }
         c.alpha = alpha
         self:addChild(c)
         return c
     end
 
-    local circle_solid = makeCircle(tex_solid, 1)  -- 初始可见
-    local circle_donut = makeCircle(tex_donut, 0)  -- 初始隐藏
+    local circle_solid = makeCircle(self.slash_assets.solid, 1)  -- 初始可见
+    local circle_donut = makeCircle(self.slash_assets.donut, 0)  -- 初始隐藏
 
-    local slash_particles = SlashParticles(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+    local slash_particles = SlashParticles(x, y, rotation)
     slash_particles.layer = 5
     self:addChild(slash_particles)
 
     -- 竖线
     local line_h = circle_solid.height * circle_solid.scale_y
-    local line = Rectangle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 1, line_h)
+    local line = Rectangle(x, y, 1, line_h)
     line:setOrigin(0.5, 0.5)
+    line.rotation = rotation
     line.color = { 1, 1, 1 }
     line.alpha = 0
     line.layer = -1
@@ -296,11 +320,20 @@ function KrisPhase1_1:onStart()
         slash_particles:stopEmission()
         line.color = { 1, 0, 0 }
         circle_donut.color = { 1, 0, 0 }
+        -- 红线沿劈砍方向滑出，rotation 为 0 时保持原本的向下移动。
+        local slide_x = -math.sin(rotation) * line_h
+        local slide_y = math.cos(rotation) * line_h
         Game.battle.timer:tween(0.5, line, {
             alpha = 0,
-            y     = line.y + line_h,
+            x     = line.x + slide_x,
+            y     = line.y + slide_y,
         }, "out-quad")
     end)
+end
+
+function KrisPhase1_1:onStart()
+    -- rotation 使用弧度；需要角度时传 math.rad(角度)
+    self:spawnSlash(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, math.rad(45))
 end
 
 function KrisPhase1_1:update()
