@@ -73,22 +73,24 @@ function actor:init()
 
         ["slide"] = {0, 0},
 
-        ["battle/idle"] = {-5, -1},
+        ["battle/idle"] = {0, -1},
 
-        ["battle/attack"] = {-8, -6},
-        ["battle/attackready"] = {-8, -6},
-        ["battle/act"] = {-6, -6},
-        ["battle/actend"] = {-6, -6},
-        ["battle/actready"] = {-6, -6},
-        ["battle/item"] = {-6, -6},
-        ["battle/itemready"] = {-6, -6},
-        ["battle/defend"] = {-5, -3},
+        ["battle/attack"] = {-9, -3},
+        ["battle/attackready"] = {-5, -5},
+        ["battle/act"] = {-6, -1},
+        ["battle/actend"] = {-8, -1},
+        ["battle/actready"] = {2, -1},
+        ["battle/item"] = {0, -5},
+        ["battle/itemready"] = {-1, -1},
+        ["battle/itemend"] = {0, -1},
+        ["battle/defend"] = {-18, -1},
 
-        ["battle/defeat"] = {-8, -5},
-        ["battle/hurt"] = {-5, -6},
+        ["battle/defeat"] = {2, -3},
+        ["battle/hurt"] = {2, 1},
 
-        ["battle/intro"] = {-8, -9},
-        ["battle/victory"] = {-3, 0},
+        ["battle/intro"] = {-6, -11},
+        ["battle/victory"] = {-5, -2},
+        ["battle/transition_out"] = {-4, 1},
 
         ["climb/climbing"] = {-5, -15},
         ["climb/fall"] = {-3, -14},
