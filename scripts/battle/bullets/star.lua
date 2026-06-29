@@ -34,13 +34,14 @@ function Star:onWaveSpawn(wave)
 	super.onWaveSpawn(self, wave)
 
 	local ghost_ref = self.ghost
-	wave.timer:every(0.189, function()
+	local handle = wave.timer:every(0.01, function()
 		if not ghost_ref or ghost_ref:isRemoved() then
 			return false
 		end
 		local img = AfterImage(ghost_ref, 0.4, 0.03)
 		ghost_ref:addChild(img)
 	end)
+	wave.timer:tween(0.5, handle, {limit = 0.189})
 end
 
 function Star:update()
