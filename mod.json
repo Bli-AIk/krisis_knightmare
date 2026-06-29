@@ -17,7 +17,8 @@
     "chapter": 4,
 
     // The map that you start in when first starting the project.
-    "map": "room1",
+    "map": "chapter_select",
+    "useSaves": false,
 
     // The party. The first character is the player.
     "party": ["kris"],
@@ -68,12 +69,61 @@
             "priority": "video",
             "alpha": 0.3,
             "layer": "top"
+        },
+        "obscurachapters": {
+            "infoAuthor": "Bli_Aik",
+            "infoProject": "KRISIS: KNIGHTMARE",
+            "chapters": [
+                {
+                    "image": "chapters/ch1",
+                    "name": "The Beginning",
+                    "map": "room1",
+                    "sound": "ui_spooky_action"
+                },
+                {
+                    "image": "chapters/ch2",
+                    "name": "A Cyber's World",
+                    "map": "room1",
+                    "sound": "queen_bitcrushed_hoot"
+                },
+                {
+                    "image": "chapters/ch3",
+                    "name": "Late Night",
+                    "map": "room1",
+                    "sound": "bluh"
+                },
+                {
+                    "image": "chapters/ch4",
+                    "name": "Prophecy",
+                    "map": "room1",
+                    "sound": "bluh"
+                },
+                {
+                    "image": "chapters/ch5",
+                    "name": "Festival Day",
+                    "map": "room1",
+                    "sound": "bluh"
+                },
+                {
+                    "image": "chapters/ch6",
+                    "name": "Nightmare",
+                    "map": "room1",
+                    "sound": "bluh"
+                },
+                {
+                    "image": "chapters/ch7",
+                    "name": "--",
+                    "unlocked": false,
+                    "map": "room1",
+                    "sound": "bluh"
+                }
+            ]
         }
     },
 
     // Whether or not to enable dev mode. Dev mode enables debug keys and the console.
     "dev": true,
 
-    "encounter": "dummy"
+    //"encounter": "dummy"
   
 }
