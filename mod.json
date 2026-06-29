@@ -64,7 +64,7 @@
             // End of config
         },
         "wave-video-debug": {
-            "enabled": true,
+            "enabled": false,
             "priority": "video",
             "alpha": 0.3,
             "layer": "top"

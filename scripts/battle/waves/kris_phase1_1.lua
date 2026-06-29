@@ -337,9 +337,18 @@ function KrisPhase1_1:spawnSlash(x, y, rotation)
     for _, d in ipairs(offsets) do
         local bx = x - math.sin(rotation) * d
         local by = y + math.cos(rotation) * d
-        -- 1111在这里调速度
         self:spawnBullet("small_sword", bx, by, bullet_dir, 5, 20, 0.75)
     end
+
+    -- star 弹幕：延迟0.5秒后在 small_sword 图层之下生成
+    self.timer:after(10 / 60., function()
+        for _, d in ipairs(offsets) do
+            local bx = x - math.sin(rotation) * d
+            local by = y + math.cos(rotation) * d
+            local star = self:spawnBullet("star", bx, by, bullet_dir, 5, 20, 0.75)
+            star.layer = BATTLE_LAYERS["bullets"] - 1
+        end
+    end)
 end
 
 function KrisPhase1_1:onStart()
