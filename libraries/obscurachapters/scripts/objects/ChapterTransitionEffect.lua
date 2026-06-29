@@ -8,17 +8,23 @@ function ChapterTransitionEffect:init(chapter, texture)
     self.chapter = chapter
     self.texture = texture
     self.clock = 0
+    self.title_shown = false
 end
 
 function ChapterTransitionEffect:update()
     super.update(self)
-    self.clock = self.clock + (DT * 0.7)
-    if self.clock > 1 then
-        self:remove()
-        Game.fader:fadeOut(function()
-            Game.world:loadMap(self.chapter.map)
-            Game.fader:fadeIn()
-        end, {speed = 1})
+    if not self.title_shown then
+        self.clock = self.clock + (DT * 0.7)
+        if self.clock > 1 then
+            self.title_shown = true
+            self:remove()
+            Game.world:openMenu(ChapterTitle(self.chapter, function()
+                Game.fader:fadeOut(function()
+                    Game.world:loadMap(self.chapter.map)
+                    Game.fader:fadeIn()
+                end, {speed = 1})
+            end))
+        end
     end
 end
 
@@ -29,7 +35,7 @@ end
 
 function ChapterTransitionEffect:draw()
     super.draw(self)
-    if self.clock > 1 then return end
+    if self.title_shown then return end
     Draw.setColor(1,1,1,1-self.clock)
     love.graphics.scale(1-self.clock, 1-(self.clock / 3))
     Draw.draw(self.texture, -SCREEN_WIDTH/2, 0)
