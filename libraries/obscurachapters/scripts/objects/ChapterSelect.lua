@@ -246,13 +246,18 @@ end
 
 ---@param chapter ChapterSelect.Chapter
 function ChapterSelect:startEnterChapter(chapter)
-    local texture = love.graphics.newImage(Draw.captureObject(self, "none"):newImageData())
-    local transition = Game.world:addChild(ChapterTransitionEffect(chapter, texture))
-    if chapter.instant then
-        transition.clock = 1000
+    if chapter.index and chapter.index <= 5 then
+        -- TODO: 之后这里得放个音效
+        self:shake(12, 6, 0.7)
+    else
+        local texture = love.graphics.newImage(Draw.captureObject(self, "none"):newImageData())
+        Game.world.music:stop()
+        Game.world:closeMenu()
+        local transition = Game.world:addChild(ChapterTransitionEffect(chapter, texture))
+        if chapter.instant then
+            transition.clock = 1000
+        end
     end
-    Game.world.music:stop()
-    Game.world:closeMenu()
 end
 
 function ChapterSelect:isValidSelection()
