@@ -109,16 +109,23 @@ end
 
 function Kris:getAttackDamage(damage, battler, points)
 	if battler and battler.chara.id == "vessel" then
-		return 1
+		return points or 0
 	end
 	return super.getAttackDamage(self, damage, battler, points)
 end
 
 function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
 	if battler and battler.chara.id == "vessel" then
-		self:addMercy(8)
-		battler:hurt(20, true)
-		return
+		local points = amount
+		if points > 0 then
+			local t = (points - 100) / 50
+			if t < 0 then t = 0 elseif t > 1 then t = 1 end
+			local vessel_damage = math.floor(40 - 20 * t + 0.5)
+			local mercy = math.floor(4 + 4 * t + 0.5)
+			self:addMercy(mercy)
+			battler:hurt(vessel_damage, true)
+			return
+		end
 	end
 	super.hurt(self, amount, battler, on_defeat, color, show_status, attacked)
 end
