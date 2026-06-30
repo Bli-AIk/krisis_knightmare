@@ -6,48 +6,42 @@ function ChapterTitle:init(chapter, onComplete)
     self.chapter = chapter
     self.onComplete = onComplete
 
-    self.font = Assets.getFont("main", 32)
-    self.name_font = Assets.getFont("main")
+    self.title_tex = Assets.getTexture("title")
+    self.debug_tex = Assets.getTexture("debug")
     self.debug_font = Assets.getFont("main", 12)
 
     self.timer = self:addChild(Timer())
-    self.text_x = SCREEN_WIDTH + 80
-    self.alpha = 1
-    self.phase = "slide_in"
     self.debug_mode = Mod.info.dev
     self.debug_blocked = false
     self.debug_subtitle_alpha = 0
     self.running = true
 
-    self:_startSlideIn()
-end
+    -- 调试参考层 不可被 ctrl+o 选中
+    local debug_tex = self.debug_tex
+    self.debug_overlay = self:addChild(Object(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
+    self.debug_overlay.layer = -2
+    self.debug_overlay.debug_select = false
+    self.debug_overlay.visible = self.debug_mode
+    function self.debug_overlay:draw()
+        local dw, dh = debug_tex:getDimensions()
+        love.graphics.draw(debug_tex, 0, 0, 0, SCREEN_WIDTH / dw, SCREEN_HEIGHT / dh)
+    end
 
-function ChapterTitle:_startSlideIn()
-    self.phase = "slide_in"
-    self.text_x = SCREEN_WIDTH + 80
-    self.alpha = 1
-    self.timer:tween(0.5, self, {text_x = 0}, "out-quad", function()
-        if not self.running then return end
-        self.phase = "hold"
-        self:_startHold()
-    end)
-end
+    -- 标题子对象 可被 ctrl+o 选中移动缩放
+    local title_tex = self.title_tex
+    local tw, th = title_tex:getDimensions()
+    self.title_child = self:addChild(Object(96, 206.5, tw, th))
+    self.title_child.layer = -1
+    self.title_child.scale_x = 0.4375
+    self.title_child.scale_y = 0.445
+    function self.title_child:draw()
+        Draw.setColor(1, 1, 1, 1)
+        Draw.draw(title_tex, 0, 0)
+    end
 
-function ChapterTitle:_startHold()
-    self.phase = "hold"
-    self.timer:after(2, function()
-        if not self.running then return end
-        self:_startFadeOut()
-    end)
-end
-
-function ChapterTitle:_startFadeOut()
-    self.phase = "fade_out"
-    self:fadeTo(0, 0.5)
-    self.timer:after(0.5, function()
+    self.timer:after(5, function()
         if not self.running then return end
         if self.debug_blocked then
-            self.phase = "blocked"
             self.debug_subtitle_alpha = 1
         else
             self:_finish()
@@ -57,7 +51,6 @@ end
 
 function ChapterTitle:_finish()
     self.running = false
-    self.phase = "done"
     Game.world:closeMenu()
     if self.onComplete then
         self.onComplete()
@@ -66,7 +59,7 @@ end
 
 function ChapterTitle:onKeyPressed(key)
     if not self.debug_mode then return end
-    if self.phase == "done" then return end
+    if not self.running then return end
 
     if key == "c" then
         if self.debug_blocked then
@@ -75,15 +68,18 @@ function ChapterTitle:onKeyPressed(key)
             self:_finish()
         else
             self.debug_blocked = true
-            if self.phase == "blocked" then
-                self.debug_subtitle_alpha = 1
-            end
         end
     elseif key == "r" and self.debug_blocked then
         self.debug_subtitle_alpha = 0
-        self.alpha = 1
         self.running = true
-        self:_startSlideIn()
+        self.timer:after(5, function()
+            if not self.running then return end
+            if self.debug_blocked then
+                self.debug_subtitle_alpha = 1
+            else
+                self:_finish()
+            end
+        end)
     end
 end
 
@@ -95,24 +91,15 @@ function ChapterTitle:update()
 end
 
 function ChapterTitle:draw()
-    Draw.setColor(0, 0, 0, self.alpha)
+    Draw.setColor(0, 0, 0, 1)
     Draw.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
-    if self.phase == "done" then return end
+    if not self.running then return end
 
-    love.graphics.push()
-    love.graphics.translate(self.text_x, 0)
+    -- 绘制所有子对象（debug参考层 → 标题）
+    self:drawChildren()
 
-    love.graphics.setFont(self.font)
-    Draw.setColor(Game:getSoulColor())
-    Draw.printAlign("CHAPTER " .. self.chapter.index, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 30, "center")
-
-    love.graphics.setFont(self.name_font)
-    Draw.setColor(COLORS.white)
-    Draw.printAlign(self.chapter.name, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 10, "center")
-
-    love.graphics.pop()
-
+    -- 调试提示文字 最上层
     if self.debug_mode and self.debug_subtitle_alpha > 0 then
         love.graphics.setFont(self.debug_font)
         Draw.setColor(1, 1, 1, self.debug_subtitle_alpha)
