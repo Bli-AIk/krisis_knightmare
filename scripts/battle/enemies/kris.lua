@@ -1,5 +1,7 @@
 local Kris, super = Class(EnemyBattler)
 
+local WAIT = "[wait:5]"
+
 function Kris:init()
     super.init(self)
 
@@ -29,28 +31,24 @@ function Kris:init()
         "kris_phase1_5",
     }
 
-    -- Dialogue randomly displayed in the enemy's speech bubble
-    self.dialogue = {
-        "..."
-    }
+    self.dialogue = {}
 
     -- Check text (automatically has "ENEMY NAME - " at the start)
-    self.check = "AT 4 DF 0\n* Cotton heart and button eye\n* Looks just like a fluffy guy."
-
-    -- Text randomly displayed at the bottom of the screen each turn
-    self.text = {
-        "* The dummy gives you a soft\nsmile.",
-        "* The power of fluffy boys is\nin the air.",
-        "* Smells like cardboard.",
+    self.check = {
+        "?? ATK ??? DEF",
+        "Darkness grants them regeneration." .. WAIT .. "\n* Transformed into a monster\nof pure aggressive instinct.",
+        "Use your power to defeat them.",
     }
-    -- Text displayed at the bottom of the screen when the enemy has low health
-    self.low_health_text = "* The dummy looks like it's\nabout to fall over."
 
-    -- Register act called "Smile"
-    self:registerAct("Smile")
-    -- Register party act with Ralsei called "Tell Story"
-    -- (second argument is description, usually empty)
-    self:registerAct("Tell Story", "", { "ralsei" })
+    self.text = {}
+    self.low_health_text = nil
+
+    self.acts[1].description = "Consider\nstrategy"
+    self:registerAct("Recharge", "SHINE", { "vessel" }, 100)
+    self:registerAct("Heartbeat", "Raise\nDefend", { "vessel" })
+
+    self.heartbeat_turn = 0
+    self.heartbeat_battler = nil
 end
 
 function Kris:selectWave()
@@ -69,65 +67,68 @@ function Kris:selectWave()
 end
 
 function Kris:onAct(battler, name)
-    if name == "Smile" then
-        -- Give the enemy 100% mercy
-        self:addMercy(100)
-        -- Change this enemy's dialogue for 1 turn
-        self.dialogue_override = "... ^^"
-        -- Act text (since it's a list, multiple textboxes)
+    if name == "Heartbeat" then
+        local vessel = nil
+        for _, pb in ipairs(Game.battle.party) do
+            if pb.chara.id == "vessel" then
+                vessel = pb
+                break
+            end
+        end
+        if vessel then
+            vessel.chara.stats.defense = vessel.chara.stats.defense + 5
+            self.heartbeat_battler = vessel
+            self.heartbeat_turn = Game.battle.turn_count
+        end
         return {
-            "* You smile.[wait:5]\n* The dummy smiles back.",
-            "* It seems the dummy just wanted\nto see you happy."
+            "* Your heartbeat quickened.\n" .. WAIT ..
+            "* Your DEF raised.\n" .. WAIT ..
+            "* Your Invincible shorter."
         }
-    elseif name == "Tell Story" then
-        -- Loop through all enemies
-        for _, enemy in ipairs(Game.battle.enemies) do
-            -- Make the enemy tired
-            enemy:setTired(true)
-        end
-        return "* You and Ralsei told the dummy\na bedtime story.\n* The enemies became [color:blue]TIRED[color:reset]..."
-    elseif name == "Standard" then --X-Action
-        -- Give the enemy 50% mercy
-        self:addMercy(50)
-        if battler.chara.id == "ralsei" then
-            -- R-Action text
-            return "* Ralsei bowed politely.\n* The dummy spiritually bowed\nin return."
-        elseif battler.chara.id == "susie" then
-            -- S-Action: start a cutscene (see scripts/battle/cutscenes/dummy.lua)
-            Game.battle:startActCutscene("dummy", "susie_punch")
-            return
-        else
-            -- Text for any other character (like Noelle)
-            return "* " .. battler.chara:getName() .. " straightened the\ndummy's hat."
-        end
+    elseif name == "Recharge" then
+        return "* Your SOUL emitted a strange glow!"
     end
 
-    -- If the act is none of the above, run the base onAct function
-    -- (this handles the Check act)
     return super.onAct(self, battler, name)
 end
 
 function Kris:getAttackDamage(damage, battler, points)
-	if battler and battler.chara.id == "vessel" then
-		return points or 0
-	end
-	return super.getAttackDamage(self, damage, battler, points)
+    if battler and battler.chara.id == "vessel" then
+        return points or 0
+    end
+    return super.getAttackDamage(self, damage, battler, points)
 end
 
 function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
-	if battler and battler.chara.id == "vessel" then
-		local points = amount
-		if points > 0 then
-			local t = (points - 100) / 50
-			if t < 0 then t = 0 elseif t > 1 then t = 1 end
-			local vessel_damage = math.floor(40 - 20 * t + 0.5)
-			local mercy = math.floor(4 + 4 * t + 0.5)
-			self:addMercy(mercy)
-			battler:hurt(vessel_damage, true)
-			return
-		end
-	end
-	super.hurt(self, amount, battler, on_defeat, color, show_status, attacked)
+    if battler and battler.chara.id == "vessel" then
+        local points = amount
+        if points > 0 then
+            local t = (points - 100) / 50
+            if t < 0 then t = 0 elseif t > 1 then t = 1 end
+            local vessel_damage = math.floor(40 - 20 * t + 0.5)
+            local mercy = math.floor(4 + 4 * t + 0.5)
+            self:addMercy(mercy)
+            battler:hurt(vessel_damage, true)
+            return
+        end
+    end
+    super.hurt(self, amount, battler, on_defeat, color, show_status, attacked)
+end
+
+function Kris:update()
+    if self.heartbeat_turn > 0 then
+        if Game.battle.soul and Game.battle.soul.inv_timer > 4 / 60 then
+            Game.battle.soul.inv_timer = 4 / 60
+        end
+        if Game.battle.turn_count > self.heartbeat_turn then
+            if self.heartbeat_battler then
+                self.heartbeat_battler.chara.stats.defense = self.heartbeat_battler.chara.stats.defense - 5
+                self.heartbeat_battler = nil
+            end
+            self.heartbeat_turn = 0
+        end
+    end
+    super.update(self)
 end
 
 return Kris
