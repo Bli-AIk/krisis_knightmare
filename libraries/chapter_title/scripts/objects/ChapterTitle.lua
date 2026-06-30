@@ -1,72 +1,67 @@
 ---@class ChapterTitle: Object
 local ChapterTitle, super = Class(Object)
 
+local FRAME_DIR = Mod.info.path .. "/libraries/chapter_title/assets/frames/"
+local FPS = 30
+local TOTAL_FRAMES = 464
+
 function ChapterTitle:init(chapter, onComplete)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
     self.chapter = chapter
     self.onComplete = onComplete
 
-    self.title_tex = Assets.getTexture("title")
-    self.debug_tex = Assets.getTexture("debug")
-    self.debug_font = Assets.getFont("main", 12)
+    -- PNG 序列
+    self.frame = 0
+    self.cur_img = nil
+    self.cur_sx = 1
+    self.cur_sy = 1
+    self.frame_timer = 0
 
-    self.timer = self:addChild(Timer())
     self.debug_mode = Mod.info.dev
+    self.debug_font = Assets.getFont("main", 12)
     self.debug_blocked = false
     self.debug_subtitle_alpha = 0
     self.running = true
+    self.ended = false
 
-    --[[ 调试参考层 
-    local debug_tex = self.debug_tex
-    self.debug_overlay = self:addChild(Object(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
-    self.debug_overlay.layer = -2
-    self.debug_overlay.debug_select = false
-    self.debug_overlay.visible = self.debug_mode
-    function self.debug_overlay:draw()
-        local dw, dh = debug_tex:getDimensions()
-        love.graphics.draw(debug_tex, 0, 0, 0, SCREEN_WIDTH / dw, SCREEN_HEIGHT / dh)
+    self:_nextFrame()
+end
+
+function ChapterTitle:_framePath(n)
+    return FRAME_DIR .. string.format("f_%03d.png", n)
+end
+
+function ChapterTitle:_nextFrame()
+    if self.cur_img then
+        self.cur_img:release()
+        self.cur_img = nil
     end
-    --]]
-
-    -- 标题子对象 可被 ctrl+o 选中移动缩放
-    local title_tex = self.title_tex
-    local tw, th = title_tex:getDimensions()
-    self.title_child = self:addChild(Object(96, 206.5, tw, th))
-    self.title_child.layer = -1
-    self.title_child.scale_x = 0.4375
-    self.title_child.scale_y = 0.445
-    function self.title_child:draw()
-        Draw.setColor(1, 1, 1, 1)
-        Draw.draw(title_tex, 0, 0)
-    end
-
-    -- 章节文本 ctrl+o 可选
-    local chapter_font = Assets.getFont("main", 32)
-    local chapter_text = "CHAPTER " .. chapter.index
-    local text_w = chapter_font:getWidth(chapter_text)
-    local text_h = chapter_font:getHeight()
-    self.text_child = self:addChild(Object(
-        (SCREEN_WIDTH - text_w) / 2, SCREEN_HEIGHT / 2 + 60, text_w, text_h
-    ))
-    self.text_child.layer = -1
-    function self.text_child:draw()
-        love.graphics.setFont(chapter_font)
-        Draw.setColor(1, 1, 1, 1)
-        love.graphics.print(chapter_text, 0, 0)
-    end
-
-    self.timer:after(5, function()
-        if not self.running then return end
+    self.frame = self.frame + 1
+    if self.frame > TOTAL_FRAMES then
         if self.debug_blocked then
             self.debug_subtitle_alpha = 1
         else
             self:_finish()
         end
-    end)
+        return
+    end
+    local path = self:_framePath(self.frame)
+    self.cur_img = love.graphics.newImage(path)
+    self.cur_sx = SCREEN_WIDTH / self.cur_img:getWidth()
+    self.cur_sy = SCREEN_HEIGHT / self.cur_img:getHeight()
+end
+
+function ChapterTitle:_reset()
+    self.frame = 0
+    self.frame_timer = 0
+    self.ended = false
+    self.running = true
+    self:_nextFrame()
 end
 
 function ChapterTitle:_finish()
     self.running = false
+    self.ended = true
     Game.world:closeMenu()
     if self.onComplete then
         self.onComplete()
@@ -75,7 +70,7 @@ end
 
 function ChapterTitle:onKeyPressed(key)
     if not self.debug_mode then return end
-    if not self.running then return end
+    if self.ended then return end
 
     if key == "c" then
         if self.debug_blocked then
@@ -87,20 +82,20 @@ function ChapterTitle:onKeyPressed(key)
         end
     elseif key == "r" and self.debug_blocked then
         self.debug_subtitle_alpha = 0
-        self.running = true
-        self.timer:after(5, function()
-            if not self.running then return end
-            if self.debug_blocked then
-                self.debug_subtitle_alpha = 1
-            else
-                self:_finish()
-            end
-        end)
+        self:_reset()
     end
 end
 
 function ChapterTitle:update()
     super.update(self)
+    if not self.running then return end
+
+    self.frame_timer = self.frame_timer + DT
+    if self.frame_timer >= 1 / FPS then
+        self.frame_timer = self.frame_timer - 1 / FPS
+        self:_nextFrame()
+    end
+
     if self.debug_mode and self.debug_subtitle_alpha > 0 and not self.debug_blocked then
         self.debug_subtitle_alpha = math.max(0, self.debug_subtitle_alpha - DT * 3)
     end
@@ -110,12 +105,13 @@ function ChapterTitle:draw()
     Draw.setColor(0, 0, 0, 1)
     Draw.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
-    if not self.running then return end
+    if self.ended then return end
 
-    -- 绘制所有子对象（debug参考层 → 标题）
-    self:drawChildren()
+    if self.cur_img then
+        Draw.setColor(1, 1, 1, 1)
+        Draw.draw(self.cur_img, 0, 0, 0, self.cur_sx, self.cur_sy)
+    end
 
-    -- 调试提示文字 最上层
     if self.debug_mode and self.debug_subtitle_alpha > 0 then
         love.graphics.setFont(self.debug_font)
         Draw.setColor(1, 1, 1, self.debug_subtitle_alpha)
