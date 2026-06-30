@@ -3,7 +3,7 @@ local Kris, super = Class(EnemyBattler)
 function Kris:init()
     super.init(self)
 
-    self.name = "Kris"
+    self.name = "KRIS"
     -- Sets the actor, which handles the enemy's sprites (see scripts/data/actors/dummy.lua)
     self:setActor("dummy")
 

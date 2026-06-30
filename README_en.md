@@ -16,6 +16,8 @@
 
 This project is a fan-game adaptation of the Bilibili animation [KRISIS KNIGHTMARE](https://www.bilibili.com/video/BV1r7f1ByETC), released as open source with full authorization.
 
+*You can also watch the English version of this animation on [YouTube](https://www.youtube.com/watch?v=GOfVuCJ4BG8).*
+
 ## Credits
 
 ### Original Animation

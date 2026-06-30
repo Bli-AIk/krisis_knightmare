@@ -16,6 +16,8 @@
 
 本项目是 B 站动画 [KRISIS KNIGHTMARE](https://www.bilibili.com/video/BV1r7f1ByETC) 的同人游戏化作品，经授权将其全部内容开源发布。
 
+*你也可以在 [Youtube](https://www.youtube.com/watch?v=GOfVuCJ4BG8) 观看此动画的英文版本。*
+
 ## 致谢
 
 ### 原片制作
