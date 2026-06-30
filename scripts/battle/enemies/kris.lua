@@ -107,4 +107,20 @@ function Kris:onAct(battler, name)
     return super.onAct(self, battler, name)
 end
 
+function Kris:getAttackDamage(damage, battler, points)
+	if battler and battler.chara.id == "vessel" then
+		return 1
+	end
+	return super.getAttackDamage(self, damage, battler, points)
+end
+
+function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
+	if battler and battler.chara.id == "vessel" then
+		self:addMercy(8)
+		battler:hurt(20, true)
+		return
+	end
+	super.hurt(self, amount, battler, on_defeat, color, show_status, attacked)
+end
+
 return Kris
