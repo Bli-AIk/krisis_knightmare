@@ -16,7 +16,7 @@ function ChapterTitle:init(chapter, onComplete)
     self.debug_subtitle_alpha = 0
     self.running = true
 
-    -- 调试参考层 不可被 ctrl+o 选中
+    --[[ 调试参考层 
     local debug_tex = self.debug_tex
     self.debug_overlay = self:addChild(Object(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
     self.debug_overlay.layer = -2
@@ -26,6 +26,7 @@ function ChapterTitle:init(chapter, onComplete)
         local dw, dh = debug_tex:getDimensions()
         love.graphics.draw(debug_tex, 0, 0, 0, SCREEN_WIDTH / dw, SCREEN_HEIGHT / dh)
     end
+    --]]
 
     -- 标题子对象 可被 ctrl+o 选中移动缩放
     local title_tex = self.title_tex
@@ -37,6 +38,21 @@ function ChapterTitle:init(chapter, onComplete)
     function self.title_child:draw()
         Draw.setColor(1, 1, 1, 1)
         Draw.draw(title_tex, 0, 0)
+    end
+
+    -- 章节文本 ctrl+o 可选
+    local chapter_font = Assets.getFont("main", 32)
+    local chapter_text = "CHAPTER " .. chapter.index
+    local text_w = chapter_font:getWidth(chapter_text)
+    local text_h = chapter_font:getHeight()
+    self.text_child = self:addChild(Object(
+        (SCREEN_WIDTH - text_w) / 2, SCREEN_HEIGHT / 2 + 60, text_w, text_h
+    ))
+    self.text_child.layer = -1
+    function self.text_child:draw()
+        love.graphics.setFont(chapter_font)
+        Draw.setColor(1, 1, 1, 1)
+        love.graphics.print(chapter_text, 0, 0)
     end
 
     self.timer:after(5, function()
