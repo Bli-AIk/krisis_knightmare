@@ -40,7 +40,17 @@ function Kris:init()
         "Use your power to defeat them.",
     }
 
-    self.text = {}
+    self.text = {
+        "* KRIS slashes into the combat.",
+        "* The darkness froze on the blade.",
+        "* Suddenly, the earth was torn apart by swords.",
+        "* Your soul is full of the POWER OF LIGHT.",
+        "* Darkness emerges from the crack, surging towards the sky.",
+        "* Suddenly, your body seized up.",
+        "* The thick fog gathered, then formed its shape.",
+        "* Countless swords make you dizzy.",
+        "* Your soul is full of POWER. (WIP!!)",
+    }
     self.low_health_text = nil
 
     self.acts[1].description = "Consider\nstrategy"
@@ -90,6 +100,15 @@ function Kris:onAct(battler, name)
     end
 
     return super.onAct(self, battler, name)
+end
+
+function Kris:getEncounterText()
+    -- 按回合顺序返回旁白文本，超出则固定最后一条
+    local turn = Game.battle.turn_count
+    if self.text[turn] then
+        return self.text[turn]
+    end
+    return self.text[#self.text]
 end
 
 function Kris:getAttackDamage(damage, battler, points)

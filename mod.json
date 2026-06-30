@@ -124,6 +124,6 @@
     // Whether or not to enable dev mode. Dev mode enables debug keys and the console.
     "dev": true,
 
-    "encounter": "dummy"
+    "encounter": "kris"
   
 }
