@@ -2,6 +2,8 @@
 
 [![license](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE-APACHE)
 
+![KRISIS KNIGHTMARE](./cover.jpg)
+
 > 当前状态：🚧 早期开发中
 
 **KRISIS KNIGHTMARE** — 动画 [KRISIS KNIGHTMARE](https://www.bilibili.com/video/BV1r7f1ByETC) 的授权游戏化项目，基于 [Kristal](https://github.com/KristalTeam/Kristal) 构建。
