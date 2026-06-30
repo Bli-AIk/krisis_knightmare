@@ -4,6 +4,7 @@ local ChapterTitle, super = Class(Object)
 local FRAME_DIR = Mod.info.path .. "/libraries/chapter_title/assets/frames/"
 local FPS = 30
 local TOTAL_FRAMES = 464
+local FADE_DURATION = 0.5
 
 function ChapterTitle:init(chapter, onComplete)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -16,6 +17,10 @@ function ChapterTitle:init(chapter, onComplete)
     self.cur_sx = 1
     self.cur_sy = 1
     self.frame_timer = 0
+
+    -- 渐出
+    self.fading_out = false
+    self.fade_timer = 0
 
     self.debug_mode = Mod.info.dev
     self.debug_font = Assets.getFont("main", 12)
@@ -32,10 +37,6 @@ function ChapterTitle:_framePath(n)
 end
 
 function ChapterTitle:_nextFrame()
-    if self.cur_img then
-        self.cur_img:release()
-        self.cur_img = nil
-    end
     self.frame = self.frame + 1
     if self.frame > TOTAL_FRAMES then
         if self.debug_blocked then
@@ -46,6 +47,14 @@ function ChapterTitle:_nextFrame()
         return
     end
     local path = self:_framePath(self.frame)
+    local info = love.filesystem.getInfo(path)
+    if not info then
+        return
+    end
+    -- 只加载存在的帧，缺失帧保留上一帧
+    if self.cur_img then
+        self.cur_img:release()
+    end
     self.cur_img = love.graphics.newImage(path)
     self.cur_sx = SCREEN_WIDTH / self.cur_img:getWidth()
     self.cur_sy = SCREEN_HEIGHT / self.cur_img:getHeight()
@@ -54,6 +63,8 @@ end
 function ChapterTitle:_reset()
     self.frame = 0
     self.frame_timer = 0
+    self.fading_out = false
+    self.fade_timer = 0
     self.ended = false
     self.running = true
     self:_nextFrame()
@@ -69,8 +80,16 @@ function ChapterTitle:_finish()
 end
 
 function ChapterTitle:onKeyPressed(key)
-    if not self.debug_mode then return end
     if self.ended then return end
+
+    if key == "z" then
+        self.fading_out = true
+        self.fade_timer = 0
+        self.running = false
+        return
+    end
+
+    if not self.debug_mode then return end
 
     if key == "c" then
         if self.debug_blocked then
@@ -88,6 +107,16 @@ end
 
 function ChapterTitle:update()
     super.update(self)
+
+    if self.fading_out then
+        self.fade_timer = self.fade_timer + DT
+        if self.fade_timer >= FADE_DURATION then
+            self.fading_out = false
+            self:_finish()
+        end
+        return
+    end
+
     if not self.running then return end
 
     self.frame_timer = self.frame_timer + DT
@@ -110,6 +139,12 @@ function ChapterTitle:draw()
     if self.cur_img then
         Draw.setColor(1, 1, 1, 1)
         Draw.draw(self.cur_img, 0, 0, 0, self.cur_sx, self.cur_sy)
+    end
+
+    if self.fading_out then
+        local alpha = math.min(self.fade_timer / FADE_DURATION, 1)
+        Draw.setColor(0, 0, 0, alpha)
+        Draw.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
     end
 
     if self.debug_mode and self.debug_subtitle_alpha > 0 then
