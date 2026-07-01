@@ -8,6 +8,7 @@ function Kris:init()
     self.name = "KRIS"
     -- Sets the actor, which handles the enemy's sprites (see scripts/data/actors/kris.lua)
     self:setActor("kris")
+    self.layer = BATTLE_LAYERS["above_bullets"] + 1
 
     -- Enemy health
     self.max_health = 450

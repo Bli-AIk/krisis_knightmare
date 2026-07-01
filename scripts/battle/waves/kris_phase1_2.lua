@@ -7,6 +7,18 @@ local function randomBetween(min, max)
 end
 
 local SLASH_CIRCLE_SIZE = 200
+local KRIS_FAR_X = 10000
+local KRIS_FAR_Y = 10000
+
+local function moveAttackerTo(attacker, x, y)
+    attacker.target_x = x
+    attacker.target_y = y
+    attacker:setPosition(attacker.target_x, attacker.target_y)
+end
+
+local function moveAttackerAway(attacker)
+    moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
+end
 
 local function makeHardCircle(size, scale, inner_radius)
     scale = scale or { 1, 1 }
@@ -334,14 +346,26 @@ function KrisPhase1_2:spawnSlash(x, y, rotation)
 end
 
 function KrisPhase1_2:onStart()
+    self.kris_home_positions = {}
+
+    for _, attacker in ipairs(self:getAttackers()) do
+        self.kris_home_positions[attacker] = {
+            x = attacker.target_x or attacker.x,
+            y = attacker.target_y or attacker.y,
+        }
+        attacker:setAnimation("flying_sword_disappear", function()
+            moveAttackerAway(attacker)
+        end)
+    end
+
     self.slashes = {
-        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 199) },
-        { x = 480 + 50 - 20, y = 220 + 25,  r = math.rad(360 - 167) },
-        { x = 480 + 50,      y = 105 + 40,  r = math.rad(360 - 199) },
-        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173) },
-        { x = 480 + 50 - 15, y = 105 + 40,  r = math.rad(360 - 205) },
-        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173) },
-        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 212) },
+        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
+        { x = 480 + 50 - 20, y = 220 + 25,  r = math.rad(360 - 167), kris_x = 550, kris_y = 327 },
+        { x = 480 + 50,      y = 105 + 40,  r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
+        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
+        { x = 480 + 50 - 15, y = 105 + 40,  r = math.rad(360 - 205), kris_x = 550, kris_y = 175 },
+        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
+        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 212), kris_x = 550, kris_y = 165 },
     }
     self.slash_index = 0
 
@@ -349,9 +373,28 @@ function KrisPhase1_2:onStart()
         self.slash_index = self.slash_index + 1
         local s = self.slashes[self.slash_index]
         if s then
+            local animation = self.slash_index % 2 == 0 and "slash1" or "slash2"
+            for _, attacker in ipairs(self:getAttackers()) do
+                moveAttackerTo(attacker, s.kris_x, s.kris_y)
+                attacker:setAnimation(animation, function()
+                    moveAttackerAway(attacker)
+                end)
+            end
             self:spawnSlash(s.x, s.y, s.r)
         end
     end)
+end
+
+function KrisPhase1_2:onEnd(death)
+    for _, attacker in ipairs(self:getAttackers()) do
+        local home = self.kris_home_positions and self.kris_home_positions[attacker]
+        if home then
+            moveAttackerTo(attacker, home.x, home.y)
+        end
+        attacker:setAnimation("appear")
+    end
+
+    return super.onEnd(self, death)
 end
 
 function KrisPhase1_2:update()
