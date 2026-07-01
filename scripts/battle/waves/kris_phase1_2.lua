@@ -21,6 +21,69 @@ local function moveAttackerAway(attacker)
     moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
 end
 
+local function clearArenaShake(arena)
+    local timer = Game.battle.timer
+    if arena.kris_shake_tweens then
+        for _, handle in ipairs(arena.kris_shake_tweens) do
+            timer:cancel(handle)
+        end
+    end
+    if arena.kris_shake_restore then
+        arena.graphics.shake_friction = arena.kris_shake_restore.friction
+        arena.graphics.shake_delay = arena.kris_shake_restore.delay
+        arena.kris_shake_restore = nil
+    end
+    arena.kris_shake_tweens = nil
+    arena.graphics.shake_x = 0
+    arena.graphics.shake_y = 0
+    arena.graphics.shake_timer = 0
+end
+
+local function shakeArena(from_x, from_y)
+    local arena = Game.battle.arena
+    if arena then
+        clearArenaShake(arena)
+
+        local center_x, center_y = arena:getCenter()
+        local angle = MathUtils.angle(from_x or center_x, from_y or center_y, center_x, center_y)
+        local jitter = randomBetween(math.rad(8), math.rad(18))
+        if love.math.random() < 0.5 then
+            jitter = -jitter
+        end
+        angle = angle + jitter
+
+        local amount = 12
+        local dx = math.cos(angle) * amount
+        local dy = math.sin(angle) * amount
+        local graphics = arena.graphics
+        local timer = Game.battle.timer
+        local handles = {}
+
+        arena.kris_shake_tweens = handles
+        arena.kris_shake_restore = {
+            friction = graphics.shake_friction,
+            delay = graphics.shake_delay,
+        }
+        graphics.shake_friction = 0
+        graphics.shake_delay = math.huge
+
+        local function addTween(handle)
+            table.insert(handles, handle)
+        end
+
+        addTween(timer:tween(1 / 30, graphics, { shake_x = dx, shake_y = dy }, "linear", function()
+            if arena.kris_shake_tweens ~= handles then return end
+            addTween(timer:tween(3 / 30, graphics, { shake_x = -dx * 0.45, shake_y = -dy * 0.45 }, "linear", function()
+                if arena.kris_shake_tweens ~= handles then return end
+                addTween(timer:tween(2 / 30, graphics, { shake_x = 0, shake_y = 0 }, "linear", function()
+                    if arena.kris_shake_tweens ~= handles then return end
+                    clearArenaShake(arena)
+                end))
+            end))
+        end))
+    end
+end
+
 local function makeHardCircle(size, scale, inner_radius)
     scale = scale or { 1, 1 }
     inner_radius = inner_radius or 0
@@ -261,8 +324,9 @@ function KrisPhase1_2:setupSlashAssets()
     }
 end
 
-function KrisPhase1_2:spawnSlash(x, y, rotation)
+function KrisPhase1_2:spawnSlash(x, y, rotation, kris_x, kris_y)
     self:setupSlashAssets()
+    shakeArena(kris_x, kris_y)
 
     x = x or SCREEN_WIDTH / 2
     y = y or SCREEN_HEIGHT / 2
@@ -382,7 +446,7 @@ function KrisPhase1_2:onStart()
                 end)
             end
             self.timer:after(SLASH_START_DELAY, function()
-                self:spawnSlash(s.x, s.y, s.r)
+                self:spawnSlash(s.x, s.y, s.r, s.kris_x, s.kris_y)
             end)
         end
     end)
