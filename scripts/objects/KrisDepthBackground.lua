@@ -2,7 +2,7 @@ local DEPTH_TEXTURE = "battle/backgrounds/kris_depth_adjusted"
 local TWIST_STRENGTH = 0.9
 local TWIST_FREQUENCY = 50.0
 local TWIST_SPEED = 0.05
-local DEPTH_ALPHA = 0.1
+local DEPTH_ALPHA = 0.15
 
 local KrisDepthBackground, super = Class(Object)
 
