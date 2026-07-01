@@ -653,18 +653,64 @@ local function consume_marked_wheel_event(wx, wy)
     return false
 end
 
+local function selection_timestop_enabled(ds)
+    return ds
+        and ds.state == "SELECTION"
+        and Kristal.Config["objectSelectionSlowdown"]
+end
+
+local function arrow_nudge_delta(key)
+    if Input.is("left", key) then
+        return -1, 0
+    elseif Input.is("right", key) then
+        return 1, 0
+    elseif Input.is("up", key) then
+        return 0, -1
+    elseif Input.is("down", key) then
+        return 0, 1
+    end
+end
+
+local function nudge_selected_object(ds, key)
+    if TF.mode ~= TFM.IDLE or not selection_timestop_enabled(ds) then
+        return false
+    end
+
+    local obj = ds.object
+    if not obj or obj:isRemoved() then
+        return false
+    end
+
+    local dx, dy = arrow_nudge_delta(key)
+    if not dx or not dy then
+        return false
+    end
+
+    local before = snap(obj)
+    local screen_x, screen_y = obj:getScreenPos()
+    obj:setScreenPos(screen_x + dx, screen_y + dy)
+    uncache_object(obj)
+    if before then
+        push_undo_entry(before)
+    end
+    return true
+end
+
 -- ============================================================
 -- KRISTAL_EVENT: onKeyPressed
 -- ============================================================
 
 local function handle_key_pressed(key, is_repeat)
-    if is_repeat then return false end
     local ds = Kristal.DebugSystem
     if not ds or ds.state ~= "SELECTION" then return false end
     if editor_input_blocked(ds) then
         commit_pending_undo()
         if TF.mode ~= TFM.IDLE then tf_cancel() end
         return false
+    end
+
+    if is_repeat then
+        return nudge_selected_object(ds, key)
     end
 
     -- Flush pending wheel/grab undo before any key action
@@ -684,6 +730,11 @@ local function handle_key_pressed(key, is_repeat)
         push_delete_undo(obj)
         ds:unselectObject()
         obj:remove()
+        return true
+    end
+
+    -- ---- Pixel nudge selected object while Object Selector timestop is enabled ----
+    if nudge_selected_object(ds, key) then
         return true
     end
 
