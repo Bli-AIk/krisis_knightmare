@@ -86,6 +86,17 @@ local function atan2(y, x)
     return math.atan(y, x)
 end
 
+local function editor_input_blocked(ds)
+    ds = ds or Kristal.DebugSystem
+    return (Kristal.Console and Kristal.Console.is_open)
+        or (TextInput and TextInput.active)
+        or (ds and (ds.window or ds.context))
+end
+
+local function console_open()
+    return Kristal.Console and Kristal.Console.is_open
+end
+
 local function same_transform(obj, x, y, sx, sy, r)
     return obj
         and obj.x == x
@@ -650,6 +661,11 @@ local function handle_key_pressed(key, is_repeat)
     if is_repeat then return false end
     local ds = Kristal.DebugSystem
     if not ds or ds.state ~= "SELECTION" then return false end
+    if editor_input_blocked(ds) then
+        commit_pending_undo()
+        if TF.mode ~= TFM.IDLE then tf_cancel() end
+        return false
+    end
 
     -- Flush pending wheel/grab undo before any key action
     commit_pending_undo()
@@ -778,6 +794,7 @@ end
 
 function lib:onMouseMoved(x, y, dx, dy, istouch)
     if TF.mode == TFM.IDLE then return end
+    if editor_input_blocked() then tf_cancel(); return end
     if not TF.obj or TF.obj:isRemoved() then tf_exit(); return end
     if TF.has_num then return end  -- numeric mode: mouse doesn't transform
 
@@ -803,6 +820,11 @@ function lib:onWheelMoved(wx, wy)
 
     local ds = Kristal.DebugSystem
     if not ds or ds.state ~= "SELECTION" then return false end
+    if editor_input_blocked(ds) then
+        commit_pending_undo()
+        if TF.mode ~= TFM.IDLE then tf_cancel() end
+        return false
+    end
     if TF.mode ~= TFM.IDLE then return true end
 
     local obj = ds.object
@@ -843,6 +865,7 @@ function lib:onMousePressed(x, y, button, istouch, presses)
 
     local ds = Kristal.DebugSystem
     if not ds or ds.state ~= "SELECTION" then return end
+    if editor_input_blocked(ds) then return end
     if ds.__object_editor_patched then return end
 
     -- Flush pending wheel undo before starting a new operation
@@ -861,6 +884,7 @@ end
 function lib:onMouseReleased(x, y, button, istouch, presses)
     local ds = Kristal.DebugSystem
     if ds and ds.__object_editor_patched then return end
+    if editor_input_blocked(ds) then return end
 
     -- Commit pending grab undo when the drag ends
     if grab_pending and button == 1 then
@@ -968,6 +992,18 @@ patch_debug_system = function(ds)
 
     -- Patch 2: onMousePressed -> intercept transform mode and capture drag starts
     function ds:onMousePressed(x, y, button, istouch, presses)
+        if console_open() then
+            commit_pending_undo()
+            if TF.mode ~= TFM.IDLE then tf_cancel() end
+            return
+        end
+
+        if editor_input_blocked(self) then
+            commit_pending_undo()
+            if TF.mode ~= TFM.IDLE then tf_cancel() end
+            return _orig_onMousePressed(self, x, y, button, istouch, presses)
+        end
+
         if TF.mode ~= TFM.IDLE then
             if TF.obj and not TF.obj:isRemoved() then
                 self:selectObject(TF.obj)
@@ -1013,6 +1049,12 @@ patch_debug_system = function(ds)
 
     -- Patch 4: onKeyPressed -> make editor keys win over DebugSystem defaults
     function ds:onKeyPressed(key, is_repeat)
+        if console_open() then
+            commit_pending_undo()
+            if TF.mode ~= TFM.IDLE then tf_cancel() end
+            return
+        end
+
         if consume_marked_key_event(key, is_repeat) then
             return
         end
@@ -1024,6 +1066,12 @@ patch_debug_system = function(ds)
 
     -- Patch 5: onWheelMoved -> quick transform without double-applying via Game events
     function ds:onWheelMoved(wx, wy)
+        if console_open() then
+            commit_pending_undo()
+            if TF.mode ~= TFM.IDLE then tf_cancel() end
+            return
+        end
+
         if lib:onWheelMoved(wx, wy) then
             mark_wheel_event_handled(wx, wy)
             return
