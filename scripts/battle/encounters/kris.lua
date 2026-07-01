@@ -8,7 +8,7 @@ function Kris:init()
     self.background = false
     self.hide_world = true
 
-    self:addEnemy("kris")
+    self:addEnemy("kris", 550, 200)
 end
 
 function Kris:setupBackground(battle)

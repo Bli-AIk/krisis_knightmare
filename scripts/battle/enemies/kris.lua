@@ -6,8 +6,8 @@ function Kris:init()
     super.init(self)
 
     self.name = "KRIS"
-    -- Sets the actor, which handles the enemy's sprites (see scripts/data/actors/dummy.lua)
-    self:setActor("dummy")
+    -- Sets the actor, which handles the enemy's sprites (see scripts/data/actors/kris.lua)
+    self:setActor("kris")
 
     -- Enemy health
     self.max_health = 450
