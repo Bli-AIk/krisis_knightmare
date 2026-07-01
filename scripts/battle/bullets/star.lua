@@ -4,7 +4,7 @@ local Star, super = Class(Bullet)
 function Star:init(x, y, dir, min_speed, max_speed, accel_duration)
 	super.init(self, x, y, "bullets/star_invert")
 
-	self:setScale(1, 1)
+	self:setScale(0.8, 0.8)
 	self.damage = 50
 	self.inv_timer = 4 / 60
 	self.destroy_on_hit = false
@@ -43,7 +43,7 @@ function Star:onWaveSpawn(wave)
 		local img = AfterImage(ghost_ref, 0.4, 0.03)
 		ghost_ref:addChild(img)
 	end)
-	wave.timer:tween(0.5, handle, {limit = 0.189})
+	wave.timer:tween(1.0, handle, {limit = 0.189})
 end
 
 function Star:update()
@@ -75,7 +75,7 @@ function Star:update()
 	local t = math.sin(self.osc_time * 2 * math.pi * 3.5 / 1.17)
 	local sx = (34.45 + 12.05 * t) / 18 -- 22.4..46.5 px -> 1.24..2.58 scale
 	local sy = (36.15 + 8.35 * t) / 18 -- 27.8..44.5 px -> 1.54..2.47 scale
-	self:setScale(sx * 0.5, sy * 0.5)
+	self:setScale(sx * 0.5 * 0.8, sy * 0.5 * 0.8)
 end
 
 return Star

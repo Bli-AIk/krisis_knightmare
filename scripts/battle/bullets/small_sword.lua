@@ -10,7 +10,7 @@ local SmallSword, super = Class(Bullet)
 function SmallSword:init(x, y, dir, min_speed, max_speed, accel_duration)
 	super.init(self, x, y, "bullets/small_sword")
 
-	self:setScale(1, 1)
+	self:setScale(0.8, 0.8)
 	self.damage = 75
 	self.destroy_on_hit = false
 	self.alpha = 0
@@ -41,7 +41,7 @@ function SmallSword:onWaveSpawn(wave)
 	super.onWaveSpawn(self, wave)
 
 	local ghost_ref = self.ghost
-	wave.timer:every(1/15, function()
+	wave.timer:every(1 / 15, function()
 		if not ghost_ref or ghost_ref:isRemoved() then
 			return false
 		end

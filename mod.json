@@ -75,7 +75,8 @@
             "max_undo": 64
         },
         "wave-video-debug": {
-            "enabled": true, //false,
+            //"enabled": false,
+            "enabled": true,
             "debug_dir": "debug",
             "priority": "video",
             "alpha": 0.3,
@@ -135,6 +136,6 @@
     // Whether or not to enable dev mode. Dev mode enables debug keys and the console.
     "dev": true,
 
-    //"encounter": "kris"
+    "encounter": "kris"
   
 }
