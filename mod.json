@@ -64,8 +64,19 @@
         "kristal": {
             // End of config
         },
+        "object-editor": {
+            "enabled": true,
+            "snap_grid": 1,
+            "snap_angle": 5,
+            "snap_scale": 0.1,
+            "fine_factor": 0.1,
+            "wheel_scale_step": 0.1,
+            "wheel_rotate_step": 5,
+            "max_undo": 64
+        },
         "wave-video-debug": {
-            "enabled": false,
+            "enabled": true, //false,
+            "debug_dir": "debug",
             "priority": "video",
             "alpha": 0.3,
             "layer": "top"
@@ -124,6 +135,6 @@
     // Whether or not to enable dev mode. Dev mode enables debug keys and the console.
     "dev": true,
 
-    "encounter": "kris"
+    //"encounter": "kris"
   
 }

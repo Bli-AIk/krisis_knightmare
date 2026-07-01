@@ -64,12 +64,13 @@ end
 function Kris:selectWave()
     local turn = Game.battle.turn_count
 
-    ---[[ 临时强制设置
+    --[[ 临时强制设置
     do return "kris_phase1_" .. 1 end
     --]]
 
     if turn <= 5 then
         self.selected_wave = "kris_phase1_" .. turn
+        print("playing wave: " .. self.selected_wave)
         return self.selected_wave
     end
 
