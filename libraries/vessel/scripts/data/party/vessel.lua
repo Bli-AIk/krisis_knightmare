@@ -58,7 +58,7 @@ function character:init()
     self.attack_sound = "laz_c"
     self.attack_pitch = 1
 
-    self.battle_offset = { 2, 1 }
+    self.battle_offset = { 19, 2 }
     self.head_icon_offset = nil
     self.menu_icon_offset = nil
 
