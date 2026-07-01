@@ -16,6 +16,10 @@ function Kris:setupBackground(battle)
     self.bg_platform.layer = BATTLE_LAYERS["bottom"]
     self.bg_platform:setScale(2, 2)
     battle:addChild(self.bg_platform)
+
+    self.vignette = KrisVignette()
+    self.vignette.layer = BATTLE_LAYERS["bottom"] + 1
+    battle:addChild(self.vignette)
 end
 
 return Kris
