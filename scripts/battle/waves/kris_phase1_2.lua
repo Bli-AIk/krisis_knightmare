@@ -7,6 +7,7 @@ local function randomBetween(min, max)
 end
 
 local SLASH_CIRCLE_SIZE = 200
+local SLASH_START_DELAY = 16 / 30
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
 
@@ -380,7 +381,9 @@ function KrisPhase1_2:onStart()
                     moveAttackerAway(attacker)
                 end)
             end
-            self:spawnSlash(s.x, s.y, s.r)
+            self.timer:after(SLASH_START_DELAY, function()
+                self:spawnSlash(s.x, s.y, s.r)
+            end)
         end
     end)
 end
