@@ -15,6 +15,14 @@ function Kris:applyLocalization()
     self.text = Game:loc("* KRIS slashes into the combat.", "enemy_kris_turn_1")
 end
 
+function Kris:onBattleEnd()
+    for _, enemy in ipairs(Game.battle.enemies or {}) do
+        if enemy.clearHeartbeatBonuses then
+            enemy:clearHeartbeatBonuses()
+        end
+    end
+end
+
 function Kris:setupBackground(battle)
     self.bg_platform = Sprite("battle/backgrounds/kris_platform_adjusted", 0, 0)
     self.bg_platform.layer = BATTLE_LAYERS["bottom"]

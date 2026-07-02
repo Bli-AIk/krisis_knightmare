@@ -37,11 +37,13 @@ function Kris:init()
     self:registerAct(self.act_recharge, self.act_recharge_description, { "vessel" }, 100)
     self:registerAct(self.act_heartbeat, self.act_heartbeat_description, { "vessel" })
 
-    self.heartbeat_turn = 0
-    self.heartbeat_battler = nil
+    self.heartbeat_bonuses = {}
+    self.heartbeat_stacks = 0
+    self.heartbeat_active = false
 end
 
 function Kris:applyLocalization(update_acts)
+    local old_check = self.act_check
     local old_recharge = self.act_recharge
     local old_heartbeat = self.act_heartbeat
 
@@ -67,6 +69,7 @@ function Kris:applyLocalization(update_acts)
     }
     self.low_health_text = nil
 
+    self.act_check = Game:loc("Check", "act_check")
     self.act_check_description = Game:loc("Consider\nstrategy", "act_kris_check_description")
     self.act_recharge = Game:loc("Recharge", "act_kris_recharge")
     self.act_recharge_description = Game:loc("SHINE", "act_kris_recharge_description")
@@ -74,12 +77,16 @@ function Kris:applyLocalization(update_acts)
     self.act_heartbeat_description = Game:loc("Raise\nDefend", "act_kris_heartbeat_description")
 
     if self.acts[1] then
+        self.acts[1].name = self.act_check
         self.acts[1].description = self.act_check_description
     end
 
     if update_acts then
         for _, act in ipairs(self.acts or {}) do
-            if act.name == old_recharge then
+            if act.name == old_check then
+                act.name = self.act_check
+                act.description = self.act_check_description
+            elseif act.name == old_recharge then
                 act.name = self.act_recharge
                 act.description = self.act_recharge_description
             elseif act.name == old_heartbeat then
@@ -110,7 +117,9 @@ function Kris:selectWave()
 end
 
 function Kris:onAct(battler, name)
-    if name == self.act_heartbeat then
+    if name == self.act_check then
+        return super.onAct(self, battler, "Check")
+    elseif name == self.act_heartbeat then
         local vessel = nil
         for _, pb in ipairs(Game.battle.party) do
             if pb.chara.id == "vessel" then
@@ -120,8 +129,9 @@ function Kris:onAct(battler, name)
         end
         if vessel then
             vessel.chara.stats.defense = vessel.chara.stats.defense + 5
-            self.heartbeat_battler = vessel
-            self.heartbeat_turn = Game.battle.turn_count
+            self.heartbeat_bonuses[vessel.chara] = (self.heartbeat_bonuses[vessel.chara] or 0) + 5
+            self.heartbeat_stacks = self.heartbeat_stacks + 1
+            self.heartbeat_active = true
         end
         return {
             Game:loc("* Your heartbeat quickened.\n" .. WAIT ..
@@ -167,17 +177,29 @@ function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
     super.hurt(self, amount, battler, on_defeat, color, show_status, attacked)
 end
 
+function Kris:clearHeartbeatBonuses()
+    for chara, defense in pairs(self.heartbeat_bonuses or {}) do
+        chara.stats.defense = chara.stats.defense - defense
+    end
+    self.heartbeat_bonuses = {}
+    self.heartbeat_stacks = 0
+    self.heartbeat_active = false
+end
+
+function Kris:getHeartbeatInvTimerCap()
+    return math.max(1 / 60, (5 - self.heartbeat_stacks) / 60)
+end
+
+function Kris:onRemove(parent)
+    self:clearHeartbeatBonuses()
+    super.onRemove(self, parent)
+end
+
 function Kris:update()
-    if self.heartbeat_turn > 0 then
-        if Game.battle.soul and Game.battle.soul.inv_timer > 4 / 60 then
-            Game.battle.soul.inv_timer = 4 / 60
-        end
-        if Game.battle.turn_count > self.heartbeat_turn then
-            if self.heartbeat_battler then
-                self.heartbeat_battler.chara.stats.defense = self.heartbeat_battler.chara.stats.defense - 5
-                self.heartbeat_battler = nil
-            end
-            self.heartbeat_turn = 0
+    if self.heartbeat_active then
+        local inv_timer_cap = self:getHeartbeatInvTimerCap()
+        if Game.battle.soul and Game.battle.soul.inv_timer > inv_timer_cap then
+            Game.battle.soul.inv_timer = inv_timer_cap
         end
     end
     super.update(self)

@@ -54,6 +54,7 @@ function FlyingSword:init(x, y, dir, spin)
     self.physics.direction = dir or 0
     self.graphics.spin = 0
     self.damage = 100
+    self.tp = 5
 
     self.target_spin = TARGET_SPIN
     self.frame_timer = 0
