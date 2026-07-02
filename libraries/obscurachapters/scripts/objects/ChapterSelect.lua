@@ -19,8 +19,7 @@ local ChapterSelect, super = Class(Object)
 
 function ChapterSelect:init()
     super.init(self,0,0,SCREEN_WIDTH,SCREEN_HEIGHT)
-    self.font = Assets.getFont("main")
-    self.smfont = Assets.getFont("main",16)
+    self:updateFonts(true)
     self:loadChapters()
     self.info = {
         Kristal.getLibConfig("obscurachapters", "infoAuthor") or ("By: " .. (Mod.info.author or "Unknown")),
@@ -43,6 +42,17 @@ function ChapterSelect:init()
         self.last_scroll_target = 0
         self:updateScroll()
     end)
+end
+
+function ChapterSelect:updateFonts(force)
+    local language = Game.getLanguage and Game:getLanguage() or nil
+    if not force and self.font_language == language then
+        return
+    end
+
+    self.font_language = language
+    self.font = Assets.getFont("main")
+    self.smfont = Assets.getFont("main",16)
 end
 
 function ChapterSelect:loadChapters()
@@ -101,6 +111,7 @@ function ChapterSelect:getScrollTarget()
 end
 
 function ChapterSelect:draw()
+    self:updateFonts()
     super.draw(self)
     local canvas = Draw.pushCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
     love.graphics.setFont(self.font)
@@ -131,7 +142,7 @@ function ChapterSelect:draw()
         Draw.draw(self.heart, 322, 442, 0, 2,2)
         Draw.setColor(prev)
     end
-    Draw.printAlign("Options", 352, 434)
+    self:drawNextLanguageName(352, 434)
     love.graphics.push()
     love.graphics.translate(6,1)
     self:drawShadowCrystals()
@@ -140,6 +151,70 @@ function ChapterSelect:draw()
     Draw.popCanvas()
     Draw.setColor(self:getDrawColor())
     Draw.draw(canvas)
+end
+
+function ChapterSelect:getFontForLanguage(language, size)
+    if language then
+        local font = Assets.getFont("lang/" .. language .. "/main", size)
+        if font then
+            return font
+        end
+    end
+    return size and Assets.getFont("main", size) or self.font
+end
+
+function ChapterSelect:getNextLanguage()
+    if not Game.getLanguages or not Game.getLanguage then
+        return nil
+    end
+
+    local languages = Game:getLanguages()
+    if #languages == 0 then
+        return nil
+    end
+
+    local current = Game:getLanguage()
+    for index, language in ipairs(languages) do
+        if language == current then
+            return languages[(index % #languages) + 1]
+        end
+    end
+
+    return languages[1]
+end
+
+function ChapterSelect:getNextLanguageName()
+    local next_language = self:getNextLanguage()
+    if next_language and Game.getLanguageName then
+        return Game:getLanguageName(next_language)
+    end
+    return "Language"
+end
+
+function ChapterSelect:drawNextLanguageName(x, y)
+    local next_language = self:getNextLanguage()
+    local font = self:getFontForLanguage(next_language)
+    local old_font = love.graphics.getFont()
+
+    love.graphics.setFont(font)
+    Draw.printAlign(self:getNextLanguageName(), x, y)
+    love.graphics.setFont(old_font)
+end
+
+function ChapterSelect:switchLanguage()
+    local next_language = self:getNextLanguage()
+    if next_language and Game.setLanguage and Game:setLanguage(next_language) then
+        self:updateFonts(true)
+        Assets.stopAndPlaySound("ui_select")
+    else
+        Assets.stopAndPlaySound("ui_cancel")
+    end
+end
+
+function ChapterSelect:openOptions()
+    Assets.playSound("ui_select")
+    Game.world:closeMenu()
+    Game.world:loadMap("options")
 end
 
 function ChapterSelect:drawVersionInfo()
@@ -217,6 +292,10 @@ end
 
 function ChapterSelect:onKeyPressed(key)
     if not Kristal.getLibConfig("obscurachapters", "interactable_while_fading") and self.alpha < 1 then
+        return
+    end
+    if key == "escape" then
+        self:openOptions()
         return
     end
     if self.state == "SELECT" then
@@ -303,9 +382,7 @@ function ChapterSelect:onKeyPressedSelect(key)
             end, {speed = .5})
             Game.state = "EXIT"
         else
-            Assets.playSound("ui_select")
-            Game.world:closeMenu()
-            Game.world:loadMap("options")
+            self:switchLanguage()
         end
     end
     self:updateScroll()

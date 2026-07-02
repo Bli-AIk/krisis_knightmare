@@ -64,6 +64,14 @@
         "kristal": {
             // End of config
         },
+        "langLibZh": {
+            "defaultLanguage": "auto",
+            "languages": ["en", "zh_hans"],
+            "languageNames": {
+                "en": "English",
+                "zh_hans": "简体中文"
+            }
+        },
         "object-editor": {
             "enabled": true,
             "snap_grid": 1,

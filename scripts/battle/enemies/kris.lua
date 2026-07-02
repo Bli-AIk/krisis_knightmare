@@ -5,7 +5,6 @@ local WAIT = "[wait:5]"
 function Kris:init()
     super.init(self)
 
-    self.name = "KRIS"
     -- Sets the actor, which handles the enemy's sprites (see scripts/data/actors/kris.lua)
     self:setActor("kris")
     self.layer = BATTLE_LAYERS["above_bullets"] + 1
@@ -34,32 +33,61 @@ function Kris:init()
 
     self.dialogue = {}
 
-    -- Check text (automatically has "ENEMY NAME - " at the start)
-    self.check = {
-        "?? ATK ??? DEF",
-        "Darkness grants them regeneration." .. WAIT .. "\n* Transformed into a monster\nof pure aggressive instinct.",
-        "Use your power to defeat them.",
-    }
-
-    self.text = {
-        "* KRIS slashes into the combat.",
-        "* The darkness froze on the blade.",
-        "* Suddenly, the earth was torn apart by swords.",
-        "* Your soul is full of the POWER OF LIGHT.",
-        "* Darkness emerges from the crack, surging towards the sky.",
-        "* Suddenly, your body seized up.",
-        "* The thick fog gathered, then formed its shape.",
-        "* Countless swords make you dizzy.",
-        "* Your soul is full of POWER. (WIP!!)",
-    }
-    self.low_health_text = nil
-
-    self.acts[1].description = "Consider\nstrategy"
-    self:registerAct("Recharge", "SHINE", { "vessel" }, 100)
-    self:registerAct("Heartbeat", "Raise\nDefend", { "vessel" })
+    self:applyLocalization()
+    self:registerAct(self.act_recharge, self.act_recharge_description, { "vessel" }, 100)
+    self:registerAct(self.act_heartbeat, self.act_heartbeat_description, { "vessel" })
 
     self.heartbeat_turn = 0
     self.heartbeat_battler = nil
+end
+
+function Kris:applyLocalization(update_acts)
+    local old_recharge = self.act_recharge
+    local old_heartbeat = self.act_heartbeat
+
+    self.name = Game:loc("KRIS", "enemy_kris_name")
+
+    -- Check text (automatically has "ENEMY NAME - " at the start)
+    self.check = {
+        Game:loc("?? ATK ??? DEF", "enemy_kris_check_1"),
+        Game:loc("Darkness grants them regeneration." .. WAIT .. "\n* Transformed into a monster\nof pure aggressive instinct.", "enemy_kris_check_2"),
+        Game:loc("Use your power to defeat them.", "enemy_kris_check_3"),
+    }
+
+    self.text = {
+        Game:loc("* KRIS slashes into the combat.", "enemy_kris_turn_1"),
+        Game:loc("* The darkness froze on the blade.", "enemy_kris_turn_2"),
+        Game:loc("* Suddenly, the earth was torn apart by swords.", "enemy_kris_turn_3"),
+        Game:loc("* Your soul is full of the POWER OF LIGHT.", "enemy_kris_turn_4"),
+        Game:loc("* Darkness emerges from the crack, surging towards the sky.", "enemy_kris_turn_5"),
+        Game:loc("* Suddenly, your body seized up.", "enemy_kris_turn_6"),
+        Game:loc("* The thick fog gathered, then formed its shape.", "enemy_kris_turn_7"),
+        Game:loc("* Countless swords make you dizzy.", "enemy_kris_turn_8"),
+        Game:loc("* Your soul is full of POWER. (WIP!!)", "enemy_kris_turn_9"),
+    }
+    self.low_health_text = nil
+
+    self.act_check_description = Game:loc("Consider\nstrategy", "act_kris_check_description")
+    self.act_recharge = Game:loc("Recharge", "act_kris_recharge")
+    self.act_recharge_description = Game:loc("SHINE", "act_kris_recharge_description")
+    self.act_heartbeat = Game:loc("Heartbeat", "act_kris_heartbeat")
+    self.act_heartbeat_description = Game:loc("Raise\nDefend", "act_kris_heartbeat_description")
+
+    if self.acts[1] then
+        self.acts[1].description = self.act_check_description
+    end
+
+    if update_acts then
+        for _, act in ipairs(self.acts or {}) do
+            if act.name == old_recharge then
+                act.name = self.act_recharge
+                act.description = self.act_recharge_description
+            elseif act.name == old_heartbeat then
+                act.name = self.act_heartbeat
+                act.description = self.act_heartbeat_description
+            end
+        end
+    end
 end
 
 function Kris:selectWave()
@@ -82,7 +110,7 @@ function Kris:selectWave()
 end
 
 function Kris:onAct(battler, name)
-    if name == "Heartbeat" then
+    if name == self.act_heartbeat then
         local vessel = nil
         for _, pb in ipairs(Game.battle.party) do
             if pb.chara.id == "vessel" then
@@ -96,12 +124,12 @@ function Kris:onAct(battler, name)
             self.heartbeat_turn = Game.battle.turn_count
         end
         return {
-            "* Your heartbeat quickened.\n" .. WAIT ..
+            Game:loc("* Your heartbeat quickened.\n" .. WAIT ..
             "* Your DEF raised.\n" .. WAIT ..
-            "* Your Invincible shorter."
+            "* Your Invincible shorter.", "act_kris_heartbeat_text")
         }
-    elseif name == "Recharge" then
-        return "* Your SOUL emitted a strange glow!"
+    elseif name == self.act_recharge then
+        return Game:loc("* Your SOUL emitted a strange glow!", "act_kris_recharge_text")
     end
 
     return super.onAct(self, battler, name)

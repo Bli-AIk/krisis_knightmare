@@ -3,12 +3,16 @@ local Kris, super = Class(Encounter)
 function Kris:init()
     super.init(self)
 
-    self.text = "* KRIS slashes into the combat."
+    self:applyLocalization()
     self.music = "never_forgetting"
     self.background = false
     self.hide_world = true
 
     self:addEnemy("kris", 507, 239)
+end
+
+function Kris:applyLocalization()
+    self.text = Game:loc("* KRIS slashes into the combat.", "enemy_kris_turn_1")
 end
 
 function Kris:setupBackground(battle)
