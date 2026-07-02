@@ -2,7 +2,7 @@ local KrisPhase1_5, super = Class(Wave)
 
 function KrisPhase1_5:init()
     super.init(self)
-    self.time = 5
+    self.time = 15
 end
 
 local KRIS_FAR_X = 10000
