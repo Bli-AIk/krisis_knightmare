@@ -53,6 +53,7 @@ function FlyingSword:init(x, y, dir, spin)
 
     self.physics.direction = dir or 0
     self.graphics.spin = 0
+    self.damage = 100
 
     self.target_spin = TARGET_SPIN
     self.frame_timer = 0
@@ -68,6 +69,11 @@ function FlyingSword:init(x, y, dir, spin)
     self.decel_started = false
     self.stop_timer = 0
     self.return_timer = 0
+
+    self.scale_x = 2.25
+    self.scale_y = 2.25
+
+    self:setHitbox(25, 4, 10, 54)
 end
 
 function FlyingSword:onWaveSpawn(wave)
