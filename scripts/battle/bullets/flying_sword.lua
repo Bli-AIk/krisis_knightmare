@@ -13,6 +13,7 @@ local SPIN_RAMP_START_FRAME = ENTER_FRAME_DURATION
 local SPIN_RAMP_END_FRAME = ENTER_FRAME_DURATION * 3
 
 local ROUND_TRIP_FRAMES = 2 * 30 + 16
+local APEX_INTERVAL_FRAMES = ROUND_TRIP_FRAMES / 2
 local ROUND_TRIP_COUNT = 3.5
 local MOVE_START_FRAME = SPIN_RAMP_END_FRAME
 local MOVE_TOTAL_FRAMES = ROUND_TRIP_FRAMES * ROUND_TRIP_COUNT
@@ -24,6 +25,7 @@ local LEFT_ROTATION = -math.pi / 2
 
 local STOP_FRAMES = 3
 local RETURN_FRAMES = 0.5 * 30
+local GRAZE_TP_MAX = 3
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -53,8 +55,8 @@ function FlyingSword:init(x, y, dir, spin)
 
     self.physics.direction = dir or 0
     self.graphics.spin = 0
+    self.current_spin = 0
     self.damage = 100
-    self.tp = 5
 
     self.target_spin = TARGET_SPIN
     self.frame_timer = 0
@@ -68,6 +70,7 @@ function FlyingSword:init(x, y, dir, spin)
 
     self.state = "move"
     self.decel_started = false
+    self.last_graze_reset_apex = nil
     self.stop_timer = 0
     self.return_timer = 0
 
@@ -75,6 +78,12 @@ function FlyingSword:init(x, y, dir, spin)
     self.scale_y = 2.25
 
     self:setHitbox(25, 4, 10, 54)
+end
+
+function FlyingSword:getGrazeTension()
+    local default_tp = super.getGrazeTension(self)
+    local progress = clamp(math.abs(self.current_spin) / TARGET_SPIN, 0, 1)
+    return default_tp + (GRAZE_TP_MAX - default_tp) * progress
 end
 
 function FlyingSword:onWaveSpawn(wave)
@@ -121,6 +130,14 @@ function FlyingSword:updateMovePosition(move_timer)
     self.y = self.start_y + (self.left_y - self.start_y) * amount
 end
 
+function FlyingSword:updateGrazeReset(move_timer)
+    local apex_index = math.floor(move_timer / APEX_INTERVAL_FRAMES)
+    if self.last_graze_reset_apex ~= apex_index then
+        self.grazed = false
+        self.last_graze_reset_apex = apex_index
+    end
+end
+
 function FlyingSword:updateMoveRotation(move_timer)
     local decel_start = MOVE_TOTAL_FRAMES - SPIN_DECEL_FRAMES
 
@@ -136,11 +153,14 @@ function FlyingSword:updateMoveRotation(move_timer)
 
         local t = clamp((move_timer - decel_start) / SPIN_DECEL_FRAMES, 0, 1)
         local eased = easeOutCubic(t)
+        local previous_rotation = self.rotation
         self.rotation = self.decel_start_rotation + (self.decel_target_rotation - self.decel_start_rotation) * eased
+        self.current_spin = math.abs(self.rotation - previous_rotation) / math.max(DTMULT, 0.001)
         return
     end
 
     if self.frame_timer < SPIN_RAMP_START_FRAME then
+        self.current_spin = 0
         return
     end
 
@@ -150,11 +170,15 @@ function FlyingSword:updateMoveRotation(move_timer)
         spin = self.target_spin * clamp(t, 0, 1)
     end
 
+    self.current_spin = spin
     self.rotation = self.rotation + spin * DTMULT
 end
 
 function FlyingSword:startStop()
     self.state = "stop"
+    self.current_spin = 0
+    self.grazed = false
+    self.last_graze_reset_apex = math.floor(MOVE_TOTAL_FRAMES / APEX_INTERVAL_FRAMES)
     self.stop_timer = 0
     self.x = self.left_x
     self.y = self.left_y
@@ -177,6 +201,7 @@ end
 
 function FlyingSword:updateReturn()
     self.return_timer = self.return_timer + DTMULT
+    self.current_spin = 0
 
     local t = clamp(self.return_timer / RETURN_FRAMES, 0, 1)
     local eased = easeInCubic(t)
@@ -203,6 +228,7 @@ function FlyingSword:updateMove()
     end
 
     self:updateMovePosition(move_timer)
+    self:updateGrazeReset(move_timer)
     self:updateMoveRotation(move_timer)
 end
 
