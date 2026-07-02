@@ -19,9 +19,11 @@ function actor:init()
     self.animations = {
         ["idle"] = { "idle", NORMAL_SPEED, true },
 
-        ["appear"] = { "appear", NORMAL_SPEED, false, next = "idle" },
+        ["appear"] = { "appear", FAST_SPEED, false, next = "idle" },
         ["act"] = { "act", NORMAL_SPEED, false, next = "idle" },
         ["catch_sword"] = { "catch_sword", NORMAL_SPEED, false, next = "idle" },
+        ["catch_sword_ready"] = { "catch_sword", NORMAL_SPEED, false, frames = { "1-4" } },
+        ["catch_sword_finish"] = { "catch_sword", FAST_SPEED, false, frames = { "5-6" } },
         ["grab_soul"] = { "grab_soul", NORMAL_SPEED, false, next = "idle" },
         ["throw_soul"] = { "throw_soul", NORMAL_SPEED, false, next = "idle" },
         ["put_back"] = { "put_back", NORMAL_SPEED, false, next = "idle" },

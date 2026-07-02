@@ -122,6 +122,9 @@ function FlyingSword:updateMoveRotation(move_timer)
             self.decel_started = true
             self.decel_start_rotation = self.rotation
             self.decel_target_rotation = nextRotationInSpinDirection(self.rotation, LEFT_ROTATION)
+            if self.on_catch_ready then
+                self.on_catch_ready(self)
+            end
         end
 
         local t = clamp((move_timer - decel_start) / SPIN_DECEL_FRAMES, 0, 1)
@@ -175,6 +178,9 @@ function FlyingSword:updateReturn()
     self.rotation = LEFT_ROTATION
 
     if t >= 1 then
+        if self.on_sword_destroyed then
+            self.on_sword_destroyed(self)
+        end
         self:remove()
     end
 end
