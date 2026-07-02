@@ -1,6 +1,7 @@
 local KrisPhase1_5, super = Class(Wave)
 
 local FPS = 30
+local DISAPPEAR_FRAME_SECONDS = 4 / FPS
 local SWORD_ENTER_AND_RAMP_FRAMES = 6
 local SWORD_ROUND_TRIP_FRAMES = 2 * FPS + 16
 local SWORD_ROUND_TRIP_COUNT = 3.5
@@ -8,6 +9,8 @@ local SWORD_STOP_FRAMES = 3
 local SWORD_RETURN_FRAMES = 0.5 * FPS
 local CATCH_FINISH_FRAMES = 2 * 5
 local END_DELAY_FRAMES = 5
+local DISAPPEAR_HOLD_FRAME = 1
+local DISAPPEAR_HOLD_SECONDS = 1.25
 
 local CATCH_KRIS_OFFSET_X = 24
 
@@ -20,7 +23,7 @@ function KrisPhase1_5:init()
         + SWORD_RETURN_FRAMES
         + CATCH_FINISH_FRAMES
         + END_DELAY_FRAMES
-    ) / FPS
+    ) / FPS + DISAPPEAR_HOLD_SECONDS
 end
 
 local KRIS_FAR_X = 10000
@@ -36,6 +39,36 @@ local function moveAttackerAway(attacker)
     moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
 end
 
+local function playDisappearingWithHold(attacker, callback)
+    attacker:setAnimation({
+        "flying_sword_disappear",
+        function(sprite, wait)
+            local frame_count = sprite.frames and #sprite.frames or 0
+            for frame = 1, frame_count do
+                sprite:setFrame(frame)
+
+                if frame == DISAPPEAR_HOLD_FRAME then
+                    wait(DISAPPEAR_FRAME_SECONDS + DISAPPEAR_HOLD_SECONDS)
+                else
+                    wait(DISAPPEAR_FRAME_SECONDS)
+                end
+            end
+        end,
+        next = "idle",
+    }, callback)
+end
+
+function KrisPhase1_5:spawnFlyingSword()
+    local sword = self:spawnBullet("flying_sword", 320, 240, 0, math.rad(12))
+    sword.on_catch_ready = function()
+        self:startCatchSword()
+    end
+    sword.on_sword_destroyed = function()
+        self:finishCatchSword()
+    end
+    return sword
+end
+
 function KrisPhase1_5:onStart()
     self.kris_home_positions = {}
     self.can_finish = false
@@ -47,17 +80,25 @@ function KrisPhase1_5:onStart()
             x = attacker.target_x or attacker.x,
             y = attacker.target_y or attacker.y,
         }
-        attacker:setAnimation("flying_sword_disappear", function()
+        playDisappearingWithHold(attacker, function()
             moveAttackerAway(attacker)
         end)
     end
 
-    local sword = self:spawnBullet("flying_sword", 320, 240, 0, math.rad(12))
-    sword.on_catch_ready = function()
-        self:startCatchSword()
+    local function pauseSword(sword)
+        if sword.parent and sword.pauseMovement then
+            sword:pauseMovement(DISAPPEAR_HOLD_SECONDS * FPS)
+        end
     end
-    sword.on_sword_destroyed = function()
-        self:finishCatchSword()
+
+    local sword = self:spawnFlyingSword()
+    local pause_delay = DISAPPEAR_FRAME_SECONDS * (DISAPPEAR_HOLD_FRAME - 1)
+    if pause_delay <= 0 then
+        pauseSword(sword)
+    else
+        self.timer:after(pause_delay, function()
+            pauseSword(sword)
+        end)
     end
 end
 

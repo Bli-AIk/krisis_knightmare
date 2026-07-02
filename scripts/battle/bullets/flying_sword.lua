@@ -71,6 +71,7 @@ function FlyingSword:init(x, y, dir, spin)
     self.state = "move"
     self.decel_started = false
     self.last_graze_reset_apex = nil
+    self.pause_timer = 0
     self.stop_timer = 0
     self.return_timer = 0
 
@@ -174,6 +175,10 @@ function FlyingSword:updateMoveRotation(move_timer)
     self.rotation = self.rotation + spin * DTMULT
 end
 
+function FlyingSword:pauseMovement(frames)
+    self.pause_timer = math.max(self.pause_timer or 0, frames)
+end
+
 function FlyingSword:startStop()
     self.state = "stop"
     self.current_spin = 0
@@ -233,6 +238,13 @@ function FlyingSword:updateMove()
 end
 
 function FlyingSword:update()
+    if self.pause_timer > 0 then
+        self.pause_timer = math.max(self.pause_timer - DTMULT, 0)
+        self.current_spin = 0
+        super.update(self)
+        return
+    end
+
     if self.state == "move" then
         self:updateMove()
     elseif self.state == "stop" then
