@@ -5,6 +5,7 @@ local WAVE_SECONDS = 6
 local EXTRA_FRAMES = 50
 local WAVE_FRAMES = WAVE_SECONDS * FPS + EXTRA_FRAMES
 local SPAWN_INTERVAL_FRAMES = 5
+local TOTAL_SHARP_SWORDS = 27
 local ARENA_Y_MARGIN = 20
 local SPAWN_RIGHT_OFFSET = 50
 local SAFE_CURVE_PADDING = 16
@@ -16,8 +17,7 @@ local EDGE_PLACEMENT_CHANCE = 0.58
 local CURVE_BLOCKER_CHANCE = 0.34
 local EDGE_BAND_DEPTH = 28
 local FLOAT_BAND_RATIO = 0.38
-local PAIR_SPAWN_INTERVAL = 11
-local PAIR_SPAWN_PHASE = 6
+local PAIR_SPAWN_MAX_COUNT = 2
 local PAIR_GAP_RATIO = 0.44
 local PAIR_GAP_MIN = 72
 local PAIR_GAP_MAX = 84
@@ -29,10 +29,19 @@ local DENSITY_Y_RADIUS = 54
 local DENSITY_GLOBAL_WEIGHT = 0.08
 local DENSITY_SCALE_STEP = 0.28
 local DENSITY_MIN_SCALE = 1
-local SHOW_SAFE_CURVE = true
+
+local SHOW_SAFE_CURVE = false
+
 local SAFE_CURVE_DRAW_STEPS = 72
 local SAFE_CURVE_DRAW_WINDOW_FRAMES = 120
 local SIDE_PATTERN = { "top", "bottom" }
+
+local KRIS_FAR_X = 10000
+local KRIS_FAR_Y = 10000
+local KRIS_SWORD_HALL_FRAME_FRAMES = 4
+local KRIS_SWORD_HALL_BULLET_START_FRAME = 6
+local KRIS_SWORD_HALL_BULLET_START_WAVE_FRAME =
+    (KRIS_SWORD_HALL_BULLET_START_FRAME - 1) * KRIS_SWORD_HALL_FRAME_FRAMES
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -43,11 +52,47 @@ local function deterministicNoise(index, salt)
     return value - math.floor(value)
 end
 
+local function moveAttackerTo(attacker, x, y)
+    attacker.target_x = x
+    attacker.target_y = y
+    attacker:setPosition(attacker.target_x, attacker.target_y)
+end
+
+local function moveAttackerAway(attacker)
+    moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
+end
+
+local function playSwordHallDisappear(attacker, on_bullet_start, on_finished)
+    attacker:setAnimation({
+        "sword_hall_disappear",
+        function(sprite, wait)
+            local frame_count = sprite.frames and #sprite.frames or 0
+            for frame = 1, frame_count do
+                sprite:setFrame(frame)
+
+                if frame == KRIS_SWORD_HALL_BULLET_START_FRAME and on_bullet_start then
+                    on_bullet_start()
+                    on_bullet_start = nil
+                end
+
+                wait(KRIS_SWORD_HALL_FRAME_FRAMES / FPS)
+            end
+
+            if on_bullet_start then
+                on_bullet_start()
+            end
+        end,
+        next = "idle",
+    }, on_finished)
+end
+
 function KrisPhase1_3:init()
     super.init(self)
     self.time = WAVE_FRAMES / FPS
     self.wave_frame = 0
     self.recent_sharp_swords = {}
+    self.pattern_seed = 0
+    self.sharp_sword_started = false
 end
 
 function KrisPhase1_3:getSpawnBounds()
@@ -139,8 +184,24 @@ function KrisPhase1_3:rememberSharpSword(spawn_frame, y, scale_y)
     end
 end
 
+function KrisPhase1_3:rollPatternSeed()
+    if Mod and Mod.nextKrisisRandomSeed then
+        return Mod:nextKrisisRandomSeed("kris_phase1_3")
+    end
+
+    return os.time()
+end
+
+function KrisPhase1_3:noise(index, salt)
+    local seed = self.pattern_seed or 0
+
+    return deterministicNoise(index + seed * 0.013, salt + seed * 0.017)
+end
+
 function KrisPhase1_3:getPreferredSide(spawn_index)
-    return SIDE_PATTERN[((spawn_index - 1) % #SIDE_PATTERN) + 1]
+    local side_offset = self:noise(1, 31) < 0.5 and 0 or 1
+
+    return SIDE_PATTERN[((spawn_index - 1 + side_offset) % #SIDE_PATTERN) + 1]
 end
 
 function KrisPhase1_3:getEdgeAnchoredY(scale_y, side)
@@ -157,7 +218,7 @@ end
 function KrisPhase1_3:getEdgeBandY(spawn_index, side)
     local spawn_top, spawn_bottom = self:getSpawnBounds()
     local salt = side == "top" and 9 or 10
-    local offset = deterministicNoise(spawn_index * 17, salt) * EDGE_BAND_DEPTH
+    local offset = self:noise(spawn_index * 17, salt) * EDGE_BAND_DEPTH
 
     if side == "top" then
         return spawn_top + offset
@@ -172,7 +233,7 @@ function KrisPhase1_3:tryEdgePlacement(spawn_index, curve_y, preferred_side)
 
     for attempt = 0, 7 do
         local seed = spawn_index * 7 + attempt * 19 + (side == "top" and 0 or 1)
-        local scale_y = 1 + 2 * deterministicNoise(seed, 4)
+        local scale_y = 1 + 2 * self:noise(seed, 4)
         local y = self:getEdgeBandY(seed, side)
 
         if not self:overlapsSafeCurve(y, scale_y, curve_y) then
@@ -191,7 +252,7 @@ function KrisPhase1_3:tryFloatingPlacement(spawn_index, curve_y, preferred_side)
 
     for attempt = 0, 23 do
         local seed = spawn_index * 31 + attempt
-        local scale_y = 1 + 2 * deterministicNoise(seed, 2)
+        local scale_y = 1 + 2 * self:noise(seed, 2)
         local max_y
         local min_y
 
@@ -209,7 +270,7 @@ function KrisPhase1_3:tryFloatingPlacement(spawn_index, curve_y, preferred_side)
             scale_y = 1
         end
 
-        local y = min_y + (max_y - min_y) * deterministicNoise(seed, 1)
+        local y = min_y + (max_y - min_y) * self:noise(seed, 1)
 
         if not self:overlapsSafeCurve(y, scale_y, curve_y) then
             return y, scale_y
@@ -237,9 +298,9 @@ function KrisPhase1_3:tryCurveBlockerPlacement(spawn_index, curve_y, preferred_s
 
     for attempt = 0, 15 do
         local seed = spawn_index * 43 + attempt
-        local scale_y = 1 + 2 * deterministicNoise(seed, 12)
+        local scale_y = 1 + 2 * self:noise(seed, 12)
         local half_height = SHARP_SWORD_HEIGHT * scale_y / 2
-        local offset = padding + half_height + deterministicNoise(seed, 13) * CURVE_BLOCKER_BAND_DEPTH
+        local offset = padding + half_height + self:noise(seed, 13) * CURVE_BLOCKER_BAND_DEPTH
         local y
 
         if side == "top" then
@@ -270,7 +331,7 @@ function KrisPhase1_3:getPairPlacement(spawn_frame, spawn_index)
     end
 
     local curve_y = self:getSafeCurveY(spawn_frame + SAFE_CURVE_LOOKAHEAD_FRAMES)
-    local gap_center = curve_y + (deterministicNoise(spawn_index, 8) - 0.5) * PAIR_GAP_WOBBLE
+    local gap_center = curve_y + (self:noise(spawn_index, 8) - 0.5) * PAIR_GAP_WOBBLE
     gap_center = clamp(gap_center, min_gap_center, max_gap_center)
 
     local top_length = gap_center - gap_size / 2 - spawn_top
@@ -286,14 +347,51 @@ function KrisPhase1_3:getPairPlacement(spawn_frame, spawn_index)
     }
 end
 
-function KrisPhase1_3:shouldSpawnPair(spawn_index)
-    return spawn_index % PAIR_SPAWN_INTERVAL == PAIR_SPAWN_PHASE
+function KrisPhase1_3:buildSharpSwordSpawnPlan()
+    local total_slots = math.floor((WAVE_FRAMES - 1) / SPAWN_INTERVAL_FRAMES) + 1
+    local pair_roll = self:noise(WAVE_FRAMES, 20)
+    local pair_count = pair_roll < 0.18 and 0
+        or pair_roll < 0.88 and 1
+        or PAIR_SPAWN_MAX_COUNT
+    local event_count = TOTAL_SHARP_SWORDS - pair_count
+    local pair_events = {}
+    local plan = {}
+
+    for pair_index = 1, pair_count do
+        local min_event = math.min(2, event_count)
+        local max_event = math.max(min_event, event_count - 1)
+        local event_span = max_event - min_event + 1
+        local event_index = min_event + math.floor(self:noise(pair_index, 21) * event_span)
+
+        while pair_events[event_index] do
+            event_index = event_index + 1
+            if event_index > max_event then
+                event_index = min_event
+            end
+        end
+
+        pair_events[event_index] = true
+    end
+
+    local start_slot = 0
+
+    for event_index = 1, event_count do
+        local slot = start_slot + event_index - 1
+
+        table.insert(plan, {
+            frame = slot * SPAWN_INTERVAL_FRAMES,
+            index = event_index,
+            pair = pair_events[event_index] or false,
+        })
+    end
+
+    return plan
 end
 
 function KrisPhase1_3:getSharpSwordPlacement(spawn_frame, spawn_index)
     local min_y, max_y = self:getSpawnBounds()
     local curve_y = self:getSafeCurveY(spawn_frame + SAFE_CURVE_LOOKAHEAD_FRAMES)
-    local placement_roll = deterministicNoise(spawn_index, 6)
+    local placement_roll = self:noise(spawn_index, 6)
     local preferred_side = self:getPreferredSide(spawn_index)
     local fallback_side = preferred_side == "top" and "bottom" or "top"
 
@@ -392,23 +490,72 @@ function KrisPhase1_3:spawnSharpSword(spawn_frame, spawn_index)
     self:rememberSharpSword(spawn_frame, y, scale_y)
 end
 
+function KrisPhase1_3:startSharpSwordPattern()
+    if self.sharp_sword_started then
+        return
+    end
+
+    self.sharp_sword_started = true
+
+    for _, spawn in ipairs(self:buildSharpSwordSpawnPlan()) do
+        local relative_frame = spawn.frame
+        local absolute_frame = KRIS_SWORD_HALL_BULLET_START_WAVE_FRAME + relative_frame
+        local delay = relative_frame / FPS
+
+        local function spawnNow()
+            if spawn.pair then
+                self:spawnSharpSwordPair(absolute_frame, spawn.index)
+            else
+                self:spawnSharpSword(absolute_frame, spawn.index)
+            end
+        end
+
+        if delay <= 0 then
+            spawnNow()
+        else
+            self.timer:after(delay, spawnNow)
+        end
+    end
+end
+
 function KrisPhase1_3:onStart()
     self.wave_frame = 0
     self.recent_sharp_swords = {}
+    self.pattern_seed = self:rollPatternSeed()
+    self.kris_home_positions = {}
+    self.sharp_sword_started = false
 
-    local spawn_count = math.floor((WAVE_FRAMES - 1) / SPAWN_INTERVAL_FRAMES) + 1
-    for i = 0, spawn_count - 1 do
-        local spawn_frame = i * SPAWN_INTERVAL_FRAMES
-        local delay = spawn_frame / FPS
-        self.timer:after(delay, function()
-            local spawn_index = i + 1
-            if self:shouldSpawnPair(spawn_index) then
-                self:spawnSharpSwordPair(spawn_frame, spawn_index)
-            else
-                self:spawnSharpSword(spawn_frame, spawn_index)
-            end
+    local attacker_count = 0
+    for _, attacker in ipairs(self:getAttackers()) do
+        attacker_count = attacker_count + 1
+        self.kris_home_positions[attacker] = {
+            x = attacker.target_x or attacker.x,
+            y = attacker.target_y or attacker.y,
+        }
+        playSwordHallDisappear(attacker, function()
+            self:startSharpSwordPattern()
+        end, function()
+            moveAttackerAway(attacker)
         end)
     end
+
+    if attacker_count == 0 then
+        self.timer:after(KRIS_SWORD_HALL_BULLET_START_WAVE_FRAME / FPS, function()
+            self:startSharpSwordPattern()
+        end)
+    end
+end
+
+function KrisPhase1_3:onEnd(death)
+    for _, attacker in ipairs(self:getAttackers()) do
+        local home = self.kris_home_positions and self.kris_home_positions[attacker]
+        if home then
+            moveAttackerTo(attacker, home.x, home.y)
+        end
+        attacker:setAnimation("appear")
+    end
+
+    return super.onEnd(self, death)
 end
 
 function KrisPhase1_3:update()

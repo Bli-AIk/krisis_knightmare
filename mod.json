@@ -62,6 +62,9 @@
     // These config values can control chapter-specific features as well.
     "config": {
         "kristal": {
+            // Set to a number or string to reproduce KRISIS random patterns.
+            // Leave null for a fresh random seed each run.
+            "krisisRandomSeed": null
             // End of config
         },
         "langLibZh": {

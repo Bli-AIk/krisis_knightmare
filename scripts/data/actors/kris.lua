@@ -33,7 +33,7 @@ function actor:init()
         ["thrust_ready"] = { "thrust_ready", NORMAL_SPEED, false, next = "idle" },
         ["thrust"] = { "thrust", NORMAL_SPEED, false, next = "idle" },
 
-        ["sword_hall_disappear"] = { "sword_hall_disappear", NORMAL_SPEED, false, next = "idle" },
+        ["sword_hall_disappear"] = { "sword_hall_disappear", FAST_SPEED, false, next = "idle" },
         ["flying_sword_disappear"] = { "flying_sword_disappear", FAST_SPEED, false, next = "idle" },
         ["twist"] = { "twist", NORMAL_SPEED, false, next = "idle" },
 

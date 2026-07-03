@@ -52,6 +52,73 @@ local function updateChapterSelectLocalization(menu)
     end
 end
 
+local KRISIS_RANDOM_MODULUS = 2147483647
+
+local function normalizeSeedValue(value)
+    if value == nil or value == false or value == "" then
+        return nil
+    end
+
+    if type(value) == "number" then
+        return math.floor(math.abs(value)) % KRISIS_RANDOM_MODULUS
+    end
+
+    local text = tostring(value)
+    local hash = 0
+    for i = 1, #text do
+        hash = (hash * 131 + text:byte(i)) % KRISIS_RANDOM_MODULUS
+    end
+
+    return hash
+end
+
+function Mod:getKrisisConfiguredSeed()
+    if Game and Game.getConfig then
+        return normalizeSeedValue(Game:getConfig("krisisRandomSeed"))
+    end
+
+    local kristal_config = self.info
+        and self.info.config
+        and (self.info.config.kristal or self.info.config.KRISTAL)
+        or {}
+
+    return normalizeSeedValue(kristal_config.krisisRandomSeed)
+end
+
+function Mod:getKrisisRunSeed()
+    if self.krisis_run_seed then
+        return self.krisis_run_seed
+    end
+
+    local configured_seed = self:getKrisisConfiguredSeed()
+    if configured_seed then
+        self.krisis_run_seed = configured_seed
+        self.krisis_random_fixed = true
+    else
+        local seed = os.time()
+        if love and love.math and love.math.random then
+            seed = seed + love.math.random(1, 1000000)
+        end
+        if love and love.timer and love.timer.getTime then
+            seed = seed + math.floor(love.timer.getTime() * 1000)
+        end
+        self.krisis_run_seed = seed % KRISIS_RANDOM_MODULUS
+        self.krisis_random_fixed = false
+    end
+
+    self.krisis_seed_counter = 0
+    return self.krisis_run_seed
+end
+
+function Mod:nextKrisisRandomSeed(label)
+    local base_seed = self:getKrisisRunSeed()
+    local label_seed = normalizeSeedValue(label or "krisis") or 0
+
+    self.krisis_seed_counter = (self.krisis_seed_counter or 0) + 1
+
+    return (base_seed + label_seed * 9176 + self.krisis_seed_counter * 1009) % KRISIS_RANDOM_MODULUS
+end
+
 function Mod:hookChapterSelectLocalization()
     if self.chapter_select_localization_hooked or not ChapterSelect then
         return
