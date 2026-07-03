@@ -4,7 +4,7 @@ local SmallSwordSharp, super = Class(Bullet)
 local FPS = 30
 local FADE_FRAMES = 10
 local DEFAULT_MIN_SPEED = 4
-local DEFAULT_MAX_SPEED = 16
+local DEFAULT_MAX_SPEED = 18
 local DEFAULT_ACCEL_DURATION = 0.75
 
 local function easeInCubic(t)

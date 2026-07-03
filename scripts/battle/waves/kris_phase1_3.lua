@@ -24,6 +24,11 @@ local PAIR_GAP_MAX = 84
 local PAIR_GAP_WOBBLE = 8
 local CENTER_BLOCK_DEADZONE = 12
 local CURVE_BLOCKER_BAND_DEPTH = 10
+local DENSITY_HISTORY_FRAMES = 30
+local DENSITY_Y_RADIUS = 54
+local DENSITY_GLOBAL_WEIGHT = 0.08
+local DENSITY_SCALE_STEP = 0.28
+local DENSITY_MIN_SCALE = 1
 local SHOW_SAFE_CURVE = true
 local SAFE_CURVE_DRAW_STEPS = 72
 local SAFE_CURVE_DRAW_WINDOW_FRAMES = 120
@@ -42,6 +47,7 @@ function KrisPhase1_3:init()
     super.init(self)
     self.time = WAVE_FRAMES / FPS
     self.wave_frame = 0
+    self.recent_sharp_swords = {}
 end
 
 function KrisPhase1_3:getSpawnBounds()
@@ -78,6 +84,59 @@ function KrisPhase1_3:overlapsSafeCurve(y, scale_y, curve_y)
     local padding = self:getSafeCurvePadding()
     local half_height = SHARP_SWORD_HEIGHT * scale_y / 2
     return math.abs(y - curve_y) < half_height + padding
+end
+
+function KrisPhase1_3:getRecentSwordPressure(spawn_frame, y)
+    if not self.recent_sharp_swords then
+        return 0
+    end
+
+    local pressure = 0
+    for _, sword in ipairs(self.recent_sharp_swords) do
+        local age = spawn_frame - sword.frame
+
+        if age > 0 and age <= DENSITY_HISTORY_FRAMES then
+            local age_weight = 1 - age / DENSITY_HISTORY_FRAMES
+            local distance = math.abs(y - sword.y)
+            local reach = DENSITY_Y_RADIUS + SHARP_SWORD_HEIGHT * sword.scale_y / 2
+            local local_weight = 0
+
+            if distance < reach then
+                local_weight = 1 - distance / reach
+            end
+
+            pressure = pressure
+                + age_weight
+                * (DENSITY_GLOBAL_WEIGHT + local_weight * (0.7 + sword.scale_y * 0.25))
+        end
+    end
+
+    return pressure
+end
+
+function KrisPhase1_3:applyDensityScale(spawn_frame, y, scale_y)
+    local pressure = self:getRecentSwordPressure(spawn_frame, y)
+
+    if pressure <= 0 then
+        return scale_y
+    end
+
+    return clamp(scale_y - pressure * DENSITY_SCALE_STEP, DENSITY_MIN_SCALE, scale_y)
+end
+
+function KrisPhase1_3:rememberSharpSword(spawn_frame, y, scale_y)
+    self.recent_sharp_swords = self.recent_sharp_swords or {}
+
+    table.insert(self.recent_sharp_swords, {
+        frame = spawn_frame,
+        y = y,
+        scale_y = scale_y,
+    })
+
+    while #self.recent_sharp_swords > 0
+        and spawn_frame - self.recent_sharp_swords[1].frame > DENSITY_HISTORY_FRAMES do
+        table.remove(self.recent_sharp_swords, 1)
+    end
 end
 
 function KrisPhase1_3:getPreferredSide(spawn_index)
@@ -314,19 +373,28 @@ end
 
 function KrisPhase1_3:spawnSharpSwordPair(spawn_frame, spawn_index)
     local placement = self:getPairPlacement(spawn_frame, spawn_index)
+    local top_scale_y = self:applyDensityScale(spawn_frame, placement.top_y, placement.top_scale_y)
+    local bottom_scale_y = self:applyDensityScale(spawn_frame, placement.bottom_y, placement.bottom_scale_y)
+    local top_y = self:getEdgeAnchoredY(top_scale_y, "top")
+    local bottom_y = self:getEdgeAnchoredY(bottom_scale_y, "bottom")
 
-    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, placement.top_y, placement.top_scale_y, true)
-    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, placement.bottom_y, placement.bottom_scale_y, false)
+    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, top_y, top_scale_y, true)
+    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, bottom_y, bottom_scale_y, false)
+    self:rememberSharpSword(spawn_frame, top_y, top_scale_y)
+    self:rememberSharpSword(spawn_frame, bottom_y, bottom_scale_y)
 end
 
 function KrisPhase1_3:spawnSharpSword(spawn_frame, spawn_index)
     local y, scale_y = self:getSharpSwordPlacement(spawn_frame, spawn_index)
+    scale_y = self:applyDensityScale(spawn_frame, y, scale_y)
 
     self:spawnSharpSwordAt(y, scale_y)
+    self:rememberSharpSword(spawn_frame, y, scale_y)
 end
 
 function KrisPhase1_3:onStart()
     self.wave_frame = 0
+    self.recent_sharp_swords = {}
 
     local spawn_count = math.floor((WAVE_FRAMES - 1) / SPAWN_INTERVAL_FRAMES) + 1
     for i = 0, spawn_count - 1 do
