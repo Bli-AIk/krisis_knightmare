@@ -266,6 +266,23 @@ function KrisPhase1_2:getKrisSlashAnimationFrameDelay()
     return nil
 end
 
+function KrisPhase1_2:getSlashSwordBulletOptions(slash_index, offset_index)
+    return nil
+end
+
+function KrisPhase1_2:spawnSlashSwordBullet(x, y, direction, slash_index, offset_index)
+    return self:spawnBullet(
+        "small_sword",
+        x,
+        y,
+        direction,
+        5,
+        20,
+        0.75,
+        self:getSlashSwordBulletOptions(slash_index, offset_index)
+    )
+end
+
 function KrisPhase1_2:spawnKrisSlashAnimation(x, y, animation)
     local sprite = ActorSprite("kris")
     sprite:setOrigin(0.5, 1)
@@ -443,10 +460,10 @@ function KrisPhase1_2:spawnSlash(x, y, rotation, kris_x, kris_y)
     local basic = 40
     local offsets = { -basic * 2, -basic, 0, basic, basic * 2 }
     local bullet_dir = rotation
-    for _, d in ipairs(offsets) do
+    for offset_index, d in ipairs(offsets) do
         local bx = x - math.sin(rotation) * d
         local by = y + math.cos(rotation) * d
-        self:spawnBullet("small_sword", bx, by, bullet_dir, 5, 20, 0.75)
+        self:spawnSlashSwordBullet(bx, by, bullet_dir, self.slash_index or 0, offset_index)
     end
 
     self.timer:after(10 / 60., function()

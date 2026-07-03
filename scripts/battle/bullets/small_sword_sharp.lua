@@ -69,6 +69,9 @@ function SmallSwordSharp:init(x, y, scale_y, flip_y, min_speed, max_speed, accel
     self.left_fade_width = options.left_fade_width or 80
     self.fire_speed = options.fire_speed or self.max_speed
     self.fire_accel_duration = options.fire_accel_duration or self.accel_duration
+    self.fire_on_left_edge = options.fire_on_left_edge == true
+    self.fire_left_x = options.fire_left_x or -self.width
+    self.skip_left_fade_alpha = options.skip_left_fade_alpha == true
     self.on_fire_launched = options.on_fire_launched
     self.on_fire_finished = options.on_fire_finished
     self.on_fire_scheduled = options.on_fire_scheduled
@@ -76,7 +79,7 @@ function SmallSwordSharp:init(x, y, scale_y, flip_y, min_speed, max_speed, accel
     self.auto_fire_delay = options.auto_fire_delay
     self.queued_fire = options.queued_fire == true
     self.phase8_fire_candidate = options.phase8_fire_candidate == true
-    if self.queued_fire then
+    if self.queued_fire or self.fire_on_left_edge then
         self.remove_offscreen = false
     end
 
@@ -210,6 +213,11 @@ function SmallSwordSharp:queueFire()
     return true
 end
 
+function SmallSwordSharp:hasReachedFireLeftEdge()
+    local x = self:getScreenPos()
+    return x <= self.fire_left_x
+end
+
 function SmallSwordSharp:fire()
     if self.fire_state then
         return false
@@ -217,6 +225,12 @@ function SmallSwordSharp:fire()
 
     self.queued_fire = false
     self.phase8_fire_candidate = false
+
+    if self.fire_on_left_edge and self.fire_left_x then
+        local _, screen_y = self:getScreenPos()
+        self:setScreenPos(self.fire_left_x, screen_y)
+    end
+
     local target_direction = self:getTargetDirection()
     local start_rotation = self.rotation or 0
     local target_rotation = self:getRotationForDirection(target_direction)
@@ -230,6 +244,7 @@ function SmallSwordSharp:fire()
     self.fire_target_rotation = start_rotation + self.fire_rotation_distance
     self.fire_target_direction = target_direction
     self.physics.speed = 0
+    self.remove_offscreen = false
     if self.on_fire_started and not self.fire_started_called then
         self.fire_started_called = true
         self.on_fire_started(self)
@@ -247,9 +262,11 @@ function SmallSwordSharp:updateDefaultMovement()
 
     if self.left_fade_x then
         local left_fade_t = clamp((self.x - self.left_fade_x) / self.left_fade_width, 0, 1)
-        alpha = alpha * left_fade_t
+        if not self.skip_left_fade_alpha then
+            alpha = alpha * left_fade_t
+        end
         if self.x <= self.left_fade_x and left_fade_t <= 0 then
-            if not self.queued_fire then
+            if not self.queued_fire and not self.fire_on_left_edge then
                 self:remove()
                 return false
             end
@@ -320,6 +337,11 @@ function SmallSwordSharp:update()
 
     if self.fire_state == "launched" and self:isFireOffscreen() then
         self:remove()
+        return
+    end
+
+    if not self.fire_state and self.fire_on_left_edge and self:hasReachedFireLeftEdge() then
+        self:fire()
     end
 end
 

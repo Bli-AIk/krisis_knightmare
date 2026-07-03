@@ -15,7 +15,7 @@ local TURN_WAVES = {
     [11] = "kris_phase1_11",
     [12] = "kris_phase1_12",
 }
-local FORCED_TURN = 8
+local FORCED_TURN = 12
 
 function Kris:init()
     super.init(self)
