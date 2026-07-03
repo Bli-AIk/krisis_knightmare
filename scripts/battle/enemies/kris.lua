@@ -7,9 +7,15 @@ local TURN_WAVES = {
     [3] = "kris_phase1_3",
     [4] = "kris_phase1_4",
     [5] = "kris_phase1_5",
+    [6] = "kris_phase1_6",
+    [7] = "kris_phase1_7",
+    [8] = "kris_phase1_8",
     [9] = "kris_phase1_9",
+    [10] = "kris_phase1_10",
+    [11] = "kris_phase1_11",
+    [12] = "kris_phase1_12",
 }
-local FORCED_TURN = 9
+local FORCED_TURN = 8
 
 function Kris:init()
     super.init(self)
@@ -38,6 +44,13 @@ function Kris:init()
         "kris_phase1_3",
         "kris_phase1_4",
         "kris_phase1_5",
+        "kris_phase1_6",
+        "kris_phase1_7",
+        "kris_phase1_8",
+        "kris_phase1_9",
+        "kris_phase1_10",
+        "kris_phase1_11",
+        "kris_phase1_12",
     }
 
     self.dialogue = {}

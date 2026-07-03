@@ -461,12 +461,30 @@ function KrisPhase1_3:getSharpSwordPlacement(spawn_frame, spawn_index)
     return y, scale_y
 end
 
+function KrisPhase1_3:getSharpSwordSpawnX()
+    return SCREEN_WIDTH - SPAWN_RIGHT_OFFSET
+end
+
+function KrisPhase1_3:getSharpSwordBulletOptions(y, scale_y, flip_y)
+    return nil
+end
+
+function KrisPhase1_3:onSharpSwordSpawned(spawn, spawned)
+end
+
 function KrisPhase1_3:spawnSharpSwordAt(y, scale_y)
     local arena = Game.battle.arena
     local arena_center_y = (arena.top + arena.bottom) / 2
     local flip_y = y < arena_center_y
 
-    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, y, scale_y, flip_y)
+    return self:spawnBullet(
+        "small_sword_sharp",
+        self:getSharpSwordSpawnX(),
+        y,
+        scale_y,
+        flip_y,
+        self:getSharpSwordBulletOptions(y, scale_y, flip_y)
+    )
 end
 
 function KrisPhase1_3:spawnSharpSwordPair(spawn_frame, spawn_index)
@@ -476,18 +494,35 @@ function KrisPhase1_3:spawnSharpSwordPair(spawn_frame, spawn_index)
     local top_y = self:getEdgeAnchoredY(top_scale_y, "top")
     local bottom_y = self:getEdgeAnchoredY(bottom_scale_y, "bottom")
 
-    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, top_y, top_scale_y, true)
-    self:spawnBullet("small_sword_sharp", SCREEN_WIDTH - SPAWN_RIGHT_OFFSET, bottom_y, bottom_scale_y, false)
+    local top = self:spawnBullet(
+        "small_sword_sharp",
+        self:getSharpSwordSpawnX(),
+        top_y,
+        top_scale_y,
+        true,
+        self:getSharpSwordBulletOptions(top_y, top_scale_y, true)
+    )
+    local bottom = self:spawnBullet(
+        "small_sword_sharp",
+        self:getSharpSwordSpawnX(),
+        bottom_y,
+        bottom_scale_y,
+        false,
+        self:getSharpSwordBulletOptions(bottom_y, bottom_scale_y, false)
+    )
     self:rememberSharpSword(spawn_frame, top_y, top_scale_y)
     self:rememberSharpSword(spawn_frame, bottom_y, bottom_scale_y)
+
+    return { top, bottom }
 end
 
 function KrisPhase1_3:spawnSharpSword(spawn_frame, spawn_index)
     local y, scale_y = self:getSharpSwordPlacement(spawn_frame, spawn_index)
     scale_y = self:applyDensityScale(spawn_frame, y, scale_y)
 
-    self:spawnSharpSwordAt(y, scale_y)
+    local sword = self:spawnSharpSwordAt(y, scale_y)
     self:rememberSharpSword(spawn_frame, y, scale_y)
+    return sword
 end
 
 function KrisPhase1_3:startSharpSwordPattern()
@@ -503,11 +538,15 @@ function KrisPhase1_3:startSharpSwordPattern()
         local delay = relative_frame / FPS
 
         local function spawnNow()
+            local spawned
+            self.current_sharp_sword_spawn = spawn
             if spawn.pair then
-                self:spawnSharpSwordPair(absolute_frame, spawn.index)
+                spawned = self:spawnSharpSwordPair(absolute_frame, spawn.index)
             else
-                self:spawnSharpSword(absolute_frame, spawn.index)
+                spawned = self:spawnSharpSword(absolute_frame, spawn.index)
             end
+            self.current_sharp_sword_spawn = nil
+            self:onSharpSwordSpawned(spawn, spawned)
         end
 
         if delay <= 0 then
