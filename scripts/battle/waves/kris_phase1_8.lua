@@ -20,13 +20,13 @@ local TOP_CAMP_Y = 110
 local TOP_CAMP_SINGLE_INTERVAL = 3
 local RANDOM_EDGE_PLACEMENT_CHANCE = 0.35
 local RANDOM_EDGE_BAND_DEPTH = 36
-local RANDOM_PAIR_GAP_MIN = 68
-local RANDOM_PAIR_GAP_MAX = 94
 local TOP_CAMP_SCALE_MAX = 1.8
+local PAIR_GAP_SIZE = 68
 local PAIR_TOP_Y_MIN = SPAWN_TOP_Y
 local PAIR_TOP_Y_MAX = TOP_CAMP_Y
-local PAIR_TOP_SCALE_MIN = MIN_SINGLE_SHARP_SWORD_SCALE
-local PAIR_TOP_SCALE_MAX = 3
+local PAIR_TOP_REACH_Y = TOP_CAMP_Y
+local PAIR_SCALE_MIN = 1
+local PAIR_SCALE_MAX = 3
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -184,46 +184,47 @@ end
 
 function KrisPhase1_8:getPairPlacement(spawn_frame, spawn_index)
     local _, spawn_bottom = self:getSpawnBounds()
-    local gap_size = lerp(RANDOM_PAIR_GAP_MIN, RANDOM_PAIR_GAP_MAX, self:noise(spawn_index * 31 + spawn_frame * 0.07, 25))
-    local top_y_t = self:noise(spawn_index * 37 + spawn_frame * 0.09, 26)
-    local top_y = lerp(PAIR_TOP_Y_MIN, PAIR_TOP_Y_MAX, top_y_t)
-    local min_top_scale = lerp(PAIR_TOP_SCALE_MAX, PAIR_TOP_SCALE_MIN, top_y_t)
+    local gap_size = PAIR_GAP_SIZE
+    local top_y = lerp(
+        PAIR_TOP_Y_MIN,
+        PAIR_TOP_Y_MAX,
+        self:noise(spawn_index * 37 + spawn_frame * 0.09, 26)
+    )
+    local min_top_scale = clamp(
+        (PAIR_TOP_REACH_Y - top_y) * 2 / SHARP_SWORD_HEIGHT,
+        PAIR_SCALE_MIN,
+        PAIR_SCALE_MAX
+    )
+    local max_top_scale = clamp(
+        (spawn_bottom - gap_size - SHARP_SWORD_HEIGHT - top_y) * 2 / SHARP_SWORD_HEIGHT,
+        min_top_scale,
+        PAIR_SCALE_MAX
+    )
     local top_scale_y = lerp(
         min_top_scale,
-        PAIR_TOP_SCALE_MAX,
+        max_top_scale,
         self:noise(spawn_index * 41 + spawn_frame * 0.05, 27)
     )
     local top_bottom_y = top_y + SHARP_SWORD_HEIGHT * top_scale_y / 2
-    local max_bottom_scale = (spawn_bottom - top_bottom_y - gap_size) / SHARP_SWORD_HEIGHT
-    local bottom_scale_y = 1
+    local gap_bottom = top_bottom_y + gap_size
+    local max_bottom_scale = (spawn_bottom - gap_bottom) / SHARP_SWORD_HEIGHT
+    local bottom_scale_y = PAIR_SCALE_MIN
 
-    if max_bottom_scale > 1 then
+    if max_bottom_scale > PAIR_SCALE_MIN then
         bottom_scale_y = lerp(
-            1,
-            math.min(max_bottom_scale, 3),
+            PAIR_SCALE_MIN,
+            math.min(max_bottom_scale, PAIR_SCALE_MAX),
             self:noise(spawn_index * 43 + spawn_frame * 0.04, 28)
         )
     end
 
-    bottom_scale_y = clamp(bottom_scale_y, 1, 3)
-
+    bottom_scale_y = clamp(bottom_scale_y, PAIR_SCALE_MIN, PAIR_SCALE_MAX)
     local bottom_half_height = SHARP_SWORD_HEIGHT * bottom_scale_y / 2
-    local min_bottom_y = top_bottom_y + gap_size + bottom_half_height
-    local max_bottom_y = spawn_bottom - bottom_half_height
-    local bottom_y = self:getEdgeAnchoredY(bottom_scale_y, "bottom")
-
-    if min_bottom_y < max_bottom_y then
-        bottom_y = lerp(
-            min_bottom_y,
-            max_bottom_y,
-            self:noise(spawn_index * 47 + spawn_frame * 0.06, 29)
-        )
-    end
 
     return {
         top_y = top_y,
         top_scale_y = top_scale_y,
-        bottom_y = bottom_y,
+        bottom_y = gap_bottom + bottom_half_height,
         bottom_scale_y = bottom_scale_y,
     }
 end
@@ -232,7 +233,7 @@ function KrisPhase1_8:spawnSharpSwordPair(spawn_frame, spawn_index)
     local placement = self:getPairPlacement(spawn_frame, spawn_index)
     local top_y = placement.top_y
     local top_scale_y = placement.top_scale_y
-    local bottom_scale_y = self:applyDensityScale(spawn_frame, placement.bottom_y, placement.bottom_scale_y)
+    local bottom_scale_y = placement.bottom_scale_y
     local bottom_y = placement.bottom_y
 
     local top = self:spawnBullet(
