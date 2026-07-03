@@ -8,7 +8,7 @@ local DEFAULT_MAX_SPEED = 18
 local DEFAULT_ACCEL_DURATION = 0.75
 local FIRE_ALPHA_DURATION = 0.12
 local FIRE_AIM_DURATION = 0.5
-local FIRE_COLOR_DURATION = 0.8
+local FIRE_COLOR_DURATION = 0.6
 local TWO_PI = math.pi * 2
 local UNFLIPPED_TIP_DIRECTION = -math.pi / 2
 local FLIPPED_TIP_DIRECTION = math.pi / 2
@@ -55,6 +55,7 @@ function SmallSwordSharp:init(x, y, scale_y, flip_y, min_speed, max_speed, accel
 
     self:setScale(1, scale_y or 1)
     self.flip_y = flip_y or false
+    self:setHitbox(8, 8, self.width - 16, self.height - 16)
     self.damage = 75
     self.destroy_on_hit = false
     self.alpha = 0

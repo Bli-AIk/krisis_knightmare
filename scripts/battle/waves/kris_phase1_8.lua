@@ -14,6 +14,23 @@ local FIRE_SPEED_MULTIPLIER = INTERVAL_SPEED_MULTIPLIER * 1.7
 local FIRE_ACCEL_DURATION = 0.2
 local MIN_FIRE_PHASE_SECONDS = 1.5
 local MIN_SINGLE_SHARP_SWORD_SCALE = 2.55
+local SHARP_SWORD_HEIGHT = 33
+local SPAWN_TOP_Y = 80
+local TOP_CAMP_Y = 110
+local TOP_CAMP_SINGLE_INTERVAL = 3
+local RANDOM_EDGE_PLACEMENT_CHANCE = 0.35
+local RANDOM_EDGE_BAND_DEPTH = 36
+local RANDOM_PAIR_GAP_MIN = 68
+local RANDOM_PAIR_GAP_MAX = 94
+local RANDOM_PAIR_TOP_SCALE_MAX = 1.8
+
+local function clamp(value, min, max)
+    return math.max(min, math.min(max, value))
+end
+
+local function lerp(from, to, t)
+    return from + (to - from) * t
+end
 
 function KrisPhase1_8:init()
     super.init(self)
@@ -35,6 +52,11 @@ function KrisPhase1_8:rollPatternSeed()
     end
 
     return os.time()
+end
+
+function KrisPhase1_8:getSpawnBounds()
+    local spawn_top, spawn_bottom = super.getSpawnBounds(self)
+    return math.min(spawn_top, SPAWN_TOP_Y), spawn_bottom
 end
 
 function KrisPhase1_8:buildSharpSwordSpawnPlan()
@@ -116,6 +138,103 @@ function KrisPhase1_8:getSharpSwordBulletOptions(y, scale_y, flip_y)
             self:onSharpSwordFireFinished(sword)
         end or nil,
     }
+end
+
+function KrisPhase1_8:getTopCampScale()
+    local spawn_top = self:getSpawnBounds()
+    return clamp((TOP_CAMP_Y - spawn_top) / (SHARP_SWORD_HEIGHT / 2), 1, RANDOM_PAIR_TOP_SCALE_MAX)
+end
+
+function KrisPhase1_8:getTopCampPlacement()
+    return TOP_CAMP_Y, self:getTopCampScale()
+end
+
+function KrisPhase1_8:getSharpSwordPlacement(spawn_frame, spawn_index)
+    local spawn = self.current_sharp_sword_spawn
+    if spawn and (spawn.fire or spawn.index % TOP_CAMP_SINGLE_INTERVAL == 1) then
+        return self:getTopCampPlacement()
+    end
+
+    local spawn_top, spawn_bottom = self:getSpawnBounds()
+    local side = self:noise(spawn_index * 13 + spawn_frame * 0.11, 20) < 0.5 and "top" or "bottom"
+    local scale_y = lerp(1.1, 3, self:noise(spawn_index * 17 + spawn_frame * 0.07, 21))
+    local half_height = SHARP_SWORD_HEIGHT * scale_y / 2
+
+    if self:noise(spawn_index * 19 + spawn_frame * 0.05, 22) < RANDOM_EDGE_PLACEMENT_CHANCE then
+        local edge_offset = self:noise(spawn_index * 23 + spawn_frame * 0.03, 23) * RANDOM_EDGE_BAND_DEPTH
+        local y = side == "top"
+            and spawn_top + half_height + edge_offset
+            or spawn_bottom - half_height - edge_offset
+        return clamp(y, spawn_top + half_height, spawn_bottom - half_height), scale_y
+    end
+
+    local min_y = spawn_top + half_height
+    local max_y = spawn_bottom - half_height
+    if min_y > max_y then
+        return (spawn_top + spawn_bottom) / 2, scale_y
+    end
+
+    local y = lerp(min_y, max_y, self:noise(spawn_index * 29 + spawn_frame * 0.13, 24))
+    return y, scale_y
+end
+
+function KrisPhase1_8:getPairPlacement(spawn_frame, spawn_index)
+    local spawn_top, spawn_bottom = self:getSpawnBounds()
+    local spawn_height = spawn_bottom - spawn_top
+    local gap_size = lerp(RANDOM_PAIR_GAP_MIN, RANDOM_PAIR_GAP_MAX, self:noise(spawn_index * 31 + spawn_frame * 0.07, 25))
+    local min_gap_center = spawn_top + SHARP_SWORD_HEIGHT + gap_size / 2
+    local max_gap_center = spawn_bottom - SHARP_SWORD_HEIGHT - gap_size / 2
+
+    if min_gap_center > max_gap_center then
+        gap_size = math.max(20, spawn_height - SHARP_SWORD_HEIGHT * 2)
+        min_gap_center = (spawn_top + spawn_bottom) / 2
+        max_gap_center = min_gap_center
+    end
+
+    local gap_center = lerp(
+        min_gap_center,
+        max_gap_center,
+        self:noise(spawn_index * 37 + spawn_frame * 0.09, 26)
+    )
+    local bottom_length = spawn_bottom - (gap_center + gap_size / 2)
+    local top_y, top_scale_y = self:getTopCampPlacement()
+    local bottom_scale_y = clamp(bottom_length / SHARP_SWORD_HEIGHT, 1, 3)
+
+    return {
+        top_y = top_y,
+        top_scale_y = top_scale_y,
+        bottom_y = self:getEdgeAnchoredY(bottom_scale_y, "bottom"),
+        bottom_scale_y = bottom_scale_y,
+    }
+end
+
+function KrisPhase1_8:spawnSharpSwordPair(spawn_frame, spawn_index)
+    local placement = self:getPairPlacement(spawn_frame, spawn_index)
+    local top_y = placement.top_y
+    local top_scale_y = placement.top_scale_y
+    local bottom_scale_y = self:applyDensityScale(spawn_frame, placement.bottom_y, placement.bottom_scale_y)
+    local bottom_y = self:getEdgeAnchoredY(bottom_scale_y, "bottom")
+
+    local top = self:spawnBullet(
+        "small_sword_sharp",
+        self:getSharpSwordSpawnX(),
+        top_y,
+        top_scale_y,
+        true,
+        self:getSharpSwordBulletOptions(top_y, top_scale_y, true)
+    )
+    local bottom = self:spawnBullet(
+        "small_sword_sharp",
+        self:getSharpSwordSpawnX(),
+        bottom_y,
+        bottom_scale_y,
+        false,
+        self:getSharpSwordBulletOptions(bottom_y, bottom_scale_y, false)
+    )
+    self:rememberSharpSword(spawn_frame, top_y, top_scale_y)
+    self:rememberSharpSword(spawn_frame, bottom_y, bottom_scale_y)
+
+    return { top, bottom }
 end
 
 function KrisPhase1_8:spawnSharpSword(spawn_frame, spawn_index)

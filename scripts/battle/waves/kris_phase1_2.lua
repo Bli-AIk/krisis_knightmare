@@ -11,15 +11,22 @@ local SLASH_START_DELAY = 16 / 30
 local DEFAULT_SLASH_INTERVAL = 50 / 60
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
+local TOP_SLASH_Y = 88
+local UPPER_SLASH_Y = 125
+local LOWER_SLASH_Y = 235
+local BOTTOM_SLASH_Y = 245
+local TOP_KRIS_Y = 148
+local UPPER_KRIS_Y = 155
+local LOWER_KRIS_Y = 327
 
 local DEFAULT_SLASHES = {
-    { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
-    { x = 480 + 50 - 20, y = 220 + 25,  r = math.rad(360 - 167), kris_x = 550, kris_y = 327 },
-    { x = 480 + 50,      y = 105 + 40,  r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
-    { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
-    { x = 480 + 50 - 15, y = 105 + 40,  r = math.rad(360 - 205), kris_x = 550, kris_y = 175 },
-    { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
-    { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 212), kris_x = 550, kris_y = 165 },
+    { x = 480 + 50 - 15, y = TOP_SLASH_Y,   r = math.rad(360 - 199), kris_x = 550, kris_y = TOP_KRIS_Y },
+    { x = 480 + 50 - 20, y = BOTTOM_SLASH_Y, r = math.rad(360 - 167), kris_x = 550, kris_y = LOWER_KRIS_Y },
+    { x = 480 + 50,      y = UPPER_SLASH_Y, r = math.rad(360 - 199), kris_x = 550, kris_y = UPPER_KRIS_Y },
+    { x = 480 + 50 - 15, y = LOWER_SLASH_Y, r = math.rad(360 - 173), kris_x = 550, kris_y = LOWER_KRIS_Y },
+    { x = 480 + 50 - 15, y = UPPER_SLASH_Y, r = math.rad(360 - 205), kris_x = 550, kris_y = UPPER_KRIS_Y },
+    { x = 480 + 50 - 15, y = LOWER_SLASH_Y, r = math.rad(360 - 173), kris_x = 550, kris_y = LOWER_KRIS_Y },
+    { x = 480 + 50 - 15, y = TOP_SLASH_Y,   r = math.rad(360 - 212), kris_x = 550, kris_y = TOP_KRIS_Y },
 }
 
 local function moveAttackerTo(attacker, x, y)
