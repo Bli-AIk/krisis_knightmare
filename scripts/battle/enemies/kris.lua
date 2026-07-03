@@ -1,6 +1,15 @@
 local Kris, super = Class(EnemyBattler)
 
 local WAIT = "[wait:5]"
+local TURN_WAVES = {
+    [1] = "kris_phase1_1",
+    [2] = "kris_phase1_2",
+    [3] = "kris_phase1_3",
+    [4] = "kris_phase1_4",
+    [5] = "kris_phase1_5",
+    [9] = "kris_phase1_9",
+}
+local FORCED_TURN = 9
 
 function Kris:init()
     super.init(self)
@@ -65,7 +74,7 @@ function Kris:applyLocalization(update_acts)
         Game:loc("* Suddenly, your body seized up.", "enemy_kris_turn_6"),
         Game:loc("* The thick fog gathered, then formed its shape.", "enemy_kris_turn_7"),
         Game:loc("* Countless swords make you dizzy.", "enemy_kris_turn_8"),
-        Game:loc("* Your soul is full of POWER. (WIP!!)", "enemy_kris_turn_9"),
+        Game:loc("* Your soul is full of POWER.", "enemy_kris_turn_9"),
     }
     self.low_health_text = nil
 
@@ -98,17 +107,11 @@ function Kris:applyLocalization(update_acts)
 end
 
 function Kris:selectWave()
-    local turn = Game.battle.turn_count
+    local turn = FORCED_TURN or Game.battle.turn_count
 
-    ---[[ 临时强制设置
-    do
-        self.selected_wave = "kris_phase1_" .. 3
-        return self.selected_wave
-    end
-    --]]
-
-    if turn <= 5 then
-        self.selected_wave = "kris_phase1_" .. turn
+    local turn_wave = TURN_WAVES[turn]
+    if turn_wave then
+        self.selected_wave = turn_wave
         print("playing wave: " .. self.selected_wave)
         return self.selected_wave
     end
@@ -147,7 +150,7 @@ end
 
 function Kris:getEncounterText()
     -- 按回合顺序返回旁白文本，超出则固定最后一条
-    local turn = Game.battle.turn_count
+    local turn = FORCED_TURN or Game.battle.turn_count
     if self.text[turn] then
         return self.text[turn]
     end

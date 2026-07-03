@@ -8,8 +8,19 @@ end
 
 local SLASH_CIRCLE_SIZE = 200
 local SLASH_START_DELAY = 16 / 30
+local DEFAULT_SLASH_INTERVAL = 50 / 60
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
+
+local DEFAULT_SLASHES = {
+    { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
+    { x = 480 + 50 - 20, y = 220 + 25,  r = math.rad(360 - 167), kris_x = 550, kris_y = 327 },
+    { x = 480 + 50,      y = 105 + 40,  r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
+    { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
+    { x = 480 + 50 - 15, y = 105 + 40,  r = math.rad(360 - 205), kris_x = 550, kris_y = 175 },
+    { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
+    { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 212), kris_x = 550, kris_y = 165 },
+}
 
 local function moveAttackerTo(attacker, x, y)
     attacker.target_x = x
@@ -232,6 +243,37 @@ function KrisPhase1_2:init()
     self.time = 8
 end
 
+function KrisPhase1_2:getSlashInterval()
+    return DEFAULT_SLASH_INTERVAL
+end
+
+function KrisPhase1_2:getInitialSlashDelay()
+    return DEFAULT_SLASH_INTERVAL
+end
+
+function KrisPhase1_2:getSlashes()
+    return DEFAULT_SLASHES
+end
+
+function KrisPhase1_2:getKrisSlashAnimationFrameDelay()
+    return nil
+end
+
+function KrisPhase1_2:spawnKrisSlashAnimation(x, y, animation)
+    local sprite = ActorSprite("kris")
+    sprite:setOrigin(0.5, 1)
+    sprite:setScale(2)
+    sprite.layer = BATTLE_LAYERS["above_bullets"] + 1
+
+    local frame_delay = self:getKrisSlashAnimationFrameDelay()
+    local anim = frame_delay and { animation, frame_delay, false } or animation
+    sprite:setAnimation(anim, function()
+        sprite:remove()
+    end)
+    self:spawnObject(sprite, x, y)
+    return sprite
+end
+
 function KrisPhase1_2:setupSlashAssets()
     if self.slash_assets then
         return
@@ -423,33 +465,26 @@ function KrisPhase1_2:onStart()
         end)
     end
 
-    self.slashes = {
-        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
-        { x = 480 + 50 - 20, y = 220 + 25,  r = math.rad(360 - 167), kris_x = 550, kris_y = 327 },
-        { x = 480 + 50,      y = 105 + 40,  r = math.rad(360 - 199), kris_x = 550, kris_y = 165 },
-        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
-        { x = 480 + 50 - 15, y = 105 + 40,  r = math.rad(360 - 205), kris_x = 550, kris_y = 175 },
-        { x = 480 + 50 - 15, y = 105 + 130, r = math.rad(360 - 173), kris_x = 550, kris_y = 327 },
-        { x = 480 + 50 - 15, y = 105,       r = math.rad(360 - 212), kris_x = 550, kris_y = 165 },
-    }
+    self.slashes = self:getSlashes()
     self.slash_index = 0
 
-    self.timer:every(50. / 60., function()
+    local function slashNext()
         self.slash_index = self.slash_index + 1
         local s = self.slashes[self.slash_index]
         if s then
             local animation = self.slash_index % 2 == 0 and "slash1" or "slash2"
-            for _, attacker in ipairs(self:getAttackers()) do
-                moveAttackerTo(attacker, s.kris_x, s.kris_y)
-                attacker:setAnimation(animation, function()
-                    moveAttackerAway(attacker)
-                end)
-            end
+            self:spawnKrisSlashAnimation(s.kris_x, s.kris_y, animation)
             self.timer:after(SLASH_START_DELAY, function()
                 self:spawnSlash(s.x, s.y, s.r, s.kris_x, s.kris_y)
             end)
+
+            if self.slashes[self.slash_index + 1] then
+                self.timer:after(self:getSlashInterval(), slashNext)
+            end
         end
-    end)
+    end
+
+    self.timer:after(self:getInitialSlashDelay(), slashNext)
 end
 
 function KrisPhase1_2:onEnd(death)
