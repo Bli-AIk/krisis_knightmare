@@ -102,7 +102,7 @@ function Kris:selectWave()
 
     ---[[ 临时强制设置
     do
-        self.selected_wave = "kris_phase1_" .. 5
+        self.selected_wave = "kris_phase1_" .. 3
         return self.selected_wave
     end
     --]]
