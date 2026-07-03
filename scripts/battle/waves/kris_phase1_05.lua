@@ -1,4 +1,4 @@
-local KrisPhase1_5, super = Class(Wave)
+local KrisPhase1_05, super = Class(Wave)
 
 local FPS = 30
 local DISAPPEAR_FRAME_SECONDS = 4 / FPS
@@ -14,7 +14,7 @@ local DISAPPEAR_HOLD_SECONDS = 1.25
 
 local CATCH_KRIS_OFFSET_X = 24
 
-function KrisPhase1_5:init()
+function KrisPhase1_05:init()
     super.init(self)
     self.time = (
         SWORD_ENTER_AND_RAMP_FRAMES
@@ -58,7 +58,7 @@ local function playDisappearingWithHold(attacker, callback)
     }, callback)
 end
 
-function KrisPhase1_5:spawnFlyingSword()
+function KrisPhase1_05:spawnFlyingSword()
     local sword = self:spawnBullet("flying_sword", 320, 240, 0, math.rad(12))
     sword.on_catch_ready = function()
         self:startCatchSword()
@@ -69,7 +69,7 @@ function KrisPhase1_5:spawnFlyingSword()
     return sword
 end
 
-function KrisPhase1_5:onStart()
+function KrisPhase1_05:onStart()
     self.kris_home_positions = {}
     self.can_finish = false
     self.catch_ready_started = false
@@ -102,7 +102,7 @@ function KrisPhase1_5:onStart()
     end
 end
 
-function KrisPhase1_5:startCatchSword()
+function KrisPhase1_05:startCatchSword()
     if self.catch_ready_started then
         return
     end
@@ -117,7 +117,7 @@ function KrisPhase1_5:startCatchSword()
     end
 end
 
-function KrisPhase1_5:finishCatchSword()
+function KrisPhase1_05:finishCatchSword()
     if self.catch_finish_started then
         return
     end
@@ -134,7 +134,7 @@ function KrisPhase1_5:finishCatchSword()
     end)
 end
 
-function KrisPhase1_5:onEnd(death)
+function KrisPhase1_05:onEnd(death)
     for _, attacker in ipairs(self:getAttackers()) do
         local home = self.kris_home_positions and self.kris_home_positions[attacker]
         if home then
@@ -146,12 +146,12 @@ function KrisPhase1_5:onEnd(death)
     return super.onEnd(self, death)
 end
 
-function KrisPhase1_5:canEnd()
+function KrisPhase1_05:canEnd()
     return self.can_finish
 end
 
-function KrisPhase1_5:update()
+function KrisPhase1_05:update()
     super.update(self)
 end
 
-return KrisPhase1_5
+return KrisPhase1_05

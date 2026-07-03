@@ -1,4 +1,4 @@
-local KrisPhase1_3, super = Class(Wave)
+local KrisPhase1_03, super = Class(Wave)
 
 local FPS = 30
 local WAVE_SECONDS = 6
@@ -86,7 +86,7 @@ local function playSwordHallDisappear(attacker, on_bullet_start, on_finished)
     }, on_finished)
 end
 
-function KrisPhase1_3:init()
+function KrisPhase1_03:init()
     super.init(self)
     self.time = WAVE_FRAMES / FPS
     self.wave_frame = 0
@@ -95,13 +95,13 @@ function KrisPhase1_3:init()
     self.sharp_sword_started = false
 end
 
-function KrisPhase1_3:getSpawnBounds()
+function KrisPhase1_03:getSpawnBounds()
     local arena = Game.battle.arena
 
     return arena.top - ARENA_Y_MARGIN, arena.bottom + ARENA_Y_MARGIN
 end
 
-function KrisPhase1_3:getSafeCurveY(frame)
+function KrisPhase1_03:getSafeCurveY(frame)
     local arena = Game.battle.arena
     local arena_center_y = (arena.top + arena.bottom) / 2
     local arena_half_height = (arena.bottom - arena.top) / 2
@@ -118,20 +118,20 @@ function KrisPhase1_3:getSafeCurveY(frame)
     )
 end
 
-function KrisPhase1_3:getSafeCurvePadding()
+function KrisPhase1_03:getSafeCurvePadding()
     local arena = Game.battle.arena
     local arena_height = arena.bottom - arena.top
 
     return clamp((arena_height - SHARP_SWORD_HEIGHT * 2) / 4, 8, SAFE_CURVE_PADDING)
 end
 
-function KrisPhase1_3:overlapsSafeCurve(y, scale_y, curve_y)
+function KrisPhase1_03:overlapsSafeCurve(y, scale_y, curve_y)
     local padding = self:getSafeCurvePadding()
     local half_height = SHARP_SWORD_HEIGHT * scale_y / 2
     return math.abs(y - curve_y) < half_height + padding
 end
 
-function KrisPhase1_3:getRecentSwordPressure(spawn_frame, y)
+function KrisPhase1_03:getRecentSwordPressure(spawn_frame, y)
     if not self.recent_sharp_swords then
         return 0
     end
@@ -159,7 +159,7 @@ function KrisPhase1_3:getRecentSwordPressure(spawn_frame, y)
     return pressure
 end
 
-function KrisPhase1_3:applyDensityScale(spawn_frame, y, scale_y)
+function KrisPhase1_03:applyDensityScale(spawn_frame, y, scale_y)
     local pressure = self:getRecentSwordPressure(spawn_frame, y)
 
     if pressure <= 0 then
@@ -169,7 +169,7 @@ function KrisPhase1_3:applyDensityScale(spawn_frame, y, scale_y)
     return clamp(scale_y - pressure * DENSITY_SCALE_STEP, DENSITY_MIN_SCALE, scale_y)
 end
 
-function KrisPhase1_3:rememberSharpSword(spawn_frame, y, scale_y)
+function KrisPhase1_03:rememberSharpSword(spawn_frame, y, scale_y)
     self.recent_sharp_swords = self.recent_sharp_swords or {}
 
     table.insert(self.recent_sharp_swords, {
@@ -184,27 +184,27 @@ function KrisPhase1_3:rememberSharpSword(spawn_frame, y, scale_y)
     end
 end
 
-function KrisPhase1_3:rollPatternSeed()
+function KrisPhase1_03:rollPatternSeed()
     if Mod and Mod.nextKrisisRandomSeed then
-        return Mod:nextKrisisRandomSeed("kris_phase1_3")
+        return Mod:nextKrisisRandomSeed("kris_phase1_03")
     end
 
     return os.time()
 end
 
-function KrisPhase1_3:noise(index, salt)
+function KrisPhase1_03:noise(index, salt)
     local seed = self.pattern_seed or 0
 
     return deterministicNoise(index + seed * 0.013, salt + seed * 0.017)
 end
 
-function KrisPhase1_3:getPreferredSide(spawn_index)
+function KrisPhase1_03:getPreferredSide(spawn_index)
     local side_offset = self:noise(1, 31) < 0.5 and 0 or 1
 
     return SIDE_PATTERN[((spawn_index - 1 + side_offset) % #SIDE_PATTERN) + 1]
 end
 
-function KrisPhase1_3:getEdgeAnchoredY(scale_y, side)
+function KrisPhase1_03:getEdgeAnchoredY(scale_y, side)
     local spawn_top, spawn_bottom = self:getSpawnBounds()
     local half_height = SHARP_SWORD_HEIGHT * scale_y / 2
 
@@ -215,7 +215,7 @@ function KrisPhase1_3:getEdgeAnchoredY(scale_y, side)
     return spawn_bottom - half_height
 end
 
-function KrisPhase1_3:getEdgeBandY(spawn_index, side)
+function KrisPhase1_03:getEdgeBandY(spawn_index, side)
     local spawn_top, spawn_bottom = self:getSpawnBounds()
     local salt = side == "top" and 9 or 10
     local offset = self:noise(spawn_index * 17, salt) * EDGE_BAND_DEPTH
@@ -227,7 +227,7 @@ function KrisPhase1_3:getEdgeBandY(spawn_index, side)
     return spawn_bottom - offset
 end
 
-function KrisPhase1_3:tryEdgePlacement(spawn_index, curve_y, preferred_side)
+function KrisPhase1_03:tryEdgePlacement(spawn_index, curve_y, preferred_side)
     preferred_side = preferred_side or self:getPreferredSide(spawn_index)
     local side = preferred_side
 
@@ -242,7 +242,7 @@ function KrisPhase1_3:tryEdgePlacement(spawn_index, curve_y, preferred_side)
     end
 end
 
-function KrisPhase1_3:tryFloatingPlacement(spawn_index, curve_y, preferred_side)
+function KrisPhase1_03:tryFloatingPlacement(spawn_index, curve_y, preferred_side)
     local arena = Game.battle.arena
     local arena_center_y = (arena.top + arena.bottom) / 2
     local spawn_top, spawn_bottom = self:getSpawnBounds()
@@ -278,7 +278,7 @@ function KrisPhase1_3:tryFloatingPlacement(spawn_index, curve_y, preferred_side)
     end
 end
 
-function KrisPhase1_3:getCenterBlockingSide(curve_y, preferred_side)
+function KrisPhase1_03:getCenterBlockingSide(curve_y, preferred_side)
     local arena = Game.battle.arena
     local arena_center_y = (arena.top + arena.bottom) / 2
 
@@ -291,7 +291,7 @@ function KrisPhase1_3:getCenterBlockingSide(curve_y, preferred_side)
     return preferred_side
 end
 
-function KrisPhase1_3:tryCurveBlockerPlacement(spawn_index, curve_y, preferred_side)
+function KrisPhase1_03:tryCurveBlockerPlacement(spawn_index, curve_y, preferred_side)
     local spawn_top, spawn_bottom = self:getSpawnBounds()
     local side = self:getCenterBlockingSide(curve_y, preferred_side)
     local padding = self:getSafeCurvePadding()
@@ -317,7 +317,7 @@ function KrisPhase1_3:tryCurveBlockerPlacement(spawn_index, curve_y, preferred_s
     return self:tryFloatingPlacement(spawn_index, curve_y, side)
 end
 
-function KrisPhase1_3:getPairPlacement(spawn_frame, spawn_index)
+function KrisPhase1_03:getPairPlacement(spawn_frame, spawn_index)
     local spawn_top, spawn_bottom = self:getSpawnBounds()
     local spawn_height = spawn_bottom - spawn_top
     local gap_size = clamp(spawn_height * PAIR_GAP_RATIO, PAIR_GAP_MIN, PAIR_GAP_MAX)
@@ -347,7 +347,7 @@ function KrisPhase1_3:getPairPlacement(spawn_frame, spawn_index)
     }
 end
 
-function KrisPhase1_3:buildSharpSwordSpawnPlan()
+function KrisPhase1_03:buildSharpSwordSpawnPlan()
     local total_slots = math.floor((WAVE_FRAMES - 1) / SPAWN_INTERVAL_FRAMES) + 1
     local pair_roll = self:noise(WAVE_FRAMES, 20)
     local pair_count = pair_roll < 0.18 and 0
@@ -388,7 +388,7 @@ function KrisPhase1_3:buildSharpSwordSpawnPlan()
     return plan
 end
 
-function KrisPhase1_3:getSharpSwordPlacement(spawn_frame, spawn_index)
+function KrisPhase1_03:getSharpSwordPlacement(spawn_frame, spawn_index)
     local min_y, max_y = self:getSpawnBounds()
     local curve_y = self:getSafeCurveY(spawn_frame + SAFE_CURVE_LOOKAHEAD_FRAMES)
     local placement_roll = self:noise(spawn_index, 6)
@@ -461,18 +461,18 @@ function KrisPhase1_3:getSharpSwordPlacement(spawn_frame, spawn_index)
     return y, scale_y
 end
 
-function KrisPhase1_3:getSharpSwordSpawnX()
+function KrisPhase1_03:getSharpSwordSpawnX()
     return SCREEN_WIDTH - SPAWN_RIGHT_OFFSET
 end
 
-function KrisPhase1_3:getSharpSwordBulletOptions(y, scale_y, flip_y)
+function KrisPhase1_03:getSharpSwordBulletOptions(y, scale_y, flip_y)
     return nil
 end
 
-function KrisPhase1_3:onSharpSwordSpawned(spawn, spawned)
+function KrisPhase1_03:onSharpSwordSpawned(spawn, spawned)
 end
 
-function KrisPhase1_3:spawnSharpSwordAt(y, scale_y)
+function KrisPhase1_03:spawnSharpSwordAt(y, scale_y)
     local arena = Game.battle.arena
     local arena_center_y = (arena.top + arena.bottom) / 2
     local flip_y = y < arena_center_y
@@ -487,7 +487,7 @@ function KrisPhase1_3:spawnSharpSwordAt(y, scale_y)
     )
 end
 
-function KrisPhase1_3:spawnSharpSwordPair(spawn_frame, spawn_index)
+function KrisPhase1_03:spawnSharpSwordPair(spawn_frame, spawn_index)
     local placement = self:getPairPlacement(spawn_frame, spawn_index)
     local top_scale_y = self:applyDensityScale(spawn_frame, placement.top_y, placement.top_scale_y)
     local bottom_scale_y = self:applyDensityScale(spawn_frame, placement.bottom_y, placement.bottom_scale_y)
@@ -516,7 +516,7 @@ function KrisPhase1_3:spawnSharpSwordPair(spawn_frame, spawn_index)
     return { top, bottom }
 end
 
-function KrisPhase1_3:spawnSharpSword(spawn_frame, spawn_index)
+function KrisPhase1_03:spawnSharpSword(spawn_frame, spawn_index)
     local y, scale_y = self:getSharpSwordPlacement(spawn_frame, spawn_index)
     scale_y = self:applyDensityScale(spawn_frame, y, scale_y)
 
@@ -525,7 +525,7 @@ function KrisPhase1_3:spawnSharpSword(spawn_frame, spawn_index)
     return sword
 end
 
-function KrisPhase1_3:startSharpSwordPattern()
+function KrisPhase1_03:startSharpSwordPattern()
     if self.sharp_sword_started then
         return
     end
@@ -557,7 +557,7 @@ function KrisPhase1_3:startSharpSwordPattern()
     end
 end
 
-function KrisPhase1_3:onStart()
+function KrisPhase1_03:onStart()
     self.wave_frame = 0
     self.recent_sharp_swords = {}
     self.pattern_seed = self:rollPatternSeed()
@@ -585,7 +585,7 @@ function KrisPhase1_3:onStart()
     end
 end
 
-function KrisPhase1_3:onEnd(death)
+function KrisPhase1_03:onEnd(death)
     for _, attacker in ipairs(self:getAttackers()) do
         local home = self.kris_home_positions and self.kris_home_positions[attacker]
         if home then
@@ -597,12 +597,12 @@ function KrisPhase1_3:onEnd(death)
     return super.onEnd(self, death)
 end
 
-function KrisPhase1_3:update()
+function KrisPhase1_03:update()
     self.wave_frame = math.min((self.wave_frame or 0) + DTMULT, WAVE_FRAMES)
     super.update(self)
 end
 
-function KrisPhase1_3:drawSafeCurve()
+function KrisPhase1_03:drawSafeCurve()
     local arena = Game.battle.arena
     if not arena then
         return
@@ -638,7 +638,7 @@ function KrisPhase1_3:drawSafeCurve()
     Draw.setColor(old_r, old_g, old_b, old_a)
 end
 
-function KrisPhase1_3:draw()
+function KrisPhase1_03:draw()
     super.draw(self)
 
     if SHOW_SAFE_CURVE then
@@ -646,4 +646,4 @@ function KrisPhase1_3:draw()
     end
 end
 
-return KrisPhase1_3
+return KrisPhase1_03

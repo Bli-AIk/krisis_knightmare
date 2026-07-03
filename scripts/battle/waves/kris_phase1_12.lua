@@ -1,4 +1,4 @@
-local KrisPhase1_12, super = Class("kris_phase1_8")
+local KrisPhase1_12, super = Class("kris_phase1_08")
 
 local FIRE_SPEED = 24
 local FIRE_ACCEL_DURATION = 0.18

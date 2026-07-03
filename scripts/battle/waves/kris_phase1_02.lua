@@ -1,4 +1,4 @@
-local KrisPhase1_2, super = Class(Wave)
+local KrisPhase1_02, super = Class(Wave)
 local ShaderFX = require("src.engine.drawfx.shaderfx")
 local Rectangle = require("src.engine.objects.rectangle")
 
@@ -245,32 +245,32 @@ function SlashParticles:draw()
     slash_super.draw(self)
 end
 
-function KrisPhase1_2:init()
+function KrisPhase1_02:init()
     super.init(self)
     self.time = 8
 end
 
-function KrisPhase1_2:getSlashInterval()
+function KrisPhase1_02:getSlashInterval()
     return DEFAULT_SLASH_INTERVAL
 end
 
-function KrisPhase1_2:getInitialSlashDelay()
+function KrisPhase1_02:getInitialSlashDelay()
     return DEFAULT_SLASH_INTERVAL
 end
 
-function KrisPhase1_2:getSlashes()
+function KrisPhase1_02:getSlashes()
     return DEFAULT_SLASHES
 end
 
-function KrisPhase1_2:getKrisSlashAnimationFrameDelay()
+function KrisPhase1_02:getKrisSlashAnimationFrameDelay()
     return nil
 end
 
-function KrisPhase1_2:getSlashSwordBulletOptions(slash_index, offset_index)
+function KrisPhase1_02:getSlashSwordBulletOptions(slash_index, offset_index)
     return nil
 end
 
-function KrisPhase1_2:spawnSlashSwordBullet(x, y, direction, slash_index, offset_index)
+function KrisPhase1_02:spawnSlashSwordBullet(x, y, direction, slash_index, offset_index)
     return self:spawnBullet(
         "small_sword",
         x,
@@ -283,7 +283,7 @@ function KrisPhase1_2:spawnSlashSwordBullet(x, y, direction, slash_index, offset
     )
 end
 
-function KrisPhase1_2:spawnKrisSlashAnimation(x, y, animation)
+function KrisPhase1_02:spawnKrisSlashAnimation(x, y, animation)
     local sprite = ActorSprite("kris")
     sprite:setOrigin(0.5, 1)
     sprite:setScale(2)
@@ -298,7 +298,7 @@ function KrisPhase1_2:spawnKrisSlashAnimation(x, y, animation)
     return sprite
 end
 
-function KrisPhase1_2:setupSlashAssets()
+function KrisPhase1_02:setupSlashAssets()
     if self.slash_assets then
         return
     end
@@ -390,7 +390,7 @@ function KrisPhase1_2:setupSlashAssets()
     }
 end
 
-function KrisPhase1_2:spawnSlash(x, y, rotation, kris_x, kris_y)
+function KrisPhase1_02:spawnSlash(x, y, rotation, kris_x, kris_y)
     self:setupSlashAssets()
     shakeArena(kris_x, kris_y)
 
@@ -476,7 +476,7 @@ function KrisPhase1_2:spawnSlash(x, y, rotation, kris_x, kris_y)
     end)
 end
 
-function KrisPhase1_2:onStart()
+function KrisPhase1_02:onStart()
     self.kris_home_positions = {}
 
     for _, attacker in ipairs(self:getAttackers()) do
@@ -511,7 +511,7 @@ function KrisPhase1_2:onStart()
     self.timer:after(self:getInitialSlashDelay(), slashNext)
 end
 
-function KrisPhase1_2:onEnd(death)
+function KrisPhase1_02:onEnd(death)
     for _, attacker in ipairs(self:getAttackers()) do
         local home = self.kris_home_positions and self.kris_home_positions[attacker]
         if home then
@@ -523,12 +523,12 @@ function KrisPhase1_2:onEnd(death)
     return super.onEnd(self, death)
 end
 
-function KrisPhase1_2:update()
+function KrisPhase1_02:update()
     super.update(self)
 end
 
-function KrisPhase1_2:draw()
+function KrisPhase1_02:draw()
     super.draw(self)
 end
 
-return KrisPhase1_2
+return KrisPhase1_02

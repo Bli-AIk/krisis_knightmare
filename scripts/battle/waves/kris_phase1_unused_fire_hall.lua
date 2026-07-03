@@ -1,4 +1,4 @@
-local KrisPhase1UnusedFireHall = Class("kris_phase1_3")
+local KrisPhase1UnusedFireHall = Class("kris_phase1_03")
 
 local FIRE_LEFT_EDGE_PADDING = 24
 local FIRE_SPEED = 24

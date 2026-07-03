@@ -1,4 +1,4 @@
-local KrisPhase1_8, super = Class("kris_phase1_3")
+local KrisPhase1_08, super = Class("kris_phase1_03")
 
 local FPS = 30
 local PHASE3_SPAWN_INTERVAL_SECONDS = 5 / FPS
@@ -39,7 +39,7 @@ local function lerp(from, to, t)
     return from + (to - from) * t
 end
 
-function KrisPhase1_8:init()
+function KrisPhase1_08:init()
     super.init(self)
     self.time = -1
     self.can_finish = false
@@ -54,20 +54,20 @@ function KrisPhase1_8:init()
     self.recent_single_sharp_swords = {}
 end
 
-function KrisPhase1_8:rollPatternSeed()
+function KrisPhase1_08:rollPatternSeed()
     if Mod and Mod.nextKrisisRandomSeed then
-        return Mod:nextKrisisRandomSeed("kris_phase1_8")
+        return Mod:nextKrisisRandomSeed("kris_phase1_08")
     end
 
     return os.time()
 end
 
-function KrisPhase1_8:getSpawnBounds()
+function KrisPhase1_08:getSpawnBounds()
     local spawn_top, spawn_bottom = super.getSpawnBounds(self)
     return math.min(spawn_top, SPAWN_TOP_Y), spawn_bottom
 end
 
-function KrisPhase1_8:buildSharpSwordSpawnPlan()
+function KrisPhase1_08:buildSharpSwordSpawnPlan()
     local plan = {}
     local interval_frames = SPAWN_INTERVAL_SECONDS * FPS
     local fire_start_index = TOTAL_SHARP_SWORD_WAVES - FINAL_FIRE_WAVES + 1
@@ -103,17 +103,17 @@ function KrisPhase1_8:buildSharpSwordSpawnPlan()
     return plan
 end
 
-function KrisPhase1_8:getSharpSwordSpawnX()
+function KrisPhase1_08:getSharpSwordSpawnX()
     local arena = Game.battle.arena
     return (arena and arena.right or SCREEN_WIDTH) + ARENA_EDGE_SPAWN_DISTANCE
 end
 
-function KrisPhase1_8:getSharpSwordLeftFadeX()
+function KrisPhase1_08:getSharpSwordLeftFadeX()
     local arena = Game.battle.arena
     return (arena and arena.left or 0) - ARENA_EDGE_SPAWN_DISTANCE
 end
 
-function KrisPhase1_8:getSharpSwordBulletOptions(y, scale_y, flip_y)
+function KrisPhase1_08:getSharpSwordBulletOptions(y, scale_y, flip_y)
     local spawn = self.current_sharp_sword_spawn
     local queued_fire = spawn and spawn.fire == true
     local auto_fire_delay
@@ -148,16 +148,16 @@ function KrisPhase1_8:getSharpSwordBulletOptions(y, scale_y, flip_y)
     }
 end
 
-function KrisPhase1_8:getTopCampScale()
+function KrisPhase1_08:getTopCampScale()
     local spawn_top = self:getSpawnBounds()
     return clamp((TOP_CAMP_Y - spawn_top) / (SHARP_SWORD_HEIGHT / 2), 1, TOP_CAMP_SCALE_MAX)
 end
 
-function KrisPhase1_8:getTopCampPlacement()
+function KrisPhase1_08:getTopCampPlacement()
     return TOP_CAMP_Y, self:getTopCampScale()
 end
 
-function KrisPhase1_8:getSharpSwordPlacement(spawn_frame, spawn_index)
+function KrisPhase1_08:getSharpSwordPlacement(spawn_frame, spawn_index)
     local spawn = self.current_sharp_sword_spawn
     if spawn and (spawn.fire or spawn.index % TOP_CAMP_SINGLE_INTERVAL == 1) then
         return self:getTopCampPlacement()
@@ -186,7 +186,7 @@ function KrisPhase1_8:getSharpSwordPlacement(spawn_frame, spawn_index)
     return y, scale_y
 end
 
-function KrisPhase1_8:getPairPlacement(spawn_frame, spawn_index)
+function KrisPhase1_08:getPairPlacement(spawn_frame, spawn_index)
     local _, spawn_bottom = self:getSpawnBounds()
     local gap_size = PAIR_GAP_SIZE
     local top_y = lerp(
@@ -233,7 +233,7 @@ function KrisPhase1_8:getPairPlacement(spawn_frame, spawn_index)
     }
 end
 
-function KrisPhase1_8:lastTwoSingleSharpSwordsAreClose()
+function KrisPhase1_08:lastTwoSingleSharpSwordsAreClose()
     local recent = self.recent_single_sharp_swords
     if not recent or #recent < 2 then
         return false
@@ -244,7 +244,7 @@ function KrisPhase1_8:lastTwoSingleSharpSwordsAreClose()
     return math.abs(first.y - second.y) <= SINGLE_CLOSE_Y_DISTANCE
 end
 
-function KrisPhase1_8:getSeparatedSingleSharpSwordY(spawn_frame, spawn_index, y, scale_y)
+function KrisPhase1_08:getSeparatedSingleSharpSwordY(spawn_frame, spawn_index, y, scale_y)
     if not self:lastTwoSingleSharpSwordsAreClose() then
         return y
     end
@@ -282,7 +282,7 @@ function KrisPhase1_8:getSeparatedSingleSharpSwordY(spawn_frame, spawn_index, y,
     )
 end
 
-function KrisPhase1_8:rememberSingleSharpSword(y, scale_y)
+function KrisPhase1_08:rememberSingleSharpSword(y, scale_y)
     self.recent_single_sharp_swords = self.recent_single_sharp_swords or {}
 
     table.insert(self.recent_single_sharp_swords, {
@@ -295,7 +295,7 @@ function KrisPhase1_8:rememberSingleSharpSword(y, scale_y)
     end
 end
 
-function KrisPhase1_8:spawnSharpSwordPair(spawn_frame, spawn_index)
+function KrisPhase1_08:spawnSharpSwordPair(spawn_frame, spawn_index)
     local placement = self:getPairPlacement(spawn_frame, spawn_index)
     local top_y = placement.top_y
     local top_scale_y = placement.top_scale_y
@@ -324,7 +324,7 @@ function KrisPhase1_8:spawnSharpSwordPair(spawn_frame, spawn_index)
     return { top, bottom }
 end
 
-function KrisPhase1_8:spawnSharpSword(spawn_frame, spawn_index)
+function KrisPhase1_08:spawnSharpSword(spawn_frame, spawn_index)
     local y, scale_y = self:getSharpSwordPlacement(spawn_frame, spawn_index)
     scale_y = self:applyDensityScale(spawn_frame, y, scale_y)
     scale_y = math.max(scale_y, MIN_SINGLE_SHARP_SWORD_SCALE)
@@ -336,7 +336,7 @@ function KrisPhase1_8:spawnSharpSword(spawn_frame, spawn_index)
     return sword
 end
 
-function KrisPhase1_8:finishIfReady()
+function KrisPhase1_08:finishIfReady()
     if self.all_spawns_done
         and self.fire_started
         and self.minimum_fire_phase_elapsed
@@ -350,20 +350,20 @@ function KrisPhase1_8:finishIfReady()
     end
 end
 
-function KrisPhase1_8:onSharpSwordFireScheduled()
+function KrisPhase1_08:onSharpSwordFireScheduled()
     self.pending_fire_count = (self.pending_fire_count or 0) + 1
     self.expected_fire_count = (self.expected_fire_count or 0) + 1
 
     if self.expected_fire_count == FINAL_FIRE_WAVES then
-        print("[kris_phase1_8] scheduled 5 auto-fire swords")
+        print("[kris_phase1_08] scheduled 5 auto-fire swords")
     end
 end
 
-function KrisPhase1_8:onSharpSwordFireStarted()
+function KrisPhase1_08:onSharpSwordFireStarted()
     self.started_fire_count = (self.started_fire_count or 0) + 1
 
     if self.started_fire_count == FINAL_FIRE_WAVES then
-        print("[kris_phase1_8] started 5 auto-fire swords")
+        print("[kris_phase1_08] started 5 auto-fire swords")
     end
 
     if self.fire_started then
@@ -382,17 +382,17 @@ function KrisPhase1_8:onSharpSwordFireStarted()
     self:finishIfReady()
 end
 
-function KrisPhase1_8:onSharpSwordFireLaunched()
+function KrisPhase1_08:onSharpSwordFireLaunched()
     self.launched_fire_count = (self.launched_fire_count or 0) + 1
     self:finishIfReady()
 end
 
-function KrisPhase1_8:onSharpSwordFireFinished()
+function KrisPhase1_08:onSharpSwordFireFinished()
     self.pending_fire_count = math.max((self.pending_fire_count or 0) - 1, 0)
     self:finishIfReady()
 end
 
-function KrisPhase1_8:startSharpSwordPattern()
+function KrisPhase1_08:startSharpSwordPattern()
     if self.fire_release_timer_started then
         return super.startSharpSwordPattern(self)
     end
@@ -407,14 +407,14 @@ function KrisPhase1_8:startSharpSwordPattern()
     end)
 end
 
-function KrisPhase1_8:onSharpSwordSpawned(spawn, spawned)
+function KrisPhase1_08:onSharpSwordSpawned(spawn, spawned)
     if spawn.index >= TOTAL_SHARP_SWORD_WAVES then
         self.all_spawns_done = true
         self:finishIfReady()
     end
 end
 
-function KrisPhase1_8:onStart()
+function KrisPhase1_08:onStart()
     self.can_finish = false
     self.all_spawns_done = false
     self.pending_fire_count = 0
@@ -428,8 +428,8 @@ function KrisPhase1_8:onStart()
     super.onStart(self)
 end
 
-function KrisPhase1_8:canEnd()
+function KrisPhase1_08:canEnd()
     return self.can_finish
 end
 
-return KrisPhase1_8
+return KrisPhase1_08
