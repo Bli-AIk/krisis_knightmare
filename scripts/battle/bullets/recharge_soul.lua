@@ -1,6 +1,5 @@
 local RechargeSoul, super = Class(Bullet)
 
-local MERCY_INTERVAL = 0.2
 local MOVE_DISTANCE = 54
 local DEFAULT_MOVE_SPEED = 4
 local EDGE_BIAS_CHANCE = 0.6
@@ -22,7 +21,6 @@ function RechargeSoul:init(x, y, target_enemy, light_radius)
     self.destroy_on_hit = false
     self.remove_offscreen = false
 
-    self.mercy_timer = 0
     self.enabled = true
 end
 
@@ -76,14 +74,9 @@ function RechargeSoul:isLit()
 end
 
 function RechargeSoul:addRechargeMercy()
-    local enemy = self:getTargetEnemy()
-    if enemy then
-        local mercy = enemy.mercy
-        enemy:addMercy(1)
-        local amount = enemy.mercy - mercy
-        if amount > 0 and not Game:getConfig("mercyMessages") then
-            enemy:statusMessage("mercy", amount)
-        end
+    local encounter = Game.battle and Game.battle.encounter
+    if encounter and encounter.tryAddRechargeMercy then
+        encounter:tryAddRechargeMercy(self:getTargetEnemy())
     end
 end
 
@@ -177,14 +170,8 @@ function RechargeSoul:update()
     end
 
     if self.enabled and self:isLit() then
-        self.mercy_timer = self.mercy_timer + DT
-        while self.mercy_timer >= MERCY_INTERVAL do
-            self.mercy_timer = self.mercy_timer - MERCY_INTERVAL
-            self:addRechargeMercy()
-        end
+        self:addRechargeMercy()
         self:startMove()
-    else
-        self.mercy_timer = 0
     end
 
     super.update(self)

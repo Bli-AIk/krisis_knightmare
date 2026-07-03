@@ -7,6 +7,7 @@ local RECHARGE_TENSION_RATE = 120
 local RECHARGE_PLATFORM_FADE_TIME = 0.3
 local RECHARGE_LIGHT_SCALE = 1
 local RECHARGE_LIGHT_RADIUS_FACTOR = 0.45
+local RECHARGE_MERCY_INTERVAL = 0.3
 
 function Kris:init()
     super.init(self)
@@ -66,6 +67,7 @@ function Kris:activateRecharge(enemy, battler, pre_spend_tension)
     self.recharge.expiring = false
     self.recharge.draining = false
     self.recharge.filling = true
+    self.recharge.mercy_cooldown = 0
 
     self:ensureRechargeVisuals(enemy, battler)
 end
@@ -90,17 +92,6 @@ function Kris:ensureRechargeVisuals(enemy, battler)
 
     self.recharge_light_radius = (self.recharge_light.width or 100) * RECHARGE_LIGHT_SCALE * RECHARGE_LIGHT_RADIUS_FACTOR
     self:updateRechargeLight()
-
-    if not self.recharge_soul or not self.recharge_soul.parent then
-        local x, y = self:getRechargeSoulSpawnPosition()
-        self.recharge_soul = Registry.createBullet("recharge_soul", x, y, enemy, self:getRechargeLightRadius())
-        Game.battle:addChild(self.recharge_soul)
-    else
-        self.recharge_soul.target_enemy = enemy
-        self.recharge_soul.light_radius = self:getRechargeLightRadius()
-        self.recharge_soul.enabled = true
-        self.recharge_soul:fadeTo(1, RECHARGE_PLATFORM_FADE_TIME)
-    end
 end
 
 function Kris:getRechargeSoulSpawnPosition()
@@ -140,6 +131,33 @@ function Kris:getRechargeLightTarget()
     end
 end
 
+function Kris:isRechargeMercyDisplayActive()
+    local state = Game.battle and Game.battle:getState()
+    return self.recharge
+        and not self.recharge.draining
+        and (state == "DEFENDINGBEGIN" or state == "DEFENDING" or state == "DEFENDINGEND")
+end
+
+function Kris:tryAddRechargeMercy(enemy)
+    local recharge = self.recharge
+    if not recharge or not enemy or not self:isRechargeMercyDisplayActive() then
+        return false
+    end
+
+    if (recharge.mercy_cooldown or 0) > 0 then
+        return false
+    end
+
+    enemy:addTemporaryMercy(1, true, { 0, 100 }, function()
+        return not Game.battle
+            or not Game.battle.encounter
+            or not Game.battle.encounter.isRechargeMercyDisplayActive
+            or not Game.battle.encounter:isRechargeMercyDisplayActive()
+    end)
+    recharge.mercy_cooldown = RECHARGE_MERCY_INTERVAL
+    return true
+end
+
 function Kris:getRechargeTargetPosition(target)
     if target == Game.battle.soul then
         return target.x, target.y
@@ -157,6 +175,10 @@ function Kris:updateRechargeLight()
     if not target then
         self.recharge_light.visible = false
         self.recharge_light.alpha = 0
+        if self.recharge_soul then
+            self.recharge_soul.enabled = false
+            self.recharge_soul.visible = false
+        end
         return
     end
 
@@ -168,6 +190,22 @@ function Kris:updateRechargeLight()
     self.recharge_light.visible = true
     self.recharge_light:setPosition(x, y)
     self.recharge_light:setLayer((target.layer or BATTLE_LAYERS["soul"]) - 1)
+
+    local recharge = self.recharge
+    if not recharge then
+        return
+    end
+
+    if not self.recharge_soul or not self.recharge_soul.parent then
+        local soul_x, soul_y = self:getRechargeSoulSpawnPosition()
+        self.recharge_soul = Registry.createBullet("recharge_soul", soul_x, soul_y, recharge.enemy, self:getRechargeLightRadius())
+        Game.battle:addChild(self.recharge_soul)
+    else
+        self.recharge_soul.target_enemy = recharge.enemy
+        self.recharge_soul.light_radius = self:getRechargeLightRadius()
+        self.recharge_soul.enabled = true
+        self.recharge_soul.visible = true
+    end
 end
 
 function Kris:beginRechargeDrain()
@@ -212,6 +250,15 @@ function Kris:updateRechargeTension()
     end
 end
 
+function Kris:updateRechargeMercyCooldown()
+    local recharge = self.recharge
+    if not recharge or not recharge.mercy_cooldown then
+        return
+    end
+
+    recharge.mercy_cooldown = math.max(recharge.mercy_cooldown - DT, 0)
+end
+
 function Kris:clearRecharge(instant)
     self.recharge = nil
 
@@ -236,6 +283,7 @@ end
 
 function Kris:update()
     super.update(self)
+    self:updateRechargeMercyCooldown()
     self:updateRechargeLight()
     self:updateRechargeTension()
 end

@@ -85,6 +85,18 @@ function Mod:getKrisisConfiguredSeed()
     return normalizeSeedValue(kristal_config.krisisRandomSeed)
 end
 
+function Mod:getConfig(key)
+    if key == "mercyMessages"
+        and Game
+        and Game.battle
+        and Game.battle.encounter
+        and Game.battle.encounter.isRechargeMercyDisplayActive
+        and Game.battle.encounter:isRechargeMercyDisplayActive()
+    then
+        return true
+    end
+end
+
 function Mod:getKrisisRunSeed()
     if self.krisis_run_seed then
         return self.krisis_run_seed
