@@ -247,7 +247,7 @@ end
 
 function KrisPhase1_02:init()
     super.init(self)
-    self.time = 8
+    self.time = 10
 end
 
 function KrisPhase1_02:getSlashInterval()

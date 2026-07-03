@@ -68,7 +68,7 @@
             // End of config
         },
         "langLibZh": {
-            "defaultLanguage": "auto",
+            "defaultLanguage": "en",
             "languages": ["en", "zh_hans"],
             "languageNames": {
                 "en": "English",

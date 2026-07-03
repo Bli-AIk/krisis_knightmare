@@ -11,6 +11,7 @@ local CATCH_FINISH_FRAMES = 2 * 5
 local END_DELAY_FRAMES = 5
 local DISAPPEAR_HOLD_FRAME = 1
 local DISAPPEAR_HOLD_SECONDS = 1.25
+local SWORD_SPAWN_DELAY_SECONDS = DISAPPEAR_FRAME_SECONDS * DISAPPEAR_HOLD_FRAME + DISAPPEAR_HOLD_SECONDS
 
 local CATCH_KRIS_OFFSET_X = 24
 
@@ -23,7 +24,7 @@ function KrisPhase1_05:init()
         + SWORD_RETURN_FRAMES
         + CATCH_FINISH_FRAMES
         + END_DELAY_FRAMES
-    ) / FPS + DISAPPEAR_HOLD_SECONDS
+    ) / FPS + SWORD_SPAWN_DELAY_SECONDS
 end
 
 local KRIS_FAR_X = 10000
@@ -85,19 +86,11 @@ function KrisPhase1_05:onStart()
         end)
     end
 
-    local function pauseSword(sword)
-        if sword.parent and sword.pauseMovement then
-            sword:pauseMovement(DISAPPEAR_HOLD_SECONDS * FPS)
-        end
-    end
-
-    local sword = self:spawnFlyingSword()
-    local pause_delay = DISAPPEAR_FRAME_SECONDS * (DISAPPEAR_HOLD_FRAME - 1)
-    if pause_delay <= 0 then
-        pauseSword(sword)
+    if SWORD_SPAWN_DELAY_SECONDS <= 0 then
+        self:spawnFlyingSword()
     else
-        self.timer:after(pause_delay, function()
-            pauseSword(sword)
+        self.timer:after(SWORD_SPAWN_DELAY_SECONDS, function()
+            self:spawnFlyingSword()
         end)
     end
 end
