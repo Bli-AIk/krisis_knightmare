@@ -1,6 +1,7 @@
 local Kris, super = Class(EnemyBattler)
 
 local WAIT = "[wait:5]"
+local RECHARGE_MIN_TENSION = 50
 local TURN_WAVES = {
     [1] = "kris_phase1_01",
     [2] = "kris_phase1_02",
@@ -56,7 +57,12 @@ function Kris:init()
     self.dialogue = {}
 
     self:applyLocalization()
-    self:registerAct(self.act_recharge, self.act_recharge_description, { "vessel" }, 50)
+    self.recharge_act = self:registerAct(
+        self.act_recharge,
+        self.act_recharge_description,
+        { "vessel" },
+        RECHARGE_MIN_TENSION
+    )
     self:registerAct(self.act_heartbeat, self.act_heartbeat_description, { "vessel" })
 
     self.heartbeat_bonuses = {}
@@ -111,11 +117,27 @@ function Kris:applyLocalization(update_acts)
             elseif act.name == old_recharge then
                 act.name = self.act_recharge
                 act.description = self.act_recharge_description
+                self.recharge_act = act
             elseif act.name == old_heartbeat then
                 act.name = self.act_heartbeat
                 act.description = self.act_heartbeat_description
             end
         end
+    end
+end
+
+function Kris:getRechargeActTPCost()
+    local tension = Game and Game.getTension and Game:getTension() or 0
+    if tension >= RECHARGE_MIN_TENSION then
+        return tension
+    end
+
+    return RECHARGE_MIN_TENSION
+end
+
+function Kris:updateRechargeActTPCost()
+    if self.recharge_act then
+        self.recharge_act.tp = self:getRechargeActTPCost()
     end
 end
 
@@ -217,6 +239,8 @@ function Kris:onRemove(parent)
 end
 
 function Kris:update()
+    self:updateRechargeActTPCost()
+
     if self.heartbeat_active then
         local inv_timer_cap = self:getHeartbeatInvTimerCap()
         if Game.battle.soul and Game.battle.soul.inv_timer > inv_timer_cap then

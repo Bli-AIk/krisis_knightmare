@@ -29,6 +29,22 @@ function Kris:applyLocalization()
     self.text = Game:loc("* KRIS slashes into the combat.", "enemy_kris_turn_1")
 end
 
+function Kris:onBattleStart()
+    local initial_tp = Game:getConfig("krisisInitialTP")
+    if initial_tp ~= nil then
+        initial_tp = tonumber(initial_tp)
+        if initial_tp then
+            Game:setTension(initial_tp)
+        end
+    end
+
+    for _, enemy in ipairs(Game.battle.enemies or {}) do
+        if enemy.updateRechargeActTPCost then
+            enemy:updateRechargeActTPCost()
+        end
+    end
+end
+
 function Kris:onBattleEnd()
     self:clearRecharge(true)
 

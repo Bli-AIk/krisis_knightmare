@@ -64,11 +64,13 @@
         "kristal": {
             // Set to a number or string to reproduce KRISIS random patterns.
             // Leave null for a fresh random seed each run.
-            "krisisRandomSeed": null
+            "krisisRandomSeed": null,
+            // Set to a number to override the TP at battle start. Leave null to use the engine default.
+            "krisisInitialTP": 100
             // End of config
         },
         "langLibZh": {
-            "defaultLanguage": "en",
+            "defaultLanguage": "auto",
             "languages": ["en", "zh_hans"],
             "languageNames": {
                 "en": "English",
