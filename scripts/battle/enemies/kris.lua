@@ -56,7 +56,7 @@ function Kris:init()
     self.dialogue = {}
 
     self:applyLocalization()
-    self:registerAct(self.act_recharge, self.act_recharge_description, { "vessel" }, 100)
+    self:registerAct(self.act_recharge, self.act_recharge_description, { "vessel" }, 50)
     self:registerAct(self.act_heartbeat, self.act_heartbeat_description, { "vessel" })
 
     self.heartbeat_bonuses = {}
@@ -155,6 +155,11 @@ function Kris:onAct(battler, name)
             "* Your Invincible shorter.", "act_kris_heartbeat_text")
         }
     elseif name == self.act_recharge then
+        local action = Game.battle:getCurrentAction()
+        local pre_spend_tension = Game:getTension() - ((action and action.tp) or 0)
+        if Game.battle.encounter and Game.battle.encounter.activateRecharge then
+            Game.battle.encounter:activateRecharge(self, battler, pre_spend_tension)
+        end
         return Game:loc("* Your SOUL emitted a strange glow!", "act_kris_recharge_text")
     end
 
