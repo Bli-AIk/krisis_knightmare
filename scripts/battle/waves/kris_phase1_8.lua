@@ -27,6 +27,9 @@ local PAIR_TOP_Y_MAX = TOP_CAMP_Y
 local PAIR_TOP_REACH_Y = TOP_CAMP_Y
 local PAIR_SCALE_MIN = 1
 local PAIR_SCALE_MAX = 3
+local SINGLE_CLOSE_Y_DISTANCE = 56
+local SINGLE_FORCED_SEPARATION_DISTANCE = 96
+local SINGLE_HISTORY_LIMIT = 2
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -48,6 +51,7 @@ function KrisPhase1_8:init()
     self.fire_started = false
     self.minimum_fire_phase_elapsed = false
     self.fire_release_timer_started = false
+    self.recent_single_sharp_swords = {}
 end
 
 function KrisPhase1_8:rollPatternSeed()
@@ -229,6 +233,68 @@ function KrisPhase1_8:getPairPlacement(spawn_frame, spawn_index)
     }
 end
 
+function KrisPhase1_8:lastTwoSingleSharpSwordsAreClose()
+    local recent = self.recent_single_sharp_swords
+    if not recent or #recent < 2 then
+        return false
+    end
+
+    local first = recent[#recent - 1]
+    local second = recent[#recent]
+    return math.abs(first.y - second.y) <= SINGLE_CLOSE_Y_DISTANCE
+end
+
+function KrisPhase1_8:getSeparatedSingleSharpSwordY(spawn_frame, spawn_index, y, scale_y)
+    if not self:lastTwoSingleSharpSwordsAreClose() then
+        return y
+    end
+
+    local recent = self.recent_single_sharp_swords
+    local cluster_y = (recent[#recent - 1].y + recent[#recent].y) / 2
+    local spawn_top, spawn_bottom = self:getSpawnBounds()
+    local half_height = SHARP_SWORD_HEIGHT * scale_y / 2
+    local min_y = spawn_top + half_height
+    local max_y = spawn_bottom - half_height
+
+    if min_y > max_y then
+        return y
+    end
+
+    local spawn_center_y = (spawn_top + spawn_bottom) / 2
+    local move_down = cluster_y < spawn_center_y
+    local separated_min_y = min_y
+    local separated_max_y = max_y
+
+    if move_down then
+        separated_min_y = math.max(min_y, cluster_y + SINGLE_FORCED_SEPARATION_DISTANCE)
+    else
+        separated_max_y = math.min(max_y, cluster_y - SINGLE_FORCED_SEPARATION_DISTANCE)
+    end
+
+    if separated_min_y > separated_max_y then
+        return move_down and max_y or min_y
+    end
+
+    return lerp(
+        separated_min_y,
+        separated_max_y,
+        self:noise(spawn_index * 53 + spawn_frame * 0.08, 30)
+    )
+end
+
+function KrisPhase1_8:rememberSingleSharpSword(y, scale_y)
+    self.recent_single_sharp_swords = self.recent_single_sharp_swords or {}
+
+    table.insert(self.recent_single_sharp_swords, {
+        y = y,
+        scale_y = scale_y,
+    })
+
+    while #self.recent_single_sharp_swords > SINGLE_HISTORY_LIMIT do
+        table.remove(self.recent_single_sharp_swords, 1)
+    end
+end
+
 function KrisPhase1_8:spawnSharpSwordPair(spawn_frame, spawn_index)
     local placement = self:getPairPlacement(spawn_frame, spawn_index)
     local top_y = placement.top_y
@@ -262,9 +328,11 @@ function KrisPhase1_8:spawnSharpSword(spawn_frame, spawn_index)
     local y, scale_y = self:getSharpSwordPlacement(spawn_frame, spawn_index)
     scale_y = self:applyDensityScale(spawn_frame, y, scale_y)
     scale_y = math.max(scale_y, MIN_SINGLE_SHARP_SWORD_SCALE)
+    y = self:getSeparatedSingleSharpSwordY(spawn_frame, spawn_index, y, scale_y)
 
     local sword = self:spawnSharpSwordAt(y, scale_y)
     self:rememberSharpSword(spawn_frame, y, scale_y)
+    self:rememberSingleSharpSword(y, scale_y)
     return sword
 end
 
@@ -356,6 +424,7 @@ function KrisPhase1_8:onStart()
     self.fire_started = false
     self.minimum_fire_phase_elapsed = false
     self.fire_release_timer_started = false
+    self.recent_single_sharp_swords = {}
     super.onStart(self)
 end
 
