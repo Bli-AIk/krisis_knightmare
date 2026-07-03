@@ -73,6 +73,63 @@ function Kris:onStateChange(old, new, reason)
     end
 end
 
+function Kris:isRechargeActive()
+    return self.recharge ~= nil
+end
+
+function Kris:onEnemySelect(state_reason, enemy_index)
+    if state_reason ~= "ACT" or not Game.battle then
+        return
+    end
+
+    local battle = Game.battle
+    if #battle.enemies_index == 0 then
+        return true
+    end
+
+    battle.ui_select:stop()
+    battle.ui_select:play()
+    battle.selected_enemy = enemy_index
+
+    local enemy = battle:_getEnemyByIndex(enemy_index)
+    if enemy.updateRechargeActTPCost then
+        enemy:updateRechargeActTPCost()
+    end
+
+    battle:clearMenuItems()
+    for _, act in ipairs(enemy.acts) do
+        local insert = not act.hidden
+        if act.character and battle.party[battle.current_selecting].chara.id ~= act.character then
+            insert = false
+        end
+        if act.party and (#act.party > 0) then
+            for _, party_id in ipairs(act.party) do
+                if not battle:getPartyIndex(party_id) then
+                    insert = false
+                    break
+                end
+            end
+        end
+        if insert then
+            battle:addMenuItem({
+                ["name"] = act.name,
+                ["tp"] = act.tp or 0,
+                ["unusable"] = act.unusable or false,
+                ["description"] = act.description,
+                ["party"] = act.party,
+                ["color"] = act.color or { 1, 1, 1, 1 },
+                ["highlight"] = act.highlight or enemy,
+                ["icons"] = act.icons,
+                ["callback"] = function(menu_item)
+                    battle:pushAction("ACT", enemy, menu_item)
+                end
+            })
+        end
+    end
+    battle:setState("MENUSELECT", "ACT")
+    return true
+end
+
 function Kris:activateRecharge(enemy, battler, pre_spend_tension)
     local turns = pre_spend_tension >= RECHARGE_FULL_TENSION and RECHARGE_FULL_TURNS or RECHARGE_DEFAULT_TURNS
 

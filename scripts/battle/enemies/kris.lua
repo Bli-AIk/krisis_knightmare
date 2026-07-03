@@ -15,8 +15,11 @@ local TURN_WAVES = {
     [10] = "kris_phase1_10",
     [11] = "kris_phase1_11",
     [12] = "kris_phase1_12",
+    [13] = "kris_phase1_13",
+    [14] = "kris_phase1_14",
+    [15] = "kris_phase1_15",
 }
-local FORCED_TURN = 12
+-- local FORCED_TURN = 12
 
 function Kris:init()
     super.init(self)
@@ -40,18 +43,11 @@ function Kris:init()
 
     -- List of possible wave ids, randomly picked each turn
     self.waves = {
-        "kris_phase1_01",
-        "kris_phase1_02",
-        "kris_phase1_03",
-        "kris_phase1_04",
-        "kris_phase1_05",
-        "kris_phase1_06",
-        "kris_phase1_07",
-        "kris_phase1_08",
-        "kris_phase1_09",
-        "kris_phase1_10",
         "kris_phase1_11",
         "kris_phase1_12",
+        "kris_phase1_13",
+        "kris_phase1_14",
+        "kris_phase1_15",
     }
 
     self.dialogue = {}
@@ -138,6 +134,10 @@ end
 function Kris:updateRechargeActTPCost()
     if self.recharge_act then
         self.recharge_act.tp = self:getRechargeActTPCost()
+        self.recharge_act.unusable = Game.battle
+            and Game.battle.encounter
+            and Game.battle.encounter.isRechargeActive
+            and Game.battle.encounter:isRechargeActive()
     end
 end
 
