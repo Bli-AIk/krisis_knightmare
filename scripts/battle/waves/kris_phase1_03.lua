@@ -29,6 +29,9 @@ local DENSITY_Y_RADIUS = 54
 local DENSITY_GLOBAL_WEIGHT = 0.08
 local DENSITY_SCALE_STEP = 0.28
 local DENSITY_MIN_SCALE = 1
+local SHARP_SWORD_MIN_SPEED = 4
+local SHARP_SWORD_MAX_SPEED = 16
+local SHARP_SWORD_ACCEL_DURATION = 0.75
 
 local SHOW_SAFE_CURVE = false
 
@@ -466,7 +469,11 @@ function KrisPhase1_03:getSharpSwordSpawnX()
 end
 
 function KrisPhase1_03:getSharpSwordBulletOptions(y, scale_y, flip_y)
-    return nil
+    return {
+        min_speed = SHARP_SWORD_MIN_SPEED,
+        max_speed = SHARP_SWORD_MAX_SPEED,
+        accel_duration = SHARP_SWORD_ACCEL_DURATION,
+    }
 end
 
 function KrisPhase1_03:onSharpSwordSpawned(spawn, spawned)
