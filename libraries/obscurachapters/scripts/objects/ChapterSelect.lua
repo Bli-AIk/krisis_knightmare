@@ -95,14 +95,19 @@ function ChapterSelect:init()
         self.last_scroll_target = 0
         self:updateScroll()
     end)
+    local language = Game.getLanguage and Game:getLanguage() or nil
+    local name_style = Game.getNameStyle and Game:getNameStyle() or nil
     self.name_style_prompt_timer = nil
-    self.name_style_prompt_last_language = Game.getLanguage and Game:getLanguage() or nil
-    self.name_style_prompt_last_name_style = Game.getNameStyle and Game:getNameStyle() or nil
+    self.name_style_prompt_last_language = language
+    self.name_style_prompt_last_name_style = name_style
+    self.name_style_prompt_pending_initial = self:shouldShowInitialNameStylePrompt(language)
+    self.name_style_prompt_loaded_frames = 0
 end
 
 function ChapterSelect:update()
     super.update(self)
     self:updateNameStylePromptTrigger()
+    self:updateInitialNameStylePrompt()
 
     if self.name_style_prompt_timer then
         self.name_style_prompt_timer = self.name_style_prompt_timer + DT
@@ -278,6 +283,37 @@ function ChapterSelect:canUseNameStylePrompt(language)
     return Game.getNameStyle and Game.setNameStyle and self:isNameStylePromptLanguage(language)
 end
 
+function ChapterSelect:shouldShowInitialNameStylePrompt(language)
+    return type(language) == "string"
+        and language:lower():match("^zh")
+        and self:canUseNameStylePrompt(language)
+end
+
+function ChapterSelect:isInitialLoadComplete()
+    return self.alpha >= 0.999 and math.abs(self.scroll) <= 0.01
+end
+
+function ChapterSelect:updateInitialNameStylePrompt()
+    if not self.name_style_prompt_pending_initial then
+        return
+    end
+
+    if not self:isInitialLoadComplete() then
+        self.name_style_prompt_loaded_frames = 0
+        return
+    end
+
+    self.name_style_prompt_loaded_frames = self.name_style_prompt_loaded_frames + 1
+    if self.name_style_prompt_loaded_frames < 2 then
+        return
+    end
+
+    self.name_style_prompt_pending_initial = false
+    if self:shouldShowInitialNameStylePrompt(Game.getLanguage and Game:getLanguage() or nil) then
+        self:showNameStylePrompt()
+    end
+end
+
 function ChapterSelect:getCurrentNameStyle()
     if Game.getNameStyle then
         return Game:getNameStyle()
@@ -306,6 +342,7 @@ function ChapterSelect:showNameStylePrompt()
         return
     end
 
+    self:updateFonts(true)
     self.name_style_prompt_timer = 0
 end
 
