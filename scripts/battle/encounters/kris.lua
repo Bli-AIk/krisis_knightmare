@@ -11,6 +11,8 @@ local RECHARGE_DEFAULT_SOUL_SPRITE = "player/heart_dodge"
 local RECHARGE_LIGHT_SCALE = 1
 local RECHARGE_LIGHT_RADIUS_FACTOR = 0.45
 local RECHARGE_MERCY_INTERVAL = 0.3
+local RECHARGE_ACT_EFFECT_FRAME = 5
+local RECHARGE_ACT_FRAME_DELAY = 1 / 15
 
 function Kris:init()
     super.init(self)
@@ -162,7 +164,6 @@ function Kris:activateRecharge(enemy, battler, pre_spend_tension)
     self.recharge.mercy_cooldown = 0
 
     self:ensureRechargeVisuals(enemy, battler)
-    self:spawnRechargeRadialBurst(battler)
 end
 
 function Kris:getRechargeRadialBurstOrigin(battler)
@@ -184,7 +185,44 @@ function Kris:spawnRechargeRadialBurst(battler, options)
     end
 
     local x, y = self:getRechargeRadialBurstOrigin(battler)
-    Game.battle:addChild(RechargeRadialBurst(x, y, options))
+    local burst = RechargeRadialBurst(x, y, options)
+    Game.battle:addChild(burst)
+    return burst
+end
+
+function Kris:spawnRechargeWhiteFlash(battler)
+    if Game.battle then
+        Game.battle:addChild(RechargeWhiteFlash(battler))
+    end
+end
+
+function Kris:triggerRechargeActVisuals(battler)
+    self:spawnRechargeRadialBurst(battler, {
+        after_snapshot = function()
+            self:spawnRechargeWhiteFlash(battler)
+        end
+    })
+end
+
+function Kris:playRechargeActAnimation(battler)
+    if not battler then
+        return
+    end
+
+    local triggered = false
+    battler:setAnimation({
+        "battle/act",
+        function(sprite, wait)
+            for frame = 1, 7 do
+                sprite:setFrame(frame)
+                if frame == RECHARGE_ACT_EFFECT_FRAME and not triggered then
+                    triggered = true
+                    self:triggerRechargeActVisuals(battler)
+                end
+                wait(RECHARGE_ACT_FRAME_DELAY)
+            end
+        end
+    })
 end
 
 function Kris:ensureRechargeVisuals(enemy, battler)

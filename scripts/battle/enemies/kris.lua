@@ -162,6 +162,19 @@ function Kris:selectWave()
     return super.selectWave(self)
 end
 
+function Kris:onActStart(battler, name)
+    if name == self.act_recharge
+        and Game.battle
+        and Game.battle.encounter
+        and Game.battle.encounter.playRechargeActAnimation
+    then
+        Game.battle.encounter:playRechargeActAnimation(battler)
+        return
+    end
+
+    return super.onActStart(self, battler, name)
+end
+
 function Kris:onAct(battler, name)
     if name == self.act_check then
         return super.onAct(self, battler, "Check")

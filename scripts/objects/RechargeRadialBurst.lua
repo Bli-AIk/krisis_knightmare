@@ -1,10 +1,14 @@
 local RechargeRadialBurst, super = Class(Object)
 
-local DURATION = 0.95
+local DURATION = 1.35
 local TWO_PI = math.pi * 2
 local FAR_RADIUS = 780
 local MIN_RAY_COUNT = 3
 local MAX_RAY_COUNT = 6
+local MAGNIFY_SCALE = 1.11
+local MAGNIFY_RING_DELAY = 0.03
+local MAGNIFY_RING_LIFE = 1.08
+local MAGNIFY_RING_THICKNESS = 72
 local CAPTURE_TIMES = { 0.08, 0.20, 0.34, 0.50, 0.68 }
 local CAPTURE_DIR = "debug/recharge_radial_capture"
 
@@ -81,6 +85,17 @@ local function easeOutCubic(t)
     return 1 - ((1 - t) * (1 - t) * (1 - t))
 end
 
+local function maxCornerDistance(x, y)
+    local distances = {
+        Utils.dist(x, y, 0, 0),
+        Utils.dist(x, y, SCREEN_WIDTH, 0),
+        Utils.dist(x, y, 0, SCREEN_HEIGHT),
+        Utils.dist(x, y, SCREEN_WIDTH, SCREEN_HEIGHT),
+    }
+
+    return math.max(unpack(distances))
+end
+
 local function drawRay(cx, cy, ray, age)
     local p = (age - ray.delay) / ray.life
     if p <= 0 or p >= 1 then
@@ -123,7 +138,24 @@ function RechargeRadialBurst:init(x, y, options)
     self.capture_pending = false
     self.capture_printed = false
     self.rays = generateRays()
+    self.snapshot = nil
+    self.waiting_for_snapshot = true
+    self.after_snapshot = options.after_snapshot
+    self.ring_max_radius = maxCornerDistance(self.origin_x, self.origin_y) + MAGNIFY_RING_THICKNESS
     self.layer = options.layer or (BATTLE_LAYERS["top"] - 10)
+
+    love.graphics.captureScreenshot(function(image_data)
+        if self.parent then
+            self.snapshot = love.graphics.newImage(image_data)
+            self.snapshot:setFilter("nearest", "nearest")
+            self.waiting_for_snapshot = false
+            if self.after_snapshot then
+                local after_snapshot = self.after_snapshot
+                self.after_snapshot = nil
+                after_snapshot(self)
+            end
+        end
+    end)
 
     if self.capture then
         love.filesystem.createDirectory(CAPTURE_DIR)
@@ -132,6 +164,10 @@ end
 
 function RechargeRadialBurst:update()
     super.update(self)
+
+    if self.waiting_for_snapshot then
+        return
+    end
 
     self.time = self.time + DT
 
@@ -160,12 +196,58 @@ function RechargeRadialBurst:captureFrame(index)
     print("[RechargeRadialBurst] captured " .. path)
 end
 
+function RechargeRadialBurst:drawMagnifiedSnapshot()
+    local image = self.snapshot
+    if not image then
+        return
+    end
+
+    local scale_x = (SCREEN_WIDTH / image:getWidth()) * MAGNIFY_SCALE
+    local scale_y = (SCREEN_HEIGHT / image:getHeight()) * MAGNIFY_SCALE
+    local draw_x = self.origin_x * (1 - MAGNIFY_SCALE)
+    local draw_y = self.origin_y * (1 - MAGNIFY_SCALE)
+
+    love.graphics.setColor(1, 1, 1, 0.92)
+    love.graphics.draw(image, draw_x, draw_y, 0, scale_x, scale_y)
+end
+
+function RechargeRadialBurst:drawMagnifyRing()
+    local p = (self.time - MAGNIFY_RING_DELAY) / MAGNIFY_RING_LIFE
+    if p <= 0 or p >= 1 then
+        return
+    end
+
+    p = clamp(p, 0, 1)
+    local grow = easeOutCubic(p)
+    local outer = self.ring_max_radius * grow
+    local thickness = MAGNIFY_RING_THICKNESS * (1.25 - (0.25 * p))
+    local inner = math.max(outer - thickness, 0)
+    local alpha = (1 - p) * 0.62
+
+    love.graphics.setBlendMode("alpha")
+    love.graphics.stencil(function()
+        love.graphics.circle("fill", self.origin_x, self.origin_y, outer, 96)
+    end, "replace", 1)
+    love.graphics.stencil(function()
+        love.graphics.circle("fill", self.origin_x, self.origin_y, inner, 96)
+    end, "replace", 0, true)
+    love.graphics.setStencilTest("equal", 1)
+    self:drawMagnifiedSnapshot()
+    love.graphics.setStencilTest()
+end
+
 function RechargeRadialBurst:draw()
+    if self.waiting_for_snapshot then
+        return
+    end
+
     love.graphics.push()
     love.graphics.origin()
 
     local old_blend, old_alpha_mode = love.graphics.getBlendMode()
     local old_r, old_g, old_b, old_a = love.graphics.getColor()
+
+    self:drawMagnifyRing()
 
     love.graphics.setBlendMode("add")
     for _, ray in ipairs(self.rays) do
