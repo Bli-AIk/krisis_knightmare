@@ -1,6 +1,8 @@
 local RechargeSoul, super = Class(Bullet)
 
 local MOVE_DISTANCE = 54
+local TRANSITION_TIME = 7
+local FADE_IN_TIME = 3
 local DEFAULT_MOVE_SPEED = 4
 local EDGE_BIAS_CHANCE = 0.6
 local EDGE_MARGIN = 18
@@ -22,6 +24,7 @@ function RechargeSoul:init(x, y, target_enemy, light_radius)
     self.remove_offscreen = false
 
     self.enabled = true
+    self.transitioning = false
 end
 
 function RechargeSoul:getTargetEnemy()
@@ -49,13 +52,46 @@ function RechargeSoul:getBounds()
 end
 
 function RechargeSoul:clampToBounds()
-    if self.move_target_x then
+    if self.move_target_x or self.transitioning then
         return
     end
 
     local left, right, top, bottom = self:getBounds()
     self.x = clamp(self.x, left, right)
     self.y = clamp(self.y, top, bottom)
+end
+
+function RechargeSoul:transitionTo(x, y)
+    self.transitioning = true
+    self.transition_timer = 0
+    self.transition_start_x = self.x
+    self.transition_start_y = self.y
+    self.transition_target_x = x
+    self.transition_target_y = y
+    self.transition_target_alpha = self.alpha
+    self.alpha = 0
+end
+
+function RechargeSoul:updateTransition()
+    if not self.transitioning then
+        return false
+    end
+
+    if self.transition_timer >= TRANSITION_TIME then
+        self.transitioning = false
+        self:setPosition(self.transition_target_x, self.transition_target_y)
+        self.alpha = self.transition_target_alpha or 1
+        return true
+    end
+
+    local progress = MathUtils.clamp(self.transition_timer / TRANSITION_TIME, 0, 1)
+    self:setPosition(
+        MathUtils.lerp(self.transition_start_x, self.transition_target_x, progress),
+        MathUtils.lerp(self.transition_start_y, self.transition_target_y, progress)
+    )
+    self.alpha = MathUtils.lerp(0, self.transition_target_alpha or 1, MathUtils.clamp(self.transition_timer / FADE_IN_TIME, 0, 1))
+    self.transition_timer = self.transition_timer + DTMULT
+    return true
 end
 
 function RechargeSoul:isLit()
@@ -163,6 +199,11 @@ end
 
 function RechargeSoul:update()
     self:clampToBounds()
+
+    if self:updateTransition() then
+        super.update(self)
+        return
+    end
 
     if self:updateMove() then
         super.update(self)

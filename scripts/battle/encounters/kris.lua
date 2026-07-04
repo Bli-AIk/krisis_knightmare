@@ -5,6 +5,9 @@ local RECHARGE_FULL_TURNS = 2
 local RECHARGE_DEFAULT_TURNS = 1
 local RECHARGE_TENSION_RATE = 120
 local RECHARGE_PLATFORM_FADE_TIME = 0.3
+local RECHARGE_LIGHT_SPRITE = "battle/light"
+local RECHARGE_PLAYER_LIGHT_SPRITE = "battle/player_light"
+local RECHARGE_DEFAULT_SOUL_SPRITE = "player/heart_dodge"
 local RECHARGE_LIGHT_SCALE = 1
 local RECHARGE_LIGHT_RADIUS_FACTOR = 0.45
 local RECHARGE_MERCY_INTERVAL = 0.3
@@ -20,9 +23,9 @@ function Kris:init()
     self:addEnemy("kris", 507, 239)
 
     self.recharge = nil
-    self.recharge_light = nil
     self.recharge_soul = nil
     self.recharge_light_radius = nil
+    self.recharge_player_light = nil
 end
 
 function Kris:applyLocalization()
@@ -70,6 +73,8 @@ end
 function Kris:onStateChange(old, new, reason)
     if new == "ACTIONSELECT" then
         self:beginRechargeDrain()
+    elseif new == "DEFENDINGBEGIN" or new == "DEFENDING" or new == "DEFENDINGEND" then
+        self:updateRechargeLight()
     end
 end
 
@@ -150,20 +155,8 @@ function Kris:ensureRechargeVisuals(enemy, battler)
         self.bg_platform:crossFadeTo("battle/backgrounds/kris_platform_light", RECHARGE_PLATFORM_FADE_TIME)
     end
 
-    if not self.recharge_light or not self.recharge_light.parent then
-        self.recharge_light = Sprite("battle/light", 0, 0)
-        self.recharge_light:setOrigin(0.5, 0.5)
-        self.recharge_light:setScale(RECHARGE_LIGHT_SCALE)
-        self.recharge_light.alpha = 0
-        self.recharge_light.visible = false
-        self.recharge_light.layer = BATTLE_LAYERS["soul"] - 1
-        Game.battle:addChild(self.recharge_light)
-    else
-        self.recharge_light.visible = false
-        self.recharge_light.alpha = 0
-    end
-
-    self.recharge_light_radius = (self.recharge_light.width or 100) * RECHARGE_LIGHT_SCALE * RECHARGE_LIGHT_RADIUS_FACTOR
+    local texture = Assets.getTexture(RECHARGE_LIGHT_SPRITE)
+    self.recharge_light_radius = ((texture and texture:getWidth()) or 20) * RECHARGE_LIGHT_SCALE * RECHARGE_LIGHT_RADIUS_FACTOR
     self:updateRechargeLight()
 end
 
@@ -179,13 +172,34 @@ function Kris:getRechargeSoulSpawnPosition()
     return SCREEN_WIDTH / 2, (SCREEN_HEIGHT - 155) / 2 + 10
 end
 
+function Kris:getRechargeSoulOriginPosition(enemy)
+    enemy = enemy or (self.recharge and self.recharge.enemy)
+    if enemy and enemy.parent then
+        if enemy.sprite then
+            return enemy:localToScreenPos((enemy.sprite.width / 2) - 4.5, enemy.sprite.height / 2)
+        end
+        return enemy:localToScreenPos(enemy.width / 2, enemy.height / 2)
+    end
+
+    return self:getRechargeSoulSpawnPosition()
+end
+
 function Kris:getRechargeLightRadius()
-    return self.recharge_light_radius or 90
+    if not self.recharge_light_radius then
+        local texture = Assets.getTexture(RECHARGE_LIGHT_SPRITE)
+        self.recharge_light_radius = ((texture and texture:getWidth()) or 20) * RECHARGE_LIGHT_SCALE * RECHARGE_LIGHT_RADIUS_FACTOR
+    end
+    return self.recharge_light_radius
 end
 
 function Kris:getRechargeLightPosition()
-    if self.recharge_light and self.recharge_light.parent and self.recharge_light.visible then
-        return self.recharge_light.x, self.recharge_light.y, self:getRechargeLightRadius()
+    if not self.recharge then
+        return
+    end
+
+    local soul = self:getRechargeLightTarget()
+    if soul then
+        return soul.x, soul.y, self:getRechargeLightRadius()
     end
 end
 
@@ -202,6 +216,54 @@ function Kris:getRechargeLightTarget()
     if Game.battle.soul and Game.battle.soul.parent and Game.battle.soul.visible then
         return Game.battle.soul
     end
+end
+
+function Kris:applyRechargePlayerLight(soul)
+    if not soul or not soul.sprite then
+        return
+    end
+
+    if self.recharge_player_light and self.recharge_player_light.soul == soul then
+        return
+    end
+
+    self:restoreRechargePlayerLight()
+    self.recharge_player_light = {
+        soul = soul,
+        sprite = soul.sprite.texture_path,
+        inherit_color = soul.sprite.inherit_color,
+    }
+    soul.sprite:setSprite(RECHARGE_PLAYER_LIGHT_SPRITE)
+    soul.sprite:setOrigin(0.5, 0.5)
+    soul.sprite.inherit_color = false
+
+    local light = Sprite(RECHARGE_LIGHT_SPRITE, 0, 0)
+    light:setOrigin(0.5, 0.5)
+    light:setScale(RECHARGE_LIGHT_SCALE)
+    light.layer = (soul.sprite.layer or 0) - 1
+    light.alpha = 0
+    soul:addChild(light)
+    light:fadeTo(1, RECHARGE_PLATFORM_FADE_TIME)
+    self.recharge_player_light.light = light
+end
+
+function Kris:restoreRechargePlayerLight()
+    local data = self.recharge_player_light
+    if not data then
+        return
+    end
+
+    if data.soul and data.soul.parent and data.soul.sprite then
+        if data.light then
+            data.light:remove()
+        end
+        data.soul.sprite:setSprite(data.sprite or RECHARGE_DEFAULT_SOUL_SPRITE)
+        data.soul.sprite:setOrigin(0.5, 0.5)
+        data.soul.sprite.inherit_color = data.inherit_color
+    elseif data.light then
+        data.light:remove()
+    end
+    self.recharge_player_light = nil
 end
 
 function Kris:isRechargeMercyDisplayActive()
@@ -240,38 +302,30 @@ function Kris:getRechargeTargetPosition(target)
 end
 
 function Kris:updateRechargeLight()
-    if not self.recharge_light or not self.recharge_light.parent then
+    local recharge = self.recharge
+    if not recharge then
+        self:restoreRechargePlayerLight()
         return
     end
 
     local target = self:getRechargeLightTarget()
     if not target then
-        self.recharge_light.visible = false
-        self.recharge_light.alpha = 0
+        self:restoreRechargePlayerLight()
         if self.recharge_soul then
-            self.recharge_soul.enabled = false
-            self.recharge_soul.visible = false
+            self.recharge_soul:remove()
+            self.recharge_soul = nil
         end
         return
     end
 
-    local x, y = self:getRechargeTargetPosition(target)
-    if not self.recharge_light.visible then
-        self.recharge_light.alpha = 0
-        self.recharge_light:fadeTo(1, RECHARGE_PLATFORM_FADE_TIME)
-    end
-    self.recharge_light.visible = true
-    self.recharge_light:setPosition(x, y)
-    self.recharge_light:setLayer((target.layer or BATTLE_LAYERS["soul"]) - 1)
-
-    local recharge = self.recharge
-    if not recharge then
-        return
-    end
+    self:applyRechargePlayerLight(target)
 
     if not self.recharge_soul or not self.recharge_soul.parent then
-        local soul_x, soul_y = self:getRechargeSoulSpawnPosition()
-        self.recharge_soul = Registry.createBullet("recharge_soul", soul_x, soul_y, recharge.enemy, self:getRechargeLightRadius())
+        local origin_x, origin_y = self:getRechargeSoulOriginPosition(recharge.enemy)
+        local target_x, target_y = self:getRechargeSoulSpawnPosition()
+        self.recharge_soul = Registry.createBullet("recharge_soul", origin_x, origin_y, recharge.enemy, self:getRechargeLightRadius())
+        self.recharge_soul:transitionTo(target_x, target_y)
+        Game.battle:addChild(HeartBurst(origin_x - 2, origin_y + 1, { 1, 1, 1 }))
         Game.battle:addChild(self.recharge_soul)
     else
         self.recharge_soul.target_enemy = recharge.enemy
@@ -290,6 +344,8 @@ function Kris:beginRechargeDrain()
     recharge.expiring = false
     recharge.draining = true
     recharge.filling = false
+
+    self:restoreRechargePlayerLight()
 
     if self.recharge_soul then
         self.recharge_soul.enabled = false
@@ -333,16 +389,8 @@ function Kris:updateRechargeMercyCooldown()
 end
 
 function Kris:clearRecharge(instant)
+    self:restoreRechargePlayerLight()
     self.recharge = nil
-
-    if self.recharge_light then
-        if instant then
-            self.recharge_light:remove()
-        else
-            self.recharge_light:fadeOutAndRemove(RECHARGE_PLATFORM_FADE_TIME)
-        end
-        self.recharge_light = nil
-    end
 
     if self.recharge_soul then
         if instant then
