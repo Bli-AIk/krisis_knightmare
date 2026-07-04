@@ -384,8 +384,10 @@ function Mod:postUpdate()
 
     if Game.getLanguage then
         local language = Game:getLanguage()
-        if language ~= self.current_language then
+        local name_style = Game.getNameStyle and Game:getNameStyle() or nil
+        if language ~= self.current_language or name_style ~= self.current_name_style then
             self.current_language = language
+            self.current_name_style = name_style
             self:updateBattleLocalization()
         end
     end

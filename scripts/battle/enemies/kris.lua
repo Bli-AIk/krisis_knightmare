@@ -72,7 +72,7 @@ function Kris:applyLocalization(update_acts)
     local old_recharge = self.act_recharge
     local old_heartbeat = self.act_heartbeat
 
-    self.name = Game:loc("KRIS", "enemy_kris_name")
+    self.name = Game:locName("actor", "kris", "KRIS")
 
     -- Check text (automatically has "ENEMY NAME - " at the start)
     self.check = {
@@ -82,7 +82,7 @@ function Kris:applyLocalization(update_acts)
     }
 
     self.text = {
-        Game:loc("* KRIS slashes into the combat.", "enemy_kris_turn_1"),
+        Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1"),
         Game:loc("* The darkness froze on the blade.", "enemy_kris_turn_2"),
         Game:loc("* Suddenly, the earth was torn apart by swords.", "enemy_kris_turn_3"),
         Game:loc("* Your soul is full of the POWER OF LIGHT.", "enemy_kris_turn_4"),

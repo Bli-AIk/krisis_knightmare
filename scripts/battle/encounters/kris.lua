@@ -31,7 +31,7 @@ function Kris:init()
 end
 
 function Kris:applyLocalization()
-    self.text = Game:loc("* KRIS slashes into the combat.", "enemy_kris_turn_1")
+    self.text = Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1")
 end
 
 function Kris:onBattleStart()
