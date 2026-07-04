@@ -116,13 +116,20 @@ function Kris:onEnemySelect(state_reason, enemy_index)
             end
         end
         if insert then
+            local color = act.color or { 1, 1, 1, 1 }
+            if act == enemy.recharge_act and enemy.getRechargeActMenuColor then
+                color = function()
+                    return enemy:getRechargeActMenuColor()
+                end
+            end
+
             battle:addMenuItem({
                 ["name"] = act.name,
                 ["tp"] = act.tp or 0,
                 ["unusable"] = act.unusable or false,
                 ["description"] = act.description,
                 ["party"] = act.party,
-                ["color"] = act.color or { 1, 1, 1, 1 },
+                ["color"] = color,
                 ["highlight"] = act.highlight or enemy,
                 ["icons"] = act.icons,
                 ["callback"] = function(menu_item)

@@ -2,6 +2,7 @@ local Kris, super = Class(EnemyBattler)
 
 local WAIT = "[wait:5]"
 local RECHARGE_MIN_TENSION = 50
+local RECHARGE_ACT_FLASH_SPEED = 6
 local TURN_WAVES = {
     [1] = "kris_phase1_01",
     [2] = "kris_phase1_02",
@@ -139,6 +140,13 @@ function Kris:updateRechargeActTPCost()
             and Game.battle.encounter.isRechargeActive
             and Game.battle.encounter:isRechargeActive()
     end
+end
+
+function Kris:getRechargeActMenuColor()
+    local time = Kristal.getTime and Kristal.getTime() or love.timer.getTime()
+    local yellow = (math.sin((time * RECHARGE_ACT_FLASH_SPEED) - (math.pi / 2)) + 1) / 2
+
+    return { 1, 1, 1 - yellow, 1 }
 end
 
 function Kris:selectWave()
