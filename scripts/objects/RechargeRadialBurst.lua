@@ -1,22 +1,79 @@
 local RechargeRadialBurst, super = Class(Object)
 
 local DURATION = 0.95
+local TWO_PI = math.pi * 2
 local FAR_RADIUS = 780
+local MIN_RAY_COUNT = 3
+local MAX_RAY_COUNT = 6
 local CAPTURE_TIMES = { 0.08, 0.20, 0.34, 0.50, 0.68 }
 local CAPTURE_DIR = "debug/recharge_radial_capture"
 
-local RAYS = {
-    { angle = -0.95, width = 0.018, delay = 0.02, life = 0.50, alpha = 0.72, length = 1.03, color = { 1.00, 0.98, 0.82 } },
-    { angle = -0.63, width = 0.045, delay = 0.04, life = 0.62, alpha = 0.48, length = 1.05, color = { 1.00, 0.88, 0.48 } },
-    { angle = -0.27, width = 0.013, delay = 0.12, life = 0.44, alpha = 0.66, length = 0.98, color = { 1.00, 0.96, 0.72 } },
-    { angle =  0.30, width = 0.060, delay = 0.08, life = 0.68, alpha = 0.36, length = 0.98, color = { 1.00, 0.78, 0.30 } },
-    { angle =  0.76, width = 0.028, delay = 0.14, life = 0.54, alpha = 0.44, length = 0.82, color = { 1.00, 0.90, 0.55 } },
-    { angle =  1.46, width = 0.016, delay = 0.20, life = 0.46, alpha = 0.38, length = 0.62, color = { 1.00, 0.97, 0.78 } },
-    { angle =  2.95, width = 0.020, delay = 0.10, life = 0.48, alpha = 0.30, length = 0.52, color = { 1.00, 0.86, 0.46 } },
-}
-
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
+end
+
+local function randomFloat(min, max)
+    return min + (max - min) * love.math.random()
+end
+
+local function angularDistance(a, b)
+    return math.abs(((a - b + math.pi) % TWO_PI) - math.pi)
+end
+
+local function isAngleSeparated(angle, angles, min_distance)
+    for _, other in ipairs(angles) do
+        if angularDistance(angle, other) < min_distance then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function generateRayAngles(count)
+    local angles = {}
+    local min_distance = randomFloat(0.46, 0.62)
+    local attempts = 0
+
+    while #angles < count do
+        local angle = randomFloat(-math.pi, math.pi)
+        if isAngleSeparated(angle, angles, min_distance) then
+            table.insert(angles, angle)
+        end
+
+        attempts = attempts + 1
+        if attempts > 80 then
+            min_distance = min_distance * 0.9
+            attempts = 0
+        end
+    end
+
+    return angles
+end
+
+local function generateRays()
+    local count = love.math.random(MIN_RAY_COUNT, MAX_RAY_COUNT)
+    local angles = generateRayAngles(count)
+    local rays = {}
+
+    for i, angle in ipairs(angles) do
+        local thin = love.math.random() < 0.45
+        local pale = love.math.random() < 0.35
+
+        rays[i] = {
+            angle = angle,
+            width = thin and randomFloat(0.010, 0.022) or randomFloat(0.030, 0.060),
+            delay = randomFloat(0.00, 0.18),
+            life = randomFloat(0.42, 0.70),
+            alpha = thin and randomFloat(0.48, 0.74) or randomFloat(0.30, 0.52),
+            length = randomFloat(0.56, 1.08),
+            color = pale
+                and { 1.00, randomFloat(0.94, 1.00), randomFloat(0.72, 0.92) }
+                or { 1.00, randomFloat(0.76, 0.92), randomFloat(0.28, 0.58) },
+        }
+    end
+
+    return rays
 end
 
 local function easeOutCubic(t)
@@ -65,6 +122,7 @@ function RechargeRadialBurst:init(x, y, options)
     self.capture_index = 1
     self.capture_pending = false
     self.capture_printed = false
+    self.rays = generateRays()
     self.layer = options.layer or (BATTLE_LAYERS["top"] - 10)
 
     if self.capture then
@@ -110,7 +168,7 @@ function RechargeRadialBurst:draw()
     local old_r, old_g, old_b, old_a = love.graphics.getColor()
 
     love.graphics.setBlendMode("add")
-    for _, ray in ipairs(RAYS) do
+    for _, ray in ipairs(self.rays) do
         drawRay(self.origin_x, self.origin_y, ray, self.time)
     end
 
