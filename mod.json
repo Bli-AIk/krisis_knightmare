@@ -66,7 +66,7 @@
             // Leave null for a fresh random seed each run.
             "krisisRandomSeed": null,
             // Set to a number to override the TP at battle start. Leave null to use the engine default.
-            "krisisInitialTP": null,
+            "krisisInitialTP": 67,
             // Play the Recharge radial burst as soon as battle starts for visual debugging.
             "krisisDebugRechargeRadial": false,
             // Save five debug screenshots while the startup Recharge burst plays.
