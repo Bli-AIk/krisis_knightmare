@@ -73,6 +73,9 @@ function ChapterTitle:_seekToFrame(target)
 end
 
 function ChapterTitle:_startFade()
+    if self.fading_out or self.ended then
+        return
+    end
     self.running = false
     self.fading_out = true
     self.fade_timer = 0
