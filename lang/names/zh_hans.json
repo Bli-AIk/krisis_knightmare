@@ -3,12 +3,20 @@
         "kris": {
             "translated": "克里斯",
             "original": "KRIS"
+        },
+        "vessel": {
+            "translated": "容器",
+            "original": "Vessel"
         }
     },
     "actor": {
         "kris": {
             "translated": "克里斯",
             "original": "KRIS"
+        },
+        "vessel": {
+            "translated": "容器",
+            "original": "Vessel"
         }
     }
 }

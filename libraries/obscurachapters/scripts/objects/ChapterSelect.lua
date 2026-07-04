@@ -1,6 +1,59 @@
 ---@class ChapterSelect: Object
 local ChapterSelect, super = Class(Object)
 
+local NAME_STYLE_TRANSLATED = "translated"
+local NAME_STYLE_ORIGINAL = "original"
+local NAME_STYLE_PROMPT_FADE_IN = 0.25
+local NAME_STYLE_PROMPT_HOLD = 1
+local NAME_STYLE_PROMPT_FADE_OUT = 0.35
+local NAME_STYLE_PROMPT_DURATION = NAME_STYLE_PROMPT_FADE_IN + NAME_STYLE_PROMPT_HOLD + NAME_STYLE_PROMPT_FADE_OUT
+local NAME_STYLE_LABELS = {
+    [NAME_STYLE_TRANSLATED] = "人名翻译版",
+    [NAME_STYLE_ORIGINAL] = "人名原文版",
+}
+local NAME_STYLE_LABEL_COLORS = {
+    [NAME_STYLE_TRANSLATED] = { 1, 0.45, 0.95 },
+    [NAME_STYLE_ORIGINAL] = { 1, 1, 0 },
+}
+local NAME_STYLE_PROMPT_COLOR_CURRENT = { 0.45, 1, 0.45 }
+local NAME_STYLE_PROMPT_COLOR_KEY = { 0, 0.95, 1 }
+local NAME_STYLE_PROMPT_COLOR_TEXT = { 1, 1, 1 }
+local NAME_STYLE_PROMPT_CJK_TEXT_SPACING = 4
+
+local function isNameStylePromptCjkCodepoint(codepoint)
+    return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
+        or (codepoint >= 0xF900 and codepoint <= 0xFAFF)
+        or (codepoint >= 0xFE10 and codepoint <= 0xFE1F)
+        or (codepoint >= 0xFF00 and codepoint <= 0xFFEF)
+        or (codepoint >= 0x20000 and codepoint <= 0x2FA1F)
+end
+
+local function getNameStylePromptTextWidth(font, text)
+    local width = 0
+    for _, codepoint in utf8.codes(text) do
+        local char = utf8.char(codepoint)
+        width = width + font:getWidth(char)
+        if isNameStylePromptCjkCodepoint(codepoint) then
+            width = width + NAME_STYLE_PROMPT_CJK_TEXT_SPACING
+        end
+    end
+    return width
+end
+
+local function drawNameStylePromptText(text, x, y)
+    local font = love.graphics.getFont()
+    local cursor_x = 0
+
+    for _, codepoint in utf8.codes(text) do
+        local char = utf8.char(codepoint)
+        love.graphics.print(char, x + cursor_x, y)
+        cursor_x = cursor_x + font:getWidth(char)
+        if isNameStylePromptCjkCodepoint(codepoint) then
+            cursor_x = cursor_x + NAME_STYLE_PROMPT_CJK_TEXT_SPACING
+        end
+    end
+end
+
 ---@class ChapterSelect.Chapter
 ---@field sound string|love.sound
 ---@field image string|love.Image
@@ -42,6 +95,21 @@ function ChapterSelect:init()
         self.last_scroll_target = 0
         self:updateScroll()
     end)
+    self.name_style_prompt_timer = nil
+    self.name_style_prompt_last_language = Game.getLanguage and Game:getLanguage() or nil
+    self.name_style_prompt_last_name_style = Game.getNameStyle and Game:getNameStyle() or nil
+end
+
+function ChapterSelect:update()
+    super.update(self)
+    self:updateNameStylePromptTrigger()
+
+    if self.name_style_prompt_timer then
+        self.name_style_prompt_timer = self.name_style_prompt_timer + DT
+        if self.name_style_prompt_timer >= NAME_STYLE_PROMPT_DURATION then
+            self.name_style_prompt_timer = nil
+        end
+    end
 end
 
 function ChapterSelect:updateFonts(force)
@@ -148,6 +216,7 @@ function ChapterSelect:draw()
     self:drawShadowCrystals()
     love.graphics.pop()
     self:drawVersionInfo()
+    self:drawNameStylePrompt()
     Draw.popCanvas()
     Draw.setColor(self:getDrawColor())
     Draw.draw(canvas)
@@ -201,10 +270,160 @@ function ChapterSelect:drawNextLanguageName(x, y)
     love.graphics.setFont(old_font)
 end
 
+function ChapterSelect:isNameStylePromptLanguage(language)
+    return type(language) == "string" and not language:lower():match("^en")
+end
+
+function ChapterSelect:canUseNameStylePrompt(language)
+    return Game.getNameStyle and Game.setNameStyle and self:isNameStylePromptLanguage(language)
+end
+
+function ChapterSelect:getCurrentNameStyle()
+    if Game.getNameStyle then
+        return Game:getNameStyle()
+    end
+    return NAME_STYLE_TRANSLATED
+end
+
+function ChapterSelect:getNextNameStyle()
+    if self:getCurrentNameStyle() == NAME_STYLE_ORIGINAL then
+        return NAME_STYLE_TRANSLATED
+    end
+    return NAME_STYLE_ORIGINAL
+end
+
+function ChapterSelect:getNameStyleLabel(style)
+    return NAME_STYLE_LABELS[style] or NAME_STYLE_LABELS[NAME_STYLE_TRANSLATED]
+end
+
+function ChapterSelect:getNameStyleLabelColor(style)
+    return NAME_STYLE_LABEL_COLORS[style] or NAME_STYLE_PROMPT_COLOR_TEXT
+end
+
+function ChapterSelect:showNameStylePrompt()
+    if not self:canUseNameStylePrompt(Game.getLanguage and Game:getLanguage() or nil) then
+        self.name_style_prompt_timer = nil
+        return
+    end
+
+    self.name_style_prompt_timer = 0
+end
+
+function ChapterSelect:hideNameStylePrompt()
+    self.name_style_prompt_timer = nil
+end
+
+function ChapterSelect:updateNameStylePromptTrigger()
+    local language = Game.getLanguage and Game:getLanguage() or nil
+    local name_style = Game.getNameStyle and Game:getNameStyle() or nil
+
+    if language ~= self.name_style_prompt_last_language then
+        self.name_style_prompt_last_language = language
+        self.name_style_prompt_last_name_style = name_style
+        if self:canUseNameStylePrompt(language) then
+            self:showNameStylePrompt()
+        else
+            self:hideNameStylePrompt()
+        end
+    elseif name_style ~= self.name_style_prompt_last_name_style then
+        self.name_style_prompt_last_name_style = name_style
+        if self:canUseNameStylePrompt(language) then
+            self:showNameStylePrompt()
+        end
+    end
+end
+
+function ChapterSelect:getNameStylePromptAlpha()
+    if not self.name_style_prompt_timer then
+        return 0
+    end
+
+    if self.name_style_prompt_timer < NAME_STYLE_PROMPT_FADE_IN then
+        return self.name_style_prompt_timer / NAME_STYLE_PROMPT_FADE_IN
+    end
+
+    local fade_out_start = NAME_STYLE_PROMPT_FADE_IN + NAME_STYLE_PROMPT_HOLD
+    if self.name_style_prompt_timer < fade_out_start then
+        return 1
+    end
+
+    local progress = (self.name_style_prompt_timer - fade_out_start) / NAME_STYLE_PROMPT_FADE_OUT
+    return 1 - math.min(progress, 1)
+end
+
+function ChapterSelect:drawNameStylePromptLine(segments, x, y, alpha)
+    local font = love.graphics.getFont()
+    local width = 0
+
+    for _, segment in ipairs(segments) do
+        width = width + getNameStylePromptTextWidth(font, segment.text)
+    end
+
+    local cursor_x = x - width
+    for _, segment in ipairs(segments) do
+        local color = segment.color or NAME_STYLE_PROMPT_COLOR_TEXT
+        Draw.setColor(color[1], color[2], color[3], alpha)
+        drawNameStylePromptText(segment.text, cursor_x, y)
+        cursor_x = cursor_x + getNameStylePromptTextWidth(font, segment.text)
+    end
+end
+
+function ChapterSelect:drawNameStylePrompt()
+    local alpha = self:getNameStylePromptAlpha()
+    if alpha <= 0 then
+        return
+    end
+
+    local current_style = self:getCurrentNameStyle()
+    local next_style = self:getNextNameStyle()
+    local old_font = love.graphics.getFont()
+    local x = SCREEN_WIDTH - 14
+    local y = SCREEN_HEIGHT - 40
+
+    love.graphics.setFont(self.smfont)
+    self:drawNameStylePromptLine({
+        { text = "当前使用", color = NAME_STYLE_PROMPT_COLOR_CURRENT },
+        { text = " ", color = NAME_STYLE_PROMPT_COLOR_TEXT },
+        { text = self:getNameStyleLabel(current_style), color = self:getNameStyleLabelColor(current_style) },
+    }, x, y, alpha)
+    self:drawNameStylePromptLine({
+        { text = "按 ", color = NAME_STYLE_PROMPT_COLOR_TEXT },
+        { text = "c", color = NAME_STYLE_PROMPT_COLOR_KEY },
+        { text = " 切换到 ", color = NAME_STYLE_PROMPT_COLOR_TEXT },
+        { text = self:getNameStyleLabel(next_style), color = self:getNameStyleLabelColor(next_style) },
+    }, x, y + self.smfont:getHeight() + 4, alpha)
+    love.graphics.setFont(old_font)
+end
+
+function ChapterSelect:switchNameStyle()
+    if not self:canUseNameStylePrompt(Game.getLanguage and Game:getLanguage() or nil) then
+        return false
+    end
+
+    local next_style = self:getNextNameStyle()
+    if Game:setNameStyle(next_style) then
+        self.name_style_prompt_last_name_style = next_style
+        self:showNameStylePrompt()
+        Assets.stopAndPlaySound("ui_select")
+        return true
+    end
+
+    Assets.stopAndPlaySound("ui_cancel")
+    return false
+end
+
 function ChapterSelect:switchLanguage()
     local next_language = self:getNextLanguage()
     if next_language and Game.setLanguage and Game:setLanguage(next_language) then
+        local language = Game.getLanguage and Game:getLanguage() or next_language
+        self.name_style_prompt_last_language = language
+        self.name_style_prompt_last_name_style = Game.getNameStyle and Game:getNameStyle() or nil
         self:updateFonts(true)
+        if self:canUseNameStylePrompt(language) then
+            self:showNameStylePrompt()
+        else
+            self:hideNameStylePrompt()
+        end
         Assets.stopAndPlaySound("ui_select")
     else
         Assets.stopAndPlaySound("ui_cancel")
@@ -296,6 +515,9 @@ function ChapterSelect:onKeyPressed(key)
     end
     if key == "escape" then
         self:openOptions()
+        return
+    end
+    if key == "c" and self:switchNameStyle() then
         return
     end
     if self.state == "SELECT" then
