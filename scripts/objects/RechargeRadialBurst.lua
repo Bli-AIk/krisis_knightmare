@@ -11,6 +11,10 @@ local MAGNIFY_RING_LIFE = 1.08
 local MAGNIFY_RING_THICKNESS = 72
 local CAPTURE_TIMES = { 0.08, 0.20, 0.34, 0.50, 0.68 }
 local CAPTURE_DIR = "debug/recharge_radial_capture"
+local REQUIRED_RAY_RANGES = {
+    { min = -0.96, max = -0.44 },
+    { min =  0.44, max =  1.05 },
+}
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -39,6 +43,10 @@ local function generateRayAngles(count)
     local min_distance = randomFloat(0.46, 0.62)
     local attempts = 0
 
+    for _, range in ipairs(REQUIRED_RAY_RANGES) do
+        table.insert(angles, randomFloat(range.min, range.max))
+    end
+
     while #angles < count do
         local angle = randomFloat(-math.pi, math.pi)
         if isAngleSeparated(angle, angles, min_distance) then
@@ -57,6 +65,7 @@ end
 
 local function generateRays()
     local count = love.math.random(MIN_RAY_COUNT, MAX_RAY_COUNT)
+    count = math.max(count, #REQUIRED_RAY_RANGES)
     local angles = generateRayAngles(count)
     local rays = {}
 
