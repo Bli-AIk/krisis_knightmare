@@ -46,6 +46,13 @@ function Kris:onBattleStart()
             enemy:updateRechargeActTPCost()
         end
     end
+
+    if Game:getConfig("krisisDebugRechargeRadial") then
+        self:spawnRechargeRadialBurst(Game.battle.party[1], {
+            capture = Game:getConfig("krisisDebugRechargeRadialCapture"),
+            quit_after_capture = Game:getConfig("krisisDebugRechargeRadialQuit"),
+        })
+    end
 end
 
 function Kris:onBattleEnd()
@@ -155,6 +162,29 @@ function Kris:activateRecharge(enemy, battler, pre_spend_tension)
     self.recharge.mercy_cooldown = 0
 
     self:ensureRechargeVisuals(enemy, battler)
+    self:spawnRechargeRadialBurst(battler)
+end
+
+function Kris:getRechargeRadialBurstOrigin(battler)
+    if battler and battler.parent then
+        return battler:getRelativePos(battler.width / 2, battler.height / 2, Game.battle)
+    end
+
+    if Game.battle and Game.battle.party and Game.battle.party[1] then
+        local party = Game.battle.party[1]
+        return party:getRelativePos(party.width / 2, party.height / 2, Game.battle)
+    end
+
+    return SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
+end
+
+function Kris:spawnRechargeRadialBurst(battler, options)
+    if not Game.battle then
+        return
+    end
+
+    local x, y = self:getRechargeRadialBurstOrigin(battler)
+    Game.battle:addChild(RechargeRadialBurst(x, y, options))
 end
 
 function Kris:ensureRechargeVisuals(enemy, battler)

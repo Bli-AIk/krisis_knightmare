@@ -5,6 +5,16 @@ local function loc(default, id, var)
     return default
 end
 
+local function envFlag(name)
+    local value = os.getenv(name)
+    if not value then
+        return nil
+    end
+
+    value = tostring(value):lower()
+    return value == "1" or value == "true" or value == "yes" or value == "on"
+end
+
 local function chapterNameKey(index)
     return "chapter_select.chapter_" .. tostring(index) .. "_name"
 end
@@ -86,6 +96,14 @@ function Mod:getKrisisConfiguredSeed()
 end
 
 function Mod:getConfig(key)
+    if key == "krisisDebugRechargeRadial" then
+        return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL")
+    elseif key == "krisisDebugRechargeRadialCapture" then
+        return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL_CAPTURE")
+    elseif key == "krisisDebugRechargeRadialQuit" then
+        return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL_QUIT")
+    end
+
     if key == "mercyMessages"
         and Game
         and Game.battle
