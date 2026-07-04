@@ -5,6 +5,142 @@ local function loc(default, id, var)
     return default
 end
 
+local localizeChapterSelectText
+local CHAPTER_SELECT_CJK_TEXT_SPACING = 4
+
+local function isChapterSelectCjkCodepoint(codepoint)
+    return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
+        or (codepoint >= 0xF900 and codepoint <= 0xFAFF)
+        or (codepoint >= 0xFE10 and codepoint <= 0xFE1F)
+        or (codepoint >= 0xFF00 and codepoint <= 0xFFEF)
+        or (codepoint >= 0x20000 and codepoint <= 0x2FA1F)
+end
+
+local function hasChapterSelectCjkText(text)
+    if type(text) ~= "string" or not utf8 or not utf8.codes then
+        return false
+    end
+
+    for _, codepoint in utf8.codes(text) do
+        if isChapterSelectCjkCodepoint(codepoint) then
+            return true
+        end
+    end
+    return false
+end
+
+local function hasMultipleCodepoints(text)
+    if type(text) ~= "string" or not utf8 or not utf8.codes then
+        return false
+    end
+
+    local count = 0
+    for _ in utf8.codes(text) do
+        count = count + 1
+        if count > 1 then
+            return true
+        end
+    end
+    return false
+end
+
+local function shouldSpaceChapterSelectCjkText(text)
+    return type(text) == "string"
+        and hasChapterSelectCjkText(text)
+        and hasMultipleCodepoints(text)
+end
+
+local function getChapterSelectCjkTextWidth(font, text)
+    local width = 0
+    for _, codepoint in utf8.codes(text) do
+        local char = utf8.char(codepoint)
+        width = width + font:getWidth(char)
+        if isChapterSelectCjkCodepoint(codepoint) then
+            width = width + CHAPTER_SELECT_CJK_TEXT_SPACING
+        end
+    end
+    return width
+end
+
+local function printChapterSelectCjkText(print_orig, text, x, y, r, sx, sy, ox, oy, kx, ky)
+    local font = love.graphics.getFont()
+    local cursor_x = 0
+    local cursor_y = 0
+
+    love.graphics.push()
+    love.graphics.translate(x or 0, y or 0)
+    if r then
+        love.graphics.rotate(r)
+    end
+    love.graphics.scale(sx or 1, sy or sx or 1)
+    if kx or ky then
+        love.graphics.shear(kx or 0, ky or 0)
+    end
+    love.graphics.translate(-(ox or 0), -(oy or 0))
+
+    for _, codepoint in utf8.codes(text) do
+        local char = utf8.char(codepoint)
+        if char == "\n" then
+            cursor_x = 0
+            cursor_y = cursor_y + font:getHeight()
+        else
+            print_orig(char, cursor_x, cursor_y)
+            cursor_x = cursor_x + font:getWidth(char)
+            if isChapterSelectCjkCodepoint(codepoint) then
+                cursor_x = cursor_x + CHAPTER_SELECT_CJK_TEXT_SPACING
+            end
+        end
+    end
+
+    love.graphics.pop()
+end
+
+local function printChapterSelectText(print_orig, text, ...)
+    text = localizeChapterSelectText(text)
+    if shouldSpaceChapterSelectCjkText(text) then
+        return printChapterSelectCjkText(print_orig, text, ...)
+    end
+    return print_orig(text, ...)
+end
+
+local function printChapterSelectTextAlign(print_orig, print_align_orig, text, x, y, align, r, sx, sy, ox, oy, kx, ky)
+    text = localizeChapterSelectText(text)
+    if not shouldSpaceChapterSelectCjkText(text) then
+        return print_align_orig(text, x, y, align, r, sx, sy, ox, oy, kx, ky)
+    end
+
+    local new_line_space = 0
+    local new_line_space_height = love.graphics.getFont():getHeight()
+    if type(align) == "table" then
+        if align["line_offset"] then
+            new_line_space_height = new_line_space_height + align["line_offset"]
+        end
+        if align["align"] then
+            align = align["align"]
+        end
+    end
+
+    for line in string.gmatch(text, "([^\n]+)") do
+        local line_width = getChapterSelectCjkTextWidth(love.graphics.getFont(), line)
+        local offset_x = 0
+        if align == "center" then
+            offset_x = (line_width / 2) * (sx or 1)
+        elseif align == "right" then
+            offset_x = line_width * (sx or 1)
+        end
+
+        printChapterSelectCjkText(
+            print_orig,
+            line,
+            x - offset_x,
+            y + new_line_space,
+            r,
+            sx, sy, ox, oy, kx, ky
+        )
+        new_line_space = new_line_space + new_line_space_height * (sy or 1)
+    end
+end
+
 local function envFlag(name)
     local value = os.getenv(name)
     if not value then
@@ -19,7 +155,7 @@ local function chapterNameKey(index)
     return "chapter_select.chapter_" .. tostring(index) .. "_name"
 end
 
-local function localizeChapterSelectText(text)
+localizeChapterSelectText = function(text)
     if type(text) ~= "string" then
         return text
     end
@@ -180,10 +316,10 @@ function Mod:hookChapterSelectLocalization()
         local old_print_align = Draw.printAlign
 
         love.graphics.print = function(text, ...)
-            return old_print(localizeChapterSelectText(text), ...)
+            return printChapterSelectText(old_print, text, ...)
         end
         Draw.printAlign = function(text, ...)
-            return old_print_align(localizeChapterSelectText(text), ...)
+            return printChapterSelectTextAlign(old_print, old_print_align, text, ...)
         end
 
         local result = { pcall(orig, menu, ...) }
