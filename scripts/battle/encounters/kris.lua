@@ -13,6 +13,7 @@ local RECHARGE_LIGHT_RADIUS_FACTOR = 0.45
 local RECHARGE_MERCY_INTERVAL = 0.3
 local RECHARGE_ACT_EFFECT_FRAME = 5
 local RECHARGE_ACT_FRAME_DELAY = 1 / 15
+local RECHARGE_SOUL_LAYER = BATTLE_LAYERS["above_bullets"] + 2
 
 function Kris:init()
     super.init(self)
@@ -415,7 +416,9 @@ function Kris:updateRechargeLight()
         local target_x, target_y = self:getRechargeSoulSpawnPosition()
         self.recharge_soul = Registry.createBullet("recharge_soul", origin_x, origin_y, recharge.enemy, self:getRechargeLightRadius())
         self.recharge_soul:transitionTo(target_x, target_y)
-        Game.battle:addChild(HeartBurst(origin_x - 2, origin_y + 1, { 1, 1, 1 }))
+        local burst = HeartBurst(origin_x - 2, origin_y + 1, { 1, 1, 1 })
+        burst.layer = RECHARGE_SOUL_LAYER
+        Game.battle:addChild(burst)
         Game.battle:addChild(self.recharge_soul)
     else
         self.recharge_soul.target_enemy = recharge.enemy

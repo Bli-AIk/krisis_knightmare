@@ -7,6 +7,7 @@ local DEFAULT_MOVE_SPEED = 4
 local EDGE_BIAS_CHANCE = 0.6
 local EDGE_MARGIN = 18
 local DEFAULT_LIGHT_RADIUS = 45
+local SOUL_BULLET_LAYER = BATTLE_LAYERS["above_bullets"] + 2
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -15,6 +16,7 @@ end
 function RechargeSoul:init(x, y, target_enemy, light_radius)
     super.init(self, x, y, "bullets/soul/soul_0")
 
+    self.layer = SOUL_BULLET_LAYER
     self:setScale(1)
     self.target_enemy = target_enemy
     self.light_radius = light_radius or DEFAULT_LIGHT_RADIUS
