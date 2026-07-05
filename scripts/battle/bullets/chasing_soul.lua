@@ -23,6 +23,7 @@ function ChasingSoul:init(x, y)
     self.remove_offscreen = false
 
     self.transitioning = false
+    self.transition_destroy = false
     self.chase_enabled = false
     self.chase_delay = 0
 end
@@ -78,6 +79,24 @@ end
 
 function ChasingSoul:transitionTo(x, y)
     self.transitioning = true
+    self.transition_destroy = false
+    self.transition_timer = 0
+    self.transition_start_x = self.x
+    self.transition_start_y = self.y
+    self.transition_target_x = x
+    self.transition_target_y = y
+    self.transition_target_alpha = self.alpha
+    self.alpha = 0
+end
+
+function ChasingSoul:transitionBackTo(x, y)
+    if self.transitioning and self.transition_destroy then
+        return
+    end
+
+    self:stopChase()
+    self.transitioning = true
+    self.transition_destroy = true
     self.transition_timer = 0
     self.transition_start_x = self.x
     self.transition_start_y = self.y
@@ -111,6 +130,14 @@ function ChasingSoul:updateTransition()
         self.transitioning = false
         self:setPosition(self.transition_target_x, self.transition_target_y)
         self.alpha = self.transition_target_alpha or 1
+        if self.transition_destroy then
+            if Game.battle then
+                local burst = HeartBurst(self.transition_target_x, self.transition_target_y, { 1, 1, 1 })
+                burst.layer = SOUL_BULLET_LAYER
+                Game.battle:addChild(burst)
+            end
+            self:remove()
+        end
         return true
     end
 
@@ -183,7 +210,9 @@ function ChasingSoul:update()
     self:clampToBounds()
 
     if self:updateTransition() then
-        super.update(self)
+        if self.parent then
+            super.update(self)
+        end
         return
     end
 

@@ -14,6 +14,8 @@ local RECHARGE_MERCY_INTERVAL = 0.3
 local RECHARGE_ACT_EFFECT_FRAME = 5
 local RECHARGE_ACT_FRAME_DELAY = 1 / 15
 local RECHARGE_SOUL_LAYER = BATTLE_LAYERS["above_bullets"] + 2
+local RECHARGE_RETURN_TARGET_OFFSET_X = -2
+local RECHARGE_RETURN_TARGET_OFFSET_Y = 1
 
 function Kris:init()
     super.init(self)
@@ -83,8 +85,11 @@ end
 function Kris:onStateChange(old, new, reason)
     if new == "ACTIONSELECT" then
         self:beginRechargeDrain()
-    elseif new == "DEFENDINGBEGIN" or new == "DEFENDING" or new == "DEFENDINGEND" then
+    elseif new == "DEFENDINGBEGIN" or new == "DEFENDING" then
         self:updateRechargeLight()
+    elseif new == "DEFENDINGEND" then
+        self:restoreRechargePlayerLight()
+        self:removeRechargeSoul(false)
     end
 end
 
@@ -346,17 +351,30 @@ function Kris:restoreRechargePlayerLight()
     self.recharge_player_light = nil
 end
 
-function Kris:removeRechargeSoul(instant)
+function Kris:removeRechargeSoul(instant, enemy)
     if not self.recharge_soul then
         return
     end
 
-    if instant then
-        self.recharge_soul:remove()
-    else
-        self.recharge_soul:fadeOutAndRemove(RECHARGE_PLATFORM_FADE_TIME)
-    end
+    local soul = self.recharge_soul
     self.recharge_soul = nil
+
+    if not soul.parent then
+        return
+    end
+
+    if instant then
+        soul:remove()
+    elseif soul.transitionBackTo then
+        enemy = enemy or soul.target_enemy or (self.recharge and self.recharge.enemy)
+        local target_x, target_y = self:getRechargeSoulOriginPosition(enemy)
+        soul:transitionBackTo(
+            target_x + RECHARGE_RETURN_TARGET_OFFSET_X,
+            target_y + RECHARGE_RETURN_TARGET_OFFSET_Y
+        )
+    else
+        soul:fadeOutAndRemove(RECHARGE_PLATFORM_FADE_TIME)
+    end
 end
 
 function Kris:isRechargeMercyDisplayActive()
@@ -405,7 +423,8 @@ function Kris:updateRechargeLight()
     local target = self:getRechargeLightTarget()
     if not target then
         self:restoreRechargePlayerLight()
-        self:removeRechargeSoul(true)
+        local state = Game.battle and Game.battle:getState()
+        self:removeRechargeSoul(state ~= "DEFENDINGEND", recharge.enemy)
         return
     end
 
@@ -480,8 +499,8 @@ end
 
 function Kris:clearRecharge(instant)
     self:restoreRechargePlayerLight()
+    self:removeRechargeSoul(instant, self.recharge and self.recharge.enemy)
     self.recharge = nil
-    self:removeRechargeSoul(instant)
 end
 
 function Kris:update()

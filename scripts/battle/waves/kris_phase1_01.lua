@@ -4,11 +4,30 @@ local PLAYER_START_OFFSET_X = -28
 local CHASER_START_OFFSET_X = 28
 local DEPTH_MASK_SPAWN_TIME = 42 / 60
 local DEPTH_MASK_FINISH_TIME = 4.5
+local ACT_FRAME_DELAY = 4 / 30
+local RETURN_TARGET_OFFSET_X = -2
+local RETURN_TARGET_OFFSET_Y = 1
 local SOUL_BULLET_LAYER = BATTLE_LAYERS["above_bullets"] + 2
 
-local function getChaserOrigin(fallback_x, fallback_y)
+local function removeValue(list, value)
+    if not list then
+        return
+    end
+
+    for i = #list, 1, -1 do
+        if list[i] == value then
+            table.remove(list, i)
+        end
+    end
+end
+
+local function getChaserEnemy()
     local attackers = Game.battle and Game.battle.getActiveEnemies and Game.battle:getActiveEnemies() or {}
-    local attacker = attackers[1]
+    return attackers[1]
+end
+
+local function getChaserOrigin(fallback_x, fallback_y, attacker)
+    attacker = attacker or getChaserEnemy()
     if attacker and attacker.parent then
         if attacker.sprite then
             return attacker:localToScreenPos((attacker.sprite.width / 2) - 4.5, attacker.sprite.height / 2)
@@ -17,6 +36,38 @@ local function getChaserOrigin(fallback_x, fallback_y)
     end
 
     return fallback_x, fallback_y
+end
+
+local function getActFrameCount(attacker)
+    local sprite = attacker and attacker.sprite
+    if sprite and sprite.frames and sprite.isSprite and sprite:isSprite("act") then
+        return #sprite.frames
+    end
+
+    local frames = Assets.getFrames("enemies/kris/act")
+    return frames and #frames or 5
+end
+
+local function playActAnimation(attacker)
+    if attacker and attacker.parent and attacker.setAnimation then
+        attacker:setAnimation({ "act", ACT_FRAME_DELAY, false })
+    end
+end
+
+local function playActAnimationReversed(attacker)
+    if attacker and attacker.parent and attacker.setAnimation then
+        local frame_count = getActFrameCount(attacker)
+        attacker:setAnimation({
+            "act",
+            ACT_FRAME_DELAY,
+            false,
+            frames = { tostring(frame_count) .. "-1" },
+        }, function()
+            if attacker.parent then
+                attacker:setAnimation("idle")
+            end
+        end)
+    end
 end
 
 function KrisPhase1_01:getArenaHeight()
@@ -78,6 +129,23 @@ function KrisPhase1_01:spawnChaserSoul()
     return soul
 end
 
+function KrisPhase1_01:returnChaserSoul()
+    local soul = self.chaser_soul
+    if not soul or not soul.parent or not soul.transitionBackTo then
+        return
+    end
+
+    self.chaser_soul = nil
+    removeValue(self.objects, soul)
+    removeValue(self.bullets, soul)
+
+    local attacker = getChaserEnemy()
+    playActAnimationReversed(attacker)
+
+    local origin_x, origin_y = getChaserOrigin(soul.x, soul.y, attacker)
+    soul:transitionBackTo(origin_x + RETURN_TARGET_OFFSET_X, origin_y + RETURN_TARGET_OFFSET_Y)
+end
+
 function KrisPhase1_01:init()
     super.init(self)
     self.time = 8
@@ -87,6 +155,7 @@ end
 
 function KrisPhase1_01:onArenaEnter()
     self:spawnChaserSoul()
+    playActAnimation(getChaserEnemy())
 end
 
 function KrisPhase1_01:onStart()
@@ -102,6 +171,14 @@ function KrisPhase1_01:onStart()
     self.timer:after(DEPTH_MASK_FINISH_TIME, function()
         self:beginSoulDepthFinale()
     end)
+end
+
+function KrisPhase1_01:onEnd(death)
+    if not death then
+        self:returnChaserSoul()
+    end
+
+    return super.onEnd(self, death)
 end
 
 function KrisPhase1_01:update()
