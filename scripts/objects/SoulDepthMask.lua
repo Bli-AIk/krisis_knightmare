@@ -2,6 +2,7 @@ local SoulDepthMask, super = Class(Object)
 
 local DEPTH_TEXTURE = "battle/backgrounds/kris_depth_hot"
 local DEPTH_ALPHA = 0.56
+local SOUL_ECHO_ALPHA = 0.28
 local GROW_TIME = 1
 local DEPTH_WHITE_TIME = 10 / 60
 local DEPTH_SHRINK_TIME = 5 / 60
@@ -130,7 +131,7 @@ function SoulDepthMask:spawnDepthEcho()
     end
 
     self.depth_echo_spawned = true
-    self.depth_echo = self.wave:spawnObjectTo(self.parent, SoulDepthEcho(DEPTH_ALPHA), self.x, self.y)
+    self.depth_echo = self.wave:spawnObjectTo(self.parent, SoulDepthEcho(SOUL_ECHO_ALPHA), self.x, self.y)
 end
 
 function SoulDepthMask:beginWhiteFade()

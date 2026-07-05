@@ -4,7 +4,7 @@ local TEXTURE = "bullets/soul/soul_4"
 local EXPAND_TIME = 10 / 60
 local START_SCALE = 1
 local EXPANDED_SCALE = 2
-local UNDER_SOUL_LAYER = -0.75
+local UNDER_SOUL_LAYER = -0.5
 local OVER_SOUL_LAYER = 2
 
 local function lerp(from, to, t)
@@ -24,7 +24,9 @@ function SoulDepthEcho:init(alpha)
     self.white_delay = 0
     self.white_timer = 0
     self.white_duration = 20 / 60
+    self.white_start_alpha = self.alpha
     self.expanded = false
+    self.white_layer_ready = false
     self.white_fading = false
 
     self.sprite = Sprite(TEXTURE)
@@ -36,14 +38,14 @@ function SoulDepthEcho:init(alpha)
 end
 
 function SoulDepthEcho:prepareWhiteLayer()
-    if self.expanded then
+    if self.white_layer_ready then
         return
     end
 
     self.expanded = true
+    self.white_layer_ready = true
     self:setLayer(OVER_SOUL_LAYER)
     self:setScale(START_SCALE)
-    self.alpha = 0
 end
 
 function SoulDepthEcho:startWhiteFade(delay, duration)
@@ -51,6 +53,7 @@ function SoulDepthEcho:startWhiteFade(delay, duration)
     self.white_delay = delay or 0
     self.white_duration = duration or self.white_duration
     self.white_timer = 0
+    self.white_start_alpha = self.alpha
     self.white_fading = true
 end
 
@@ -64,7 +67,8 @@ function SoulDepthEcho:updateExpand()
     self:setScale(lerp(START_SCALE, EXPANDED_SCALE, progress))
 
     if progress >= 1 then
-        self:prepareWhiteLayer()
+        self.expanded = true
+        self:setScale(EXPANDED_SCALE)
     end
 end
 
@@ -80,7 +84,7 @@ function SoulDepthEcho:updateWhiteFade()
 
     self.white_timer = math.min(self.white_timer + DT, self.white_duration)
     local progress = self.white_duration > 0 and clamp(self.white_timer / self.white_duration, 0, 1) or 1
-    self.alpha = progress
+    self.alpha = lerp(self.white_start_alpha or 0, 1, progress)
 end
 
 function SoulDepthEcho:update()
