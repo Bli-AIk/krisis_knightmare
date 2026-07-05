@@ -14,6 +14,10 @@ local RECHARGE_MERCY_INTERVAL = 0.3
 local RECHARGE_ACT_EFFECT_FRAME = 5
 local RECHARGE_ACT_FRAME_DELAY = 1 / 15
 local RECHARGE_SOUL_LAYER = BATTLE_LAYERS["above_bullets"] + 2
+local RECHARGE_PLAYER_START_OFFSET_X = -28
+local RECHARGE_PLAYER_START_OFFSET_Y = 0
+local RECHARGE_SOUL_START_OFFSET_X = 28
+local RECHARGE_SOUL_START_OFFSET_Y = 0
 local RECHARGE_RETURN_TARGET_OFFSET_X = -2
 local RECHARGE_RETURN_TARGET_OFFSET_Y = 1
 local PLATFORM_SPRITE = "battle/backgrounds/kris_platform_adjusted"
@@ -106,6 +110,17 @@ function Kris:isRechargeSustaining()
     return self.recharge
         and not self.recharge.expiring
         and not self.recharge.draining
+end
+
+function Kris:applyRechargeSoulOffsets(waves)
+    if not self:isRechargeSustaining() then
+        return
+    end
+
+    for _, wave in ipairs(waves or {}) do
+        wave.soul_offset_x = wave.soul_offset_x or RECHARGE_PLAYER_START_OFFSET_X
+        wave.soul_offset_y = wave.soul_offset_y or RECHARGE_PLAYER_START_OFFSET_Y
+    end
 end
 
 function Kris:onEnemySelect(state_reason, enemy_index)
@@ -265,10 +280,12 @@ function Kris:getRechargeSoulSpawnPosition()
     end
 
     if Game.battle and Game.battle.arena then
-        return Game.battle.arena:getCenter()
+        local x, y = Game.battle.arena:getCenter()
+        return x + RECHARGE_SOUL_START_OFFSET_X, y + RECHARGE_SOUL_START_OFFSET_Y
     end
 
-    return SCREEN_WIDTH / 2, (SCREEN_HEIGHT - 155) / 2 + 10
+    return SCREEN_WIDTH / 2 + RECHARGE_SOUL_START_OFFSET_X,
+        (SCREEN_HEIGHT - 155) / 2 + 10 + RECHARGE_SOUL_START_OFFSET_Y
 end
 
 function Kris:getRechargeSoulOriginPosition(enemy)
