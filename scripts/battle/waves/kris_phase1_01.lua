@@ -40,14 +40,11 @@ function KrisPhase1_01:spawnSoulDepthMask()
     self:spawnObjectTo(soul, SoulDepthMask(arena_height * 0.5, arena_height * 0.8), soul.width / 2, soul.height / 2)
 end
 
-function KrisPhase1_01:init()
-    super.init(self)
-    self.time = 5
-    self.soul_offset_x = PLAYER_START_OFFSET_X
-    self.soul_offset_y = 0
-end
+function KrisPhase1_01:spawnChaserSoul()
+    if self.chaser_soul and self.chaser_soul.parent then
+        return self.chaser_soul
+    end
 
-function KrisPhase1_01:onStart()
     local arena = Game.battle and Game.battle.arena
     local x, y
     if arena then
@@ -65,6 +62,26 @@ function KrisPhase1_01:onStart()
     local burst = HeartBurst(origin_x - 2, origin_y + 1, { 1, 1, 1 })
     burst.layer = SOUL_BULLET_LAYER
     Game.battle:addChild(burst)
+
+    return soul
+end
+
+function KrisPhase1_01:init()
+    super.init(self)
+    self.time = 5
+    self.soul_offset_x = PLAYER_START_OFFSET_X
+    self.soul_offset_y = 0
+end
+
+function KrisPhase1_01:onArenaEnter()
+    self:spawnChaserSoul()
+end
+
+function KrisPhase1_01:onStart()
+    local soul = self:spawnChaserSoul()
+    if soul and soul.startChaseDelay then
+        soul:startChaseDelay()
+    end
 
     self.timer:after(DEPTH_MASK_SPAWN_TIME, function()
         self:spawnSoulDepthMask()

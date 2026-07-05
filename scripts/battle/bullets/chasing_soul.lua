@@ -23,7 +23,8 @@ function ChasingSoul:init(x, y)
     self.remove_offscreen = false
 
     self.transitioning = false
-    self.chase_delay = CHASE_START_DELAY
+    self.chase_enabled = false
+    self.chase_delay = 0
 end
 
 function ChasingSoul:getBounds()
@@ -84,6 +85,11 @@ function ChasingSoul:transitionTo(x, y)
     self.transition_target_y = y
     self.transition_target_alpha = self.alpha
     self.alpha = 0
+end
+
+function ChasingSoul:startChaseDelay(delay)
+    self.chase_enabled = true
+    self.chase_delay = delay or CHASE_START_DELAY
 end
 
 function ChasingSoul:updateTransition()
@@ -167,6 +173,11 @@ function ChasingSoul:update()
     self:clampToBounds()
 
     if self:updateTransition() then
+        super.update(self)
+        return
+    end
+
+    if not self.chase_enabled then
         super.update(self)
         return
     end

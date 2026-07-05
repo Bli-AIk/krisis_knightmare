@@ -2,7 +2,7 @@ local SoulDepthMask, super = Class(Object)
 
 local DEPTH_TEXTURE = "battle/backgrounds/kris_depth_hot"
 local DEPTH_ALPHA = 0.56
-local GROW_TIME = 0.12
+local GROW_TIME = 1
 local SCROLL_SPEED = 12
 local TEXTURE_SCALE_X = 1.8
 local TEXTURE_SCALE_Y = 1.75
@@ -18,14 +18,20 @@ local function easeOutCubic(t)
     return 1 - inv * inv * inv
 end
 
+local function lerp(from, to, t)
+    return from + (to - from) * t
+end
+
 function SoulDepthMask:init(start_diameter, target_diameter)
     super.init(self, 0, 0)
 
     self.layer = CHILD_LAYER
-    self.start_radius = (start_diameter or 0) / 2
-    self.target_radius = (target_diameter or start_diameter or 0) / 2
-    self.radius = self.start_radius
-    self.debug_rect = { -self.target_radius, -self.target_radius, self.target_radius * 2, self.target_radius * 2 }
+    self.start_diameter = start_diameter or 0
+    self.target_diameter = target_diameter or self.start_diameter
+    self.diameter = self.start_diameter
+    self.radius = self.diameter / 2
+    self.target_radius = self.target_diameter / 2
+    self.debug_rect = { -self.target_radius, -self.target_radius, self.target_diameter, self.target_diameter }
     self.grow_timer = 0
     self.texture_x = TEXTURE_OFFSET_X
     self.texture_y = TEXTURE_OFFSET_Y
@@ -69,7 +75,8 @@ function SoulDepthMask:update()
 
     self.grow_timer = math.min(self.grow_timer + DT, GROW_TIME)
     local progress = GROW_TIME > 0 and MathUtils.clamp(self.grow_timer / GROW_TIME, 0, 1) or 1
-    self.radius = MathUtils.lerp(self.start_radius, self.target_radius, easeOutCubic(progress))
+    self.diameter = lerp(self.start_diameter, self.target_diameter, easeOutCubic(progress))
+    self.radius = self.diameter / 2
 
     self.texture_x = self.texture_x + SCROLL_SPEED * DT
     self.texture_y = self.texture_y + SCROLL_SPEED * DT
