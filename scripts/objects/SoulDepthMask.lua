@@ -46,6 +46,8 @@ local RADIAL_PARTICLE_MIN_WIDTH = 1
 local RADIAL_PARTICLE_MAX_WIDTH = 2
 local RADIAL_PARTICLE_MASK_SCALE = 0.8
 local RADIAL_RING_FIRST_DELAY = 0.75
+local RADIAL_RING_LEAD_COUNT = 3
+local RADIAL_RING_LEAD_LIFE = 0.84
 local RADIAL_RING_LIFE = 1.0
 local RADIAL_RING_SHORT_INTERVAL = 0.22
 local RADIAL_RING_GROUP_INTERVAL = 0.16
@@ -118,6 +120,8 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
     self.radial_ring_elapsed = 0
     self.radial_ring_next_spawn = options.radial_ring_first_delay or RADIAL_RING_FIRST_DELAY
     self.radial_ring_spawn_index = 1
+    self.radial_ring_lead_count = options.radial_ring_lead_count or RADIAL_RING_LEAD_COUNT
+    self.radial_ring_lead_life = options.radial_ring_lead_life or RADIAL_RING_LEAD_LIFE
     self.radial_ring_life = options.radial_ring_life or RADIAL_RING_LIFE
     self.radial_ring_short_interval = options.radial_ring_short_interval or RADIAL_RING_SHORT_INTERVAL
     self.radial_ring_group_interval = options.radial_ring_group_interval or RADIAL_RING_GROUP_INTERVAL
@@ -385,23 +389,33 @@ function SoulDepthMask:getRadialParticleMaskRadius()
 end
 
 function SoulDepthMask:getRadialRingInterval(index)
-    if index < 2 then
-        return self.radial_ring_life
-    elseif index == 2 then
-        return self.radial_ring_life + self.radial_ring_group_interval
-    elseif index == 3 then
+    local lead_count = self.radial_ring_lead_count
+
+    if index < lead_count then
+        return self.radial_ring_lead_life
+    elseif index == lead_count then
+        return self.radial_ring_lead_life + self.radial_ring_group_interval
+    elseif index == lead_count + 1 then
         return self.radial_ring_short_interval
-    elseif index == 4 then
+    elseif index == lead_count + 2 then
         return self.radial_ring_group_interval
-    elseif index == 5 or index == 6 then
+    elseif index == lead_count + 3 or index == lead_count + 4 then
         return self.radial_ring_short_interval
     end
 end
 
-function SoulDepthMask:spawnRadialRing()
+function SoulDepthMask:getRadialRingCount()
+    return self.radial_ring_lead_count + 5
+end
+
+function SoulDepthMask:spawnRadialRing(index)
+    local life = index <= self.radial_ring_lead_count
+        and self.radial_ring_lead_life
+        or self.radial_ring_life
+
     table.insert(self.radial_rings, {
         age = 0,
-        life = self.radial_ring_life,
+        life = life,
     })
 end
 
@@ -421,11 +435,12 @@ function SoulDepthMask:updateRadialRings()
     end
 
     while not self.white_fading
-        and self.radial_ring_spawn_index <= 7
+        and self.radial_ring_spawn_index <= self:getRadialRingCount()
         and self.radial_ring_elapsed >= self.radial_ring_next_spawn do
-        self:spawnRadialRing()
+        local spawn_index = self.radial_ring_spawn_index
+        self:spawnRadialRing(spawn_index)
 
-        local interval = self:getRadialRingInterval(self.radial_ring_spawn_index)
+        local interval = self:getRadialRingInterval(spawn_index)
         self.radial_ring_spawn_index = self.radial_ring_spawn_index + 1
         if interval then
             self.radial_ring_next_spawn = self.radial_ring_next_spawn + interval
