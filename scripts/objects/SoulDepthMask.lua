@@ -28,6 +28,23 @@ local STAR_TRAVEL_MIN_TIME = 1.25
 local STAR_TRAVEL_MAX_TIME = 1.75
 local STAR_START_SCALE = 0.9
 local STAR_END_SCALE = 0.2
+local RADIAL_PARTICLE_INITIAL_COUNT = 100
+local RADIAL_PARTICLE_MAX_COUNT = 180
+local RADIAL_PARTICLE_MIN_INTERVAL = 0.018
+local RADIAL_PARTICLE_MAX_INTERVAL = 0.045
+local RADIAL_PARTICLE_MIN_EMIT_COUNT = 2
+local RADIAL_PARTICLE_MAX_EMIT_COUNT = 5
+local RADIAL_PARTICLE_MIN_LIFE = 0.36
+local RADIAL_PARTICLE_MAX_LIFE = 0.74
+local RADIAL_PARTICLE_MIN_RADIUS = 0.10
+local RADIAL_PARTICLE_MAX_RADIUS = 0.94
+local RADIAL_PARTICLE_MIN_LENGTH = 7
+local RADIAL_PARTICLE_MAX_LENGTH = 23
+local RADIAL_PARTICLE_MIN_SPEED = 0.18
+local RADIAL_PARTICLE_MAX_SPEED = 0.46
+local RADIAL_PARTICLE_MIN_WIDTH = 1
+local RADIAL_PARTICLE_MAX_WIDTH = 2
+local RADIAL_PARTICLE_MASK_SCALE = 0.8
 local CAPTURE_DIR = "debug/soul_depth_capture"
 local CAPTURE_TIME = 0.2
 local DEPTH_WHITE_SHADER = [[
@@ -79,6 +96,16 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
     self.star_burst_max_count = options.star_burst_max_count or STAR_BURST_MAX_COUNT
     self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
     self.star_bursts_enabled = true
+    self.radial_particles_enabled = options.radial_particles == true
+    self.radial_particles = {}
+    self.radial_particle_initial_count = options.radial_particle_initial_count or RADIAL_PARTICLE_INITIAL_COUNT
+    self.radial_particle_max_count = options.radial_particle_max_count or RADIAL_PARTICLE_MAX_COUNT
+    self.radial_particle_min_interval = options.radial_particle_min_interval or RADIAL_PARTICLE_MIN_INTERVAL
+    self.radial_particle_max_interval = options.radial_particle_max_interval or RADIAL_PARTICLE_MAX_INTERVAL
+    self.radial_particle_min_emit_count = options.radial_particle_min_emit_count or RADIAL_PARTICLE_MIN_EMIT_COUNT
+    self.radial_particle_max_emit_count = options.radial_particle_max_emit_count or RADIAL_PARTICLE_MAX_EMIT_COUNT
+    self.radial_particle_mask_scale = options.radial_particle_mask_scale or RADIAL_PARTICLE_MASK_SCALE
+    self.radial_particle_timer = randomFloat(self.radial_particle_min_interval, self.radial_particle_max_interval)
     self.depth_echo_spawned = false
     self.white_fading = false
     self.white_timer = 0
@@ -104,6 +131,12 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
             self.texture:getWidth(),
             self.texture:getHeight()
         )
+    end
+
+    if self.radial_particles_enabled then
+        for _ = 1, self.radial_particle_initial_count do
+            self:spawnRadialParticle(love.math.random())
+        end
     end
 end
 
@@ -274,6 +307,65 @@ function SoulDepthMask:updateStarBursts()
     self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
 end
 
+function SoulDepthMask:makeRadialParticle(age_progress)
+    local age = age_progress and randomFloat(0, RADIAL_PARTICLE_MAX_LIFE) * age_progress or 0
+    local life = randomFloat(RADIAL_PARTICLE_MIN_LIFE, RADIAL_PARTICLE_MAX_LIFE)
+    age = math.min(age, life * 0.92)
+
+    return {
+        angle = randomFloat(0, math.pi * 2),
+        radius = randomFloat(RADIAL_PARTICLE_MIN_RADIUS, RADIAL_PARTICLE_MAX_RADIUS),
+        speed = randomFloat(RADIAL_PARTICLE_MIN_SPEED, RADIAL_PARTICLE_MAX_SPEED),
+        length = randomFloat(RADIAL_PARTICLE_MIN_LENGTH, RADIAL_PARTICLE_MAX_LENGTH),
+        width = randomFloat(RADIAL_PARTICLE_MIN_WIDTH, RADIAL_PARTICLE_MAX_WIDTH),
+        alpha = randomFloat(0.38, 0.92),
+        life = life,
+        age = age,
+        flicker = randomFloat(0, math.pi * 2),
+        angle_drift = randomFloat(-0.025, 0.025),
+    }
+end
+
+function SoulDepthMask:spawnRadialParticle(age_progress)
+    if #self.radial_particles >= self.radial_particle_max_count then
+        return
+    end
+
+    table.insert(self.radial_particles, self:makeRadialParticle(age_progress))
+end
+
+function SoulDepthMask:updateRadialParticles()
+    if not self.radial_particles_enabled then
+        return
+    end
+
+    for i = #self.radial_particles, 1, -1 do
+        local particle = self.radial_particles[i]
+        particle.age = particle.age + DT
+        if particle.age >= particle.life then
+            table.remove(self.radial_particles, i)
+        end
+    end
+
+    if self.white_fading then
+        return
+    end
+
+    self.radial_particle_timer = self.radial_particle_timer - DT
+    while self.radial_particle_timer <= 0 do
+        local emit_count = love.math.random(self.radial_particle_min_emit_count, self.radial_particle_max_emit_count)
+        for _ = 1, emit_count do
+            self:spawnRadialParticle()
+        end
+        self.radial_particle_timer = self.radial_particle_timer
+            + randomFloat(self.radial_particle_min_interval, self.radial_particle_max_interval)
+    end
+end
+
+function SoulDepthMask:getRadialParticleMaskRadius()
+    return self.radius * self.radial_particle_mask_scale
+end
+
 function SoulDepthMask:update()
     super.update(self)
 
@@ -303,6 +395,7 @@ function SoulDepthMask:update()
     self.texture_x = self.texture_x + SCROLL_SPEED * DT
     self.texture_y = self.texture_y + SCROLL_SPEED * DT
     self:updateStarBursts()
+    self:updateRadialParticles()
 
     if self.white_fading then
         self.white_elapsed = self.white_elapsed + DT
@@ -331,6 +424,60 @@ function SoulDepthMask:update()
             love.graphics.captureScreenshot(path)
             print("[SoulDepthMask] captured " .. love.filesystem.getSaveDirectory() .. "/" .. path)
         end
+    end
+end
+
+function SoulDepthMask:drawRadialParticles()
+    if not self.radial_particles_enabled or #self.radial_particles == 0 then
+        return
+    end
+
+    local mask_radius = self:getRadialParticleMaskRadius()
+    if mask_radius <= 0 then
+        return
+    end
+
+    local old_line_width = love.graphics.getLineWidth()
+    local old_blend, old_alpha_mode = love.graphics.getBlendMode()
+    local old_stencil_mode, old_stencil_value = love.graphics.getStencilTest()
+    local fade_with_white = 1 - (self.white_progress or 0)
+
+    love.graphics.setStencilTest()
+    love.graphics.stencil(function()
+        love.graphics.circle("fill", 0, 0, mask_radius)
+    end, "replace", 1)
+    love.graphics.setStencilTest("greater", 0)
+
+    love.graphics.setBlendMode("add")
+    for _, particle in ipairs(self.radial_particles) do
+        local progress = MathUtils.clamp(particle.age / particle.life, 0, 1)
+        local fade = math.sin(progress * math.pi)
+        local radius = mask_radius * (particle.radius + particle.speed * progress)
+        local half_length = particle.length * (0.55 + (0.45 * fade)) / 2
+        local angle = particle.angle + particle.angle_drift * progress
+        local inner = math.max(radius - half_length, 0)
+        local outer = math.min(radius + half_length, mask_radius)
+
+        if outer > inner then
+            local pulse = 0.88 + 0.12 * math.sin((self.grow_timer + particle.flicker) * 34)
+            local alpha = particle.alpha * fade * fade_with_white * pulse
+            love.graphics.setLineWidth(particle.width)
+            love.graphics.setColor(1, 1, 1, alpha)
+            love.graphics.line(
+                math.cos(angle) * inner,
+                math.sin(angle) * inner,
+                math.cos(angle) * outer,
+                math.sin(angle) * outer
+            )
+        end
+    end
+
+    love.graphics.setBlendMode(old_blend, old_alpha_mode)
+    love.graphics.setLineWidth(old_line_width)
+    if old_stencil_mode then
+        love.graphics.setStencilTest(old_stencil_mode, old_stencil_value)
+    else
+        love.graphics.setStencilTest()
     end
 end
 
@@ -366,6 +513,7 @@ function SoulDepthMask:draw()
     love.graphics.setColor(1, 1, 1, DEPTH_ALPHA)
     love.graphics.draw(self.texture, self.quad, -self.radius, -self.radius, 0, TEXTURE_SCALE_X, TEXTURE_SCALE_Y)
     love.graphics.setShader(old_shader)
+    self:drawRadialParticles()
 
     if old_stencil_mode then
         love.graphics.setStencilTest(old_stencil_mode, old_stencil_value)
