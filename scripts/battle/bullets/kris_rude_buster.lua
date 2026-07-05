@@ -10,6 +10,7 @@ local ROTATION = -math.pi / 2
 local SPAWN_INSET = 8
 local MIN_RANDOM_SPEED = 7.5
 local MAX_RANDOM_SPEED = 14
+local MAX_CHAIN_SPEED = MAX_RANDOM_SPEED
 local DIAMOND_START_MIN_COUNT = 4
 local DIAMOND_START_MAX_COUNT = 6
 local DIAMOND_SPLIT_MIN_COUNT = 2
@@ -188,6 +189,8 @@ local function spawnFollowup(wave, edge, impact_x, impact_y, options)
             speed = bullet_speed,
             chain_depth = 1,
             diamond_count_divisor = diamond_count_divisor,
+            bounce_speed_factor = options.bounce_speed_factor,
+            max_chain_speed = options.max_chain_speed,
         })
 
         local diamond_count = options.split_diamonds
@@ -218,6 +221,8 @@ function KrisRudeBuster:init(x, y, options)
     self.followup_bullet_count = options.followup_bullet_count or 1
     self.followup_split_diamonds = options.followup_split_diamonds == true
     self.followup_diamond_count_divisor = options.followup_diamond_count_divisor or 1
+    self.followup_bounce_speed_factor = options.followup_bounce_speed_factor
+    self.followup_max_chain_speed = options.followup_max_chain_speed or MAX_CHAIN_SPEED
     self.start_scale_x = BUSTER_SCALE
     self.start_scale_y = BUSTER_SCALE
     self:setScale(self.start_scale_x, self.start_scale_y)
@@ -249,6 +254,8 @@ function KrisRudeBuster:startShrink()
             bullet_count = self.followup_bullet_count,
             split_diamonds = self.followup_split_diamonds,
             diamond_count_divisor = self.followup_diamond_count_divisor,
+            bounce_speed_factor = self.followup_bounce_speed_factor,
+            max_chain_speed = self.followup_max_chain_speed,
         })
     end
 end
