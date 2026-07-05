@@ -79,6 +79,9 @@ function Kris:onTurnEnd()
     recharge.turns_remaining = math.max((recharge.turns_remaining or 1) - 1, 0)
     if recharge.turns_remaining <= 0 then
         recharge.expiring = true
+        if recharge.enemy and recharge.enemy.finishRechargeWavePhaseAdvance then
+            recharge.enemy:finishRechargeWavePhaseAdvance()
+        end
     end
 end
 
@@ -95,6 +98,12 @@ end
 
 function Kris:isRechargeActive()
     return self.recharge ~= nil
+end
+
+function Kris:isRechargeSustaining()
+    return self.recharge
+        and not self.recharge.expiring
+        and not self.recharge.draining
 end
 
 function Kris:onEnemySelect(state_reason, enemy_index)

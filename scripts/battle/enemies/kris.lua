@@ -21,7 +21,31 @@ local TURN_WAVES = {
     [14] = "kris_phase1_14",
     [15] = "kris_phase1_15",
 }
+local WAVE_PHASES = {
+    { first = 1, last = 5 },
+    { first = 6, last = 10 },
+    { first = 11, last = 15 },
+}
+local RECHARGE_AVOID_WAVES = {
+    [1] = true,
+    [6] = true,
+}
 -- local FORCED_TURN = 12
+
+local function makeWaveList(first, last)
+    local waves = {}
+    for i = first, last do
+        table.insert(waves, TURN_WAVES[i])
+    end
+    return waves
+end
+
+local function randomWaveNumber(first, last)
+    if love and love.math and love.math.random then
+        return love.math.random(first, last)
+    end
+    return math.random(first, last)
+end
 
 local function liftMercyTextLayer(enemy, mercy_text)
     if not mercy_text then
@@ -54,14 +78,13 @@ function Kris:init()
     -- Mercy given when sparing this enemy before its spareable (20% for basic enemies)
     self.spare_points = 20
 
-    -- List of possible wave ids, randomly picked each turn
-    self.waves = {
-        "kris_phase1_11",
-        "kris_phase1_12",
-        "kris_phase1_13",
-        "kris_phase1_14",
-        "kris_phase1_15",
-    }
+    -- Used by the base battle code/debug paths; selectWave controls the actual order.
+    self.waves = makeWaveList(1, 15)
+    self.wave_phase = 1
+    self.wave_phase_turns_played = 0
+    self.wave_select_turn_count = nil
+    self.selected_wave_number = nil
+    self.recharge_wave_phase_advance_pending = false
 
     self.dialogue = {}
 
@@ -174,12 +197,125 @@ function Kris:addTemporaryMercy(...)
     liftMercyTextLayer(self, self.temporary_mercy_percent)
 end
 
-function Kris:selectWave()
-    local turn = FORCED_TURN or Game.battle.turn_count
+function Kris:getCurrentWavePhase()
+    return WAVE_PHASES[self.wave_phase] or WAVE_PHASES[#WAVE_PHASES]
+end
 
-    local turn_wave = TURN_WAVES[turn]
+function Kris:getPhaseSequenceLength(phase)
+    phase = phase or self:getCurrentWavePhase()
+    return (phase.last - phase.first) + 1
+end
+
+function Kris:isRechargeSustaining()
+    return Game.battle
+        and Game.battle.encounter
+        and Game.battle.encounter.isRechargeSustaining
+        and Game.battle.encounter:isRechargeSustaining()
+end
+
+function Kris:shouldAvoidWaveNumber(wave_number)
+    return self:isRechargeSustaining() and RECHARGE_AVOID_WAVES[wave_number] == true
+end
+
+function Kris:getRandomPhaseWaveNumber(phase)
+    local candidates = {}
+    for i = phase.first, phase.last do
+        if not self:shouldAvoidWaveNumber(i) then
+            table.insert(candidates, i)
+        end
+    end
+
+    if #candidates > 0 then
+        return candidates[randomWaveNumber(1, #candidates)]
+    end
+
+    return randomWaveNumber(phase.first, phase.last)
+end
+
+function Kris:getNextPhaseWaveNumber()
+    local phase = self:getCurrentWavePhase()
+    local played = self.wave_phase_turns_played or 0
+
+    if played < self:getPhaseSequenceLength(phase) then
+        for wave_number = phase.first + played, phase.last do
+            if not self:shouldAvoidWaveNumber(wave_number) then
+                return wave_number, (wave_number - phase.first) + 1
+            end
+        end
+    end
+
+    return self:getRandomPhaseWaveNumber(phase), played + 1
+end
+
+function Kris:getEncounterTextWaveNumber()
+    if FORCED_TURN then
+        return FORCED_TURN
+    end
+
+    local battle_turn = Game.battle and Game.battle.turn_count
+    if self.wave_select_turn_count == battle_turn and self.selected_wave_number then
+        return self.selected_wave_number
+    end
+
+    local phase = self:getCurrentWavePhase()
+    local played = self.wave_phase_turns_played or 0
+    if played < self:getPhaseSequenceLength(phase) then
+        local wave_number = self:getNextPhaseWaveNumber()
+        return wave_number
+    end
+
+    return phase.last
+end
+
+function Kris:queueRechargeWavePhaseAdvance()
+    self.recharge_wave_phase_advance_pending = true
+end
+
+function Kris:finishRechargeWavePhaseAdvance()
+    if not self.recharge_wave_phase_advance_pending then
+        return false
+    end
+
+    self.recharge_wave_phase_advance_pending = false
+    return self:advanceWavePhase()
+end
+
+function Kris:advanceWavePhase()
+    if (self.wave_phase or 1) >= #WAVE_PHASES then
+        return false
+    end
+
+    self.wave_phase = (self.wave_phase or 1) + 1
+    self.wave_phase_turns_played = 0
+    self.wave_select_turn_count = nil
+    self.selected_wave = nil
+    self.selected_wave_number = nil
+    return true
+end
+
+function Kris:selectWave()
+    if FORCED_TURN then
+        local forced_wave = TURN_WAVES[FORCED_TURN]
+        if forced_wave then
+            self.selected_wave = forced_wave
+            self.selected_wave_number = FORCED_TURN
+            print("playing wave: " .. self.selected_wave)
+            return self.selected_wave
+        end
+    end
+
+    local battle_turn = Game.battle and Game.battle.turn_count
+    if self.wave_select_turn_count == battle_turn and self.selected_wave then
+        return self.selected_wave
+    end
+
+    local wave_number, next_phase_turns_played = self:getNextPhaseWaveNumber()
+    local turn_wave = TURN_WAVES[wave_number]
     if turn_wave then
         self.selected_wave = turn_wave
+        self.selected_wave_number = wave_number
+        self.wave_select_turn_count = battle_turn
+        self.wave_phase_turns_played = next_phase_turns_played or ((self.wave_phase_turns_played or 0) + 1)
         print("playing wave: " .. self.selected_wave)
         return self.selected_wave
     end
@@ -227,6 +363,7 @@ function Kris:onAct(battler, name)
         local pre_spend_tension = Game:getTension() - ((action and action.tp) or 0)
         if Game.battle.encounter and Game.battle.encounter.activateRecharge then
             Game.battle.encounter:activateRecharge(self, battler, pre_spend_tension)
+            self:queueRechargeWavePhaseAdvance()
         end
         return Game:loc("* Your SOUL emitted a strange glow!", "act_kris_recharge_text")
     end
@@ -235,8 +372,7 @@ function Kris:onAct(battler, name)
 end
 
 function Kris:getEncounterText()
-    -- 按回合顺序返回旁白文本，超出则固定最后一条
-    local turn = FORCED_TURN or Game.battle.turn_count
+    local turn = self:getEncounterTextWaveNumber()
     if self.text[turn] then
         return self.text[turn]
     end
