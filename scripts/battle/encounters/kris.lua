@@ -268,7 +268,7 @@ function Kris:getRechargeLightRadius()
 end
 
 function Kris:getRechargeLightPosition()
-    if not self.recharge then
+    if not self.recharge or self.recharge.draining then
         return
     end
 
@@ -280,6 +280,10 @@ end
 
 function Kris:getRechargeLightTarget()
     if not Game.battle then
+        return
+    end
+
+    if not self.recharge or self.recharge.draining then
         return
     end
 
@@ -341,6 +345,19 @@ function Kris:restoreRechargePlayerLight()
     self.recharge_player_light = nil
 end
 
+function Kris:removeRechargeSoul(instant)
+    if not self.recharge_soul then
+        return
+    end
+
+    if instant then
+        self.recharge_soul:remove()
+    else
+        self.recharge_soul:fadeOutAndRemove(RECHARGE_PLATFORM_FADE_TIME)
+    end
+    self.recharge_soul = nil
+end
+
 function Kris:isRechargeMercyDisplayActive()
     local state = Game.battle and Game.battle:getState()
     return self.recharge
@@ -378,18 +395,16 @@ end
 
 function Kris:updateRechargeLight()
     local recharge = self.recharge
-    if not recharge then
+    if not recharge or recharge.draining then
         self:restoreRechargePlayerLight()
+        self:removeRechargeSoul(true)
         return
     end
 
     local target = self:getRechargeLightTarget()
     if not target then
         self:restoreRechargePlayerLight()
-        if self.recharge_soul then
-            self.recharge_soul:remove()
-            self.recharge_soul = nil
-        end
+        self:removeRechargeSoul(true)
         return
     end
 
@@ -421,10 +436,7 @@ function Kris:beginRechargeDrain()
     recharge.filling = false
 
     self:restoreRechargePlayerLight()
-
-    if self.recharge_soul then
-        self.recharge_soul.enabled = false
-    end
+    self:removeRechargeSoul(true)
 
     if self.bg_platform then
         self.bg_platform:crossFadeTo("battle/backgrounds/kris_platform_adjusted", RECHARGE_PLATFORM_FADE_TIME)
@@ -466,15 +478,7 @@ end
 function Kris:clearRecharge(instant)
     self:restoreRechargePlayerLight()
     self.recharge = nil
-
-    if self.recharge_soul then
-        if instant then
-            self.recharge_soul:remove()
-        else
-            self.recharge_soul:fadeOutAndRemove(RECHARGE_PLATFORM_FADE_TIME)
-        end
-        self.recharge_soul = nil
-    end
+    self:removeRechargeSoul(instant)
 end
 
 function Kris:update()
