@@ -10,6 +10,18 @@ local TEXTURE_OFFSET_X = 11
 local TEXTURE_OFFSET_Y = 237
 local CHILD_LAYER = -1
 local CHILD_LAYER_SPLIT = 0
+local STAR_EDGE_OFFSET = 8
+local STAR_BURST_MIN_INTERVAL = 0.28
+local STAR_BURST_MAX_INTERVAL = 0.62
+local STAR_BURST_MIN_COUNT = 2
+local STAR_BURST_MAX_COUNT = 4
+local STAR_MIN_ANGLE_SPACING = math.rad(18)
+local STAR_ANGLE_RANDOM_ATTEMPTS = 16
+local STAR_DISTANCE_JITTER = 3
+local STAR_TRAVEL_MIN_TIME = 0.9
+local STAR_TRAVEL_MAX_TIME = 1.25
+local STAR_START_SCALE = 0.9
+local STAR_END_SCALE = 0.2
 local CAPTURE_DIR = "debug/soul_depth_capture"
 local CAPTURE_TIME = 0.2
 
@@ -20,6 +32,15 @@ end
 
 local function lerp(from, to, t)
     return from + (to - from) * t
+end
+
+local function randomFloat(min, max)
+    return min + love.math.random() * (max - min)
+end
+
+local function angleDistance(a, b)
+    local diff = math.abs((a - b + math.pi) % (math.pi * 2) - math.pi)
+    return diff
 end
 
 function SoulDepthMask:init(start_diameter, target_diameter)
@@ -35,6 +56,7 @@ function SoulDepthMask:init(start_diameter, target_diameter)
     self.grow_timer = 0
     self.texture_x = TEXTURE_OFFSET_X
     self.texture_y = TEXTURE_OFFSET_Y
+    self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
     self.capture_timer = 0
     self.capture_done = false
 
@@ -70,6 +92,77 @@ function SoulDepthMask:onRemove(parent)
     end
 end
 
+function SoulDepthMask:getCenterInSoul()
+    return self.x, self.y
+end
+
+function SoulDepthMask:getStarBurstAngles(count)
+    local angles = {}
+
+    for _ = 1, count do
+        local chosen
+        for _ = 1, STAR_ANGLE_RANDOM_ATTEMPTS do
+            local candidate = randomFloat(0, math.pi * 2)
+            local valid = true
+            for _, angle in ipairs(angles) do
+                if angleDistance(candidate, angle) < STAR_MIN_ANGLE_SPACING then
+                    valid = false
+                    break
+                end
+            end
+            if valid then
+                chosen = candidate
+                break
+            end
+        end
+
+        table.insert(angles, chosen or randomFloat(0, math.pi * 2))
+    end
+
+    return angles
+end
+
+function SoulDepthMask:spawnStarBurst()
+    if not self.wave or not self.parent or not self.parent.parent then
+        return
+    end
+
+    local center_x, center_y = self:getCenterInSoul()
+    local count = love.math.random(STAR_BURST_MIN_COUNT, STAR_BURST_MAX_COUNT)
+    local angles = self:getStarBurstAngles(count)
+    local distance = self.radius + STAR_EDGE_OFFSET
+
+    for i = 1, count do
+        local angle = angles[i]
+        local spawn_distance = distance + randomFloat(0, STAR_DISTANCE_JITTER)
+        local start_x = center_x + math.cos(angle) * spawn_distance
+        local start_y = center_y + math.sin(angle) * spawn_distance
+        local travel_time = randomFloat(STAR_TRAVEL_MIN_TIME, STAR_TRAVEL_MAX_TIME)
+
+        self.wave:spawnBulletTo(
+            self.parent,
+            "soul_depth_star",
+            start_x,
+            start_y,
+            center_x,
+            center_y,
+            travel_time,
+            STAR_START_SCALE,
+            STAR_END_SCALE
+        )
+    end
+end
+
+function SoulDepthMask:updateStarBursts()
+    self.star_burst_timer = self.star_burst_timer - DT
+    if self.star_burst_timer > 0 then
+        return
+    end
+
+    self:spawnStarBurst()
+    self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
+end
+
 function SoulDepthMask:update()
     super.update(self)
 
@@ -80,6 +173,7 @@ function SoulDepthMask:update()
 
     self.texture_x = self.texture_x + SCROLL_SPEED * DT
     self.texture_y = self.texture_y + SCROLL_SPEED * DT
+    self:updateStarBursts()
 
     if Game:getConfig("krisisDebugSoulDepthCapture") and not self.capture_done then
         self.capture_timer = self.capture_timer + DT
