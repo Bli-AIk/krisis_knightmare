@@ -16,15 +16,18 @@ local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
 end
 
-function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end_scale)
+function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end_scale, options)
     super.init(self, x, y, "bullets/star")
 
-    self.layer = -0.5
+    options = options or {}
+
+    self.layer = options.layer or -0.5
     self.damage = DAMAGE
     self.inv_timer = INV_TIMER
     self.destroy_on_hit = false
     self.remove_offscreen = false
-    self.alpha = 0
+    self.fade = options.fade ~= false
+    self.alpha = options.alpha or (self.fade and 0 or 1)
 
     self.start_x = x
     self.start_y = y
@@ -36,6 +39,8 @@ function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end
     self.end_scale = end_scale or END_SCALE
 
     self:setScale(self.start_scale)
+    self.rotation = options.rotation or self.rotation
+    self.spin_speed = options.spin_speed or SPIN_SPEED
 end
 
 function SoulDepthStar:update()
@@ -44,12 +49,14 @@ function SoulDepthStar:update()
 
     self.x = lerp(self.start_x, self.target_x, progress)
     self.y = lerp(self.start_y, self.target_y, progress)
-    self.rotation = self.rotation + SPIN_SPEED * DT
+    self.rotation = self.rotation + self.spin_speed * DT
     self:setScale(lerp(self.start_scale, self.end_scale, progress))
 
-    local fade_in = clamp(progress / FADE_IN_END, 0, 1)
-    local fade_out = clamp((1 - progress) / (1 - FADE_OUT_START), 0, 1)
-    self.alpha = math.min(fade_in, fade_out)
+    if self.fade then
+        local fade_in = clamp(progress / FADE_IN_END, 0, 1)
+        local fade_out = clamp((1 - progress) / (1 - FADE_OUT_START), 0, 1)
+        self.alpha = math.min(fade_in, fade_out)
+    end
 
     if progress >= 1 then
         self:remove()

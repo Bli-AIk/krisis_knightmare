@@ -4,9 +4,10 @@ local DEPTH_TEXTURE = "battle/backgrounds/kris_depth_hot"
 local DEPTH_ALPHA = 0.56
 local GROW_TIME = 1
 local DEPTH_WHITE_TIME = 10 / 60
-local DEPTH_SHRINK_TIME = 10 / 60
+local DEPTH_SHRINK_TIME = 5 / 60
 local SOUL_WHITE_DELAY = 0.1
 local SOUL_WHITE_TIME = 40 / 60
+local FINALE_DELAY = 20 / 60
 local SCROLL_SPEED = 12
 local TEXTURE_SCALE_X = 1.8
 local TEXTURE_SCALE_Y = 1.75
@@ -78,8 +79,11 @@ function SoulDepthMask:init(start_diameter, target_diameter)
     self.white_elapsed = 0
     self.white_progress = 0
     self.shrinking = false
+    self.shrink_done = false
     self.shrink_timer = 0
     self.shrink_start_diameter = self.diameter
+    self.finale_triggered = false
+    self.soul_white_complete_elapsed = nil
     self.capture_timer = 0
     self.capture_done = false
 
@@ -138,6 +142,7 @@ function SoulDepthMask:beginWhiteFade()
     self.white_fading = true
     self.white_timer = 0
     self.white_elapsed = 0
+    self.soul_white_complete_elapsed = nil
 
     if self.parent and self.parent.stopChase then
         self.parent:stopChase()
@@ -152,13 +157,44 @@ function SoulDepthMask:beginWhiteFade()
 end
 
 function SoulDepthMask:beginShrink()
-    if self.shrinking then
+    if self.shrinking or self.shrink_done then
         return
     end
 
     self.shrinking = true
     self.shrink_timer = 0
     self.shrink_start_diameter = self.diameter
+end
+
+function SoulDepthMask:isSoulWhiteComplete()
+    if self.depth_echo and self.depth_echo.parent then
+        return (self.depth_echo.alpha or 0) >= 1
+    end
+
+    return self.white_elapsed >= SOUL_WHITE_DELAY + SOUL_WHITE_TIME
+end
+
+function SoulDepthMask:triggerFinale()
+    if self.finale_triggered then
+        return
+    end
+
+    self.finale_triggered = true
+
+    local x, y
+    if self.parent and self.parent.getRelativePos then
+        x, y = self.parent:getRelativePos(self.x, self.y, Game.battle)
+    else
+        x, y = self:getRelativePos(0, 0, Game.battle)
+    end
+
+    local finale = SoulDepthFinale(x, y, self.wave, self.depth_echo)
+    if self.wave and self.wave.spawnObject then
+        self.wave:spawnObject(finale)
+    else
+        Game.battle:addChild(finale)
+    end
+    self:remove()
 end
 
 function SoulDepthMask:getStarBurstAngles(count)
@@ -236,14 +272,17 @@ function SoulDepthMask:update()
     super.update(self)
 
     if self.shrinking then
-        self.shrink_timer = math.min(self.shrink_timer + DT, DEPTH_SHRINK_TIME)
-        local shrink_progress = DEPTH_SHRINK_TIME > 0 and MathUtils.clamp(self.shrink_timer / DEPTH_SHRINK_TIME, 0, 1) or 1
-        self.diameter = lerp(self.shrink_start_diameter, 0, easeOutCubic(shrink_progress))
-        self.radius = self.diameter / 2
+        if not self.shrink_done then
+            self.shrink_timer = math.min(self.shrink_timer + DT, DEPTH_SHRINK_TIME)
+            local shrink_progress = DEPTH_SHRINK_TIME > 0 and MathUtils.clamp(self.shrink_timer / DEPTH_SHRINK_TIME, 0, 1) or 1
+            self.diameter = lerp(self.shrink_start_diameter, 0, easeOutCubic(shrink_progress))
+            self.radius = self.diameter / 2
 
-        if shrink_progress >= 1 then
-            self:remove()
-            return
+            if shrink_progress >= 1 then
+                self.shrink_done = true
+                self.diameter = 0
+                self.radius = 0
+            end
         end
     else
         self.grow_timer = math.min(self.grow_timer + DT, GROW_TIME)
@@ -263,8 +302,17 @@ function SoulDepthMask:update()
         self.white_elapsed = self.white_elapsed + DT
         self.white_timer = math.min(self.white_timer + DT, DEPTH_WHITE_TIME)
         self.white_progress = DEPTH_WHITE_TIME > 0 and MathUtils.clamp(self.white_timer / DEPTH_WHITE_TIME, 0, 1) or 1
-        if self.white_progress >= 1 and self.white_elapsed >= SOUL_WHITE_DELAY + SOUL_WHITE_TIME then
+
+        if self.white_progress >= 1 and self:isSoulWhiteComplete() then
             self:beginShrink()
+            self.soul_white_complete_elapsed = (self.soul_white_complete_elapsed or 0) + DT
+
+            if self.soul_white_complete_elapsed >= FINALE_DELAY then
+                self:triggerFinale()
+                return
+            end
+        else
+            self.soul_white_complete_elapsed = nil
         end
     end
 
