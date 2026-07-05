@@ -1,10 +1,10 @@
 local KrisPhase1_06, super = Class("kris_phase1_01")
 
 local CHASING_SOUL_SPEED_MULTIPLIER = 0.5
-local ATTRACT_START_TIME = 3.45
-local ATTRACT_MAX_SPEED = 2.25
-local ATTRACT_RAMP_TIME = 0.25
-local ATTRACT_MIN_DISTANCE = 8
+local ATTRACT_MAX_SPEED = 3.75
+local ATTRACT_START_STRENGTH = 0.32
+local ATTRACT_RAMP_TIME = 0.18
+local ATTRACT_MIN_DISTANCE = 5
 local ATTRACT_ARENA_MARGIN = 2
 
 local function clamp(value, min, max)
@@ -31,9 +31,16 @@ function KrisPhase1_06:spawnSoulDepthMask()
         radial_rings = true,
     })
     self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
+    self:startPlayerAttraction()
+
     if self.depth_mask_finished and self.depth_mask.beginWhiteFade then
         self.depth_mask:beginWhiteFade()
     end
+end
+
+function KrisPhase1_06:startPlayerAttraction()
+    self.player_attraction_active = true
+    self.player_attraction_timer = 0
 end
 
 function KrisPhase1_06:onStart()
@@ -41,11 +48,6 @@ function KrisPhase1_06:onStart()
     self.player_attraction_timer = 0
 
     super.onStart(self)
-
-    self.timer:after(ATTRACT_START_TIME, function()
-        self.player_attraction_active = true
-        self.player_attraction_timer = 0
-    end)
 end
 
 function KrisPhase1_06:beginSoulDepthFinale()
@@ -93,7 +95,8 @@ function KrisPhase1_06:updatePlayerAttraction()
     end
 
     self.player_attraction_timer = self.player_attraction_timer + DT
-    local ramp = ATTRACT_RAMP_TIME > 0 and clamp(self.player_attraction_timer / ATTRACT_RAMP_TIME, 0, 1) or 1
+    local progress = ATTRACT_RAMP_TIME > 0 and clamp(self.player_attraction_timer / ATTRACT_RAMP_TIME, 0, 1) or 1
+    local ramp = ATTRACT_START_STRENGTH + (1 - ATTRACT_START_STRENGTH) * progress
     local amount = math.min(distance - ATTRACT_MIN_DISTANCE, ATTRACT_MAX_SPEED * ramp * DTMULT)
     local x = player_soul.x + dx / distance * amount
     local y = player_soul.y + dy / distance * amount
