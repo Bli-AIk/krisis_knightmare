@@ -3,6 +3,7 @@ local KrisPhase1_01, super = Class(Wave)
 local PLAYER_START_OFFSET_X = -28
 local CHASER_START_OFFSET_X = 28
 local DEPTH_MASK_SPAWN_TIME = 42 / 60
+local DEPTH_MASK_FINISH_TIME = 4.5
 local SOUL_BULLET_LAYER = BATTLE_LAYERS["above_bullets"] + 2
 
 local function getChaserOrigin(fallback_x, fallback_y)
@@ -37,7 +38,18 @@ function KrisPhase1_01:spawnSoulDepthMask()
     end
 
     local arena_height = self:getArenaHeight()
-    self:spawnObjectTo(soul, SoulDepthMask(arena_height * 0.5, arena_height * 0.8), soul.width / 2, soul.height / 2)
+    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8)
+    self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
+    if self.depth_mask_finished and self.depth_mask.beginWhiteFade then
+        self.depth_mask:beginWhiteFade()
+    end
+end
+
+function KrisPhase1_01:beginSoulDepthFinale()
+    self.depth_mask_finished = true
+    if self.depth_mask and self.depth_mask.parent and self.depth_mask.beginWhiteFade then
+        self.depth_mask:beginWhiteFade()
+    end
 end
 
 function KrisPhase1_01:spawnChaserSoul()
@@ -68,7 +80,7 @@ end
 
 function KrisPhase1_01:init()
     super.init(self)
-    self.time = 5
+    self.time = 15
     self.soul_offset_x = PLAYER_START_OFFSET_X
     self.soul_offset_y = 0
 end
@@ -85,6 +97,10 @@ function KrisPhase1_01:onStart()
 
     self.timer:after(DEPTH_MASK_SPAWN_TIME, function()
         self:spawnSoulDepthMask()
+    end)
+
+    self.timer:after(DEPTH_MASK_FINISH_TIME, function()
+        self:beginSoulDepthFinale()
     end)
 end
 

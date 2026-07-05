@@ -92,6 +92,16 @@ function ChasingSoul:startChaseDelay(delay)
     self.chase_delay = delay or CHASE_START_DELAY
 end
 
+function ChasingSoul:stopChase()
+    self.chase_enabled = false
+    self.chase_delay = 0
+    self.move_dx = nil
+    self.move_dy = nil
+    self.move_remaining = nil
+    self.move_target_x = nil
+    self.move_target_y = nil
+end
+
 function ChasingSoul:updateTransition()
     if not self.transitioning then
         return false
