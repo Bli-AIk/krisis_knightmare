@@ -15,6 +15,7 @@ local SPAWN_INSET = 8
 local DIAMOND_START_MIN_COUNT = 4
 local DIAMOND_START_MAX_COUNT = 6
 local DIAMOND_MAX_COUNT = 6
+local DIAMOND_SPLIT_MIN_COUNT = 2
 local DIAMOND_MIN_SPEED_LEAD = 1.5
 local DIAMOND_MAX_SPEED_LEAD = 3.5
 local DIAMOND_MAX_SPEED = 8
@@ -140,11 +141,19 @@ local function randomSafeInwardDirection(edge, x, y, speed, min_degrees, max_deg
     return best_direction, math.max(best_distance / (FPS * MIN_BOUNCE_SECONDS), 1)
 end
 
-local function getDiamondCount(depth)
+local function getDiamondCount(depth, divisor)
     depth = math.max(depth or 1, 1)
+    divisor = math.max(divisor or 1, 1)
+
     local growth = depth - 1
     local min_count = clamp(DIAMOND_START_MIN_COUNT + growth, DIAMOND_START_MIN_COUNT, DIAMOND_MAX_COUNT)
-    return love.math.random(min_count, DIAMOND_MAX_COUNT)
+    local total_count = love.math.random(min_count, DIAMOND_MAX_COUNT)
+
+    if divisor <= 1 then
+        return total_count
+    end
+
+    return math.max(DIAMOND_SPLIT_MIN_COUNT, math.floor(total_count / divisor))
 end
 
 local function spawnDiamond(wave, edge, x, y, bullet_speed)
@@ -172,6 +181,7 @@ local function spawnFollowup(wave, edge, impact_x, impact_y, options)
     wave:spawnBullet("kris_buster_explode", impact_x, impact_y)
 
     local chain_depth = options.chain_depth or 1
+    local diamond_count_divisor = options.diamond_count_divisor or 1
     local bullet_speed = math.max(options.bullet_speed or randomBetween(MIN_RANDOM_SPEED, MAX_RANDOM_SPEED), MIN_CHAIN_SPEED)
     local spawn_x, spawn_y = getSpawnPosition(edge, impact_x, impact_y)
     local direction
@@ -179,9 +189,10 @@ local function spawnFollowup(wave, edge, impact_x, impact_y, options)
     wave:spawnBullet("kris_buster_bullet", spawn_x, spawn_y, direction, {
         speed = bullet_speed,
         chain_depth = chain_depth,
+        diamond_count_divisor = diamond_count_divisor,
     })
 
-    for _ = 1, getDiamondCount(chain_depth) do
+    for _ = 1, getDiamondCount(chain_depth, diamond_count_divisor) do
         spawnDiamond(wave, edge, spawn_x, spawn_y, bullet_speed)
     end
 end
@@ -200,6 +211,7 @@ function KrisBusterBullet:init(x, y, direction, options)
     self.end_speed = math.max(self.start_speed * FLIGHT_END_SPEED_FACTOR, MIN_CHAIN_SPEED)
     self.decel_duration = options.decel_duration or DECEL_DURATION
     self.chain_depth = options.chain_depth or 1
+    self.diamond_count_divisor = options.diamond_count_divisor or 1
     self.elapsed = 0
     self.impacting = false
     self.rotation = (direction or 0) + math.pi / 2
@@ -230,6 +242,7 @@ function KrisBusterBullet:impact(edge, x, y)
     spawnFollowup(self.wave, edge, x, y, {
         bullet_speed = self.start_speed * BOUNCE_SPEED_FACTOR,
         chain_depth = self.chain_depth + 1,
+        diamond_count_divisor = self.diamond_count_divisor,
     })
     self:remove()
 end

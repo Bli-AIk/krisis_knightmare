@@ -12,6 +12,7 @@ local MIN_RANDOM_SPEED = 7.5
 local MAX_RANDOM_SPEED = 14
 local DIAMOND_START_MIN_COUNT = 4
 local DIAMOND_START_MAX_COUNT = 6
+local DIAMOND_SPLIT_MIN_COUNT = 2
 local DIAMOND_MIN_SPEED_LEAD = 1.5
 local DIAMOND_MAX_SPEED_LEAD = 3.5
 local DIAMOND_MAX_SPEED = 8
@@ -153,29 +154,55 @@ local function spawnDiamond(wave, edge, x, y, bullet_speed)
     })
 end
 
-local function spawnFollowup(wave, edge, impact_x, impact_y)
+local function getSplitDiamondCount(total_count, bullet_count, index)
+    bullet_count = math.max(bullet_count or 1, 1)
+    index = math.max(index or 1, 1)
+
+    local count = math.floor(total_count / bullet_count)
+    if index <= (total_count % bullet_count) then
+        count = count + 1
+    end
+
+    return math.max(count, DIAMOND_SPLIT_MIN_COUNT)
+end
+
+local function spawnFollowup(wave, edge, impact_x, impact_y, options)
     if not wave or wave.finished then
         return
     end
 
+    options = options or {}
+
     wave:spawnBullet("kris_buster_explode", impact_x, impact_y)
 
-    local bullet_speed = randomBetween(MIN_RANDOM_SPEED, MAX_RANDOM_SPEED)
     local spawn_x, spawn_y = getSpawnPosition(edge, impact_x, impact_y)
-    local direction
-    direction, bullet_speed = randomSafeInwardDirection(edge, spawn_x, spawn_y, bullet_speed, 45, 135)
-    wave:spawnBullet("kris_buster_bullet", spawn_x, spawn_y, direction, {
-        speed = bullet_speed,
-        chain_depth = 1,
-    })
+    local bullet_count = math.max(options.bullet_count or 1, 1)
+    local total_diamond_count = love.math.random(DIAMOND_START_MIN_COUNT, DIAMOND_START_MAX_COUNT)
+    local diamond_count_divisor = options.diamond_count_divisor or 1
 
-    for _ = 1, love.math.random(DIAMOND_START_MIN_COUNT, DIAMOND_START_MAX_COUNT) do
-        spawnDiamond(wave, edge, spawn_x, spawn_y, bullet_speed)
+    for bullet_index = 1, bullet_count do
+        local bullet_speed = randomBetween(MIN_RANDOM_SPEED, MAX_RANDOM_SPEED)
+        local direction
+        direction, bullet_speed = randomSafeInwardDirection(edge, spawn_x, spawn_y, bullet_speed, 45, 135)
+        wave:spawnBullet("kris_buster_bullet", spawn_x, spawn_y, direction, {
+            speed = bullet_speed,
+            chain_depth = 1,
+            diamond_count_divisor = diamond_count_divisor,
+        })
+
+        local diamond_count = options.split_diamonds
+            and getSplitDiamondCount(total_diamond_count, bullet_count, bullet_index)
+            or total_diamond_count
+        for _ = 1, diamond_count do
+            spawnDiamond(wave, edge, spawn_x, spawn_y, bullet_speed)
+        end
     end
 end
 
-function KrisRudeBuster:init(x, y)
+function KrisRudeBuster:init(x, y, options)
     super.init(self, x, y, "bullets/rude_buster")
+
+    options = options or {}
 
     self.damage = DAMAGE
     self.destroy_on_hit = false
@@ -188,6 +215,9 @@ function KrisRudeBuster:init(x, y)
     self.impact_x = x
     self.impact_y = y
     self.followup_spawned = false
+    self.followup_bullet_count = options.followup_bullet_count or 1
+    self.followup_split_diamonds = options.followup_split_diamonds == true
+    self.followup_diamond_count_divisor = options.followup_diamond_count_divisor or 1
     self.start_scale_x = BUSTER_SCALE
     self.start_scale_y = BUSTER_SCALE
     self:setScale(self.start_scale_x, self.start_scale_y)
@@ -215,7 +245,11 @@ function KrisRudeBuster:startShrink()
 
     if not self.followup_spawned then
         self.followup_spawned = true
-        spawnFollowup(self.wave, "left", self.impact_x, self.impact_y)
+        spawnFollowup(self.wave, "left", self.impact_x, self.impact_y, {
+            bullet_count = self.followup_bullet_count,
+            split_diamonds = self.followup_split_diamonds,
+            diamond_count_divisor = self.followup_diamond_count_divisor,
+        })
     end
 end
 
