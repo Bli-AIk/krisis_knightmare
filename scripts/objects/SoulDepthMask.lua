@@ -3,10 +3,10 @@ local SoulDepthMask, super = Class(Object)
 local DEPTH_TEXTURE = "battle/backgrounds/kris_depth_hot"
 local DEPTH_ALPHA = 0.56
 local GROW_TIME = 1
-local DEPTH_WHITE_TIME = 5 / 60
-local DEPTH_SHRINK_TIME = 5 / 60
+local DEPTH_WHITE_TIME = 10 / 60
+local DEPTH_SHRINK_TIME = 10 / 60
 local SOUL_WHITE_DELAY = 0.1
-local SOUL_WHITE_TIME = 20 / 60
+local SOUL_WHITE_TIME = 40 / 60
 local SCROLL_SPEED = 12
 local TEXTURE_SCALE_X = 1.8
 local TEXTURE_SCALE_Y = 1.75
@@ -75,6 +75,7 @@ function SoulDepthMask:init(start_diameter, target_diameter)
     self.depth_echo_spawned = false
     self.white_fading = false
     self.white_timer = 0
+    self.white_elapsed = 0
     self.white_progress = 0
     self.shrinking = false
     self.shrink_timer = 0
@@ -136,6 +137,7 @@ function SoulDepthMask:beginWhiteFade()
     self.star_bursts_enabled = false
     self.white_fading = true
     self.white_timer = 0
+    self.white_elapsed = 0
 
     if self.parent and self.parent.stopChase then
         self.parent:stopChase()
@@ -258,9 +260,10 @@ function SoulDepthMask:update()
     self:updateStarBursts()
 
     if self.white_fading then
+        self.white_elapsed = self.white_elapsed + DT
         self.white_timer = math.min(self.white_timer + DT, DEPTH_WHITE_TIME)
         self.white_progress = DEPTH_WHITE_TIME > 0 and MathUtils.clamp(self.white_timer / DEPTH_WHITE_TIME, 0, 1) or 1
-        if self.white_progress >= 1 then
+        if self.white_progress >= 1 and self.white_elapsed >= SOUL_WHITE_DELAY + SOUL_WHITE_TIME then
             self:beginShrink()
         end
     end
