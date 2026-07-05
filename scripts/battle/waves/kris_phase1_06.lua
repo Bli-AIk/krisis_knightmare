@@ -28,6 +28,7 @@ function KrisPhase1_06:spawnSoulDepthMask()
     local arena_height = self:getArenaHeight()
     local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8, {
         radial_particles = true,
+        radial_rings = true,
     })
     self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
     if self.depth_mask_finished and self.depth_mask.beginWhiteFade then

@@ -45,6 +45,13 @@ local RADIAL_PARTICLE_MAX_SPEED = 0.46
 local RADIAL_PARTICLE_MIN_WIDTH = 1
 local RADIAL_PARTICLE_MAX_WIDTH = 2
 local RADIAL_PARTICLE_MASK_SCALE = 0.8
+local RADIAL_RING_FIRST_DELAY = 0.75
+local RADIAL_RING_LIFE = 1.0
+local RADIAL_RING_SHORT_INTERVAL = 0.22
+local RADIAL_RING_GROUP_INTERVAL = 0.16
+local RADIAL_RING_MIN_RADIUS_SCALE = 0.08
+local RADIAL_RING_WIDTH_SCALE = 0.2
+local RADIAL_RING_ALPHA = 0.3
 local CAPTURE_DIR = "debug/soul_depth_capture"
 local CAPTURE_TIME = 0.2
 local DEPTH_WHITE_SHADER = [[
@@ -106,6 +113,17 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
     self.radial_particle_max_emit_count = options.radial_particle_max_emit_count or RADIAL_PARTICLE_MAX_EMIT_COUNT
     self.radial_particle_mask_scale = options.radial_particle_mask_scale or RADIAL_PARTICLE_MASK_SCALE
     self.radial_particle_timer = randomFloat(self.radial_particle_min_interval, self.radial_particle_max_interval)
+    self.radial_rings_enabled = options.radial_rings == true
+    self.radial_rings = {}
+    self.radial_ring_elapsed = 0
+    self.radial_ring_next_spawn = options.radial_ring_first_delay or RADIAL_RING_FIRST_DELAY
+    self.radial_ring_spawn_index = 1
+    self.radial_ring_life = options.radial_ring_life or RADIAL_RING_LIFE
+    self.radial_ring_short_interval = options.radial_ring_short_interval or RADIAL_RING_SHORT_INTERVAL
+    self.radial_ring_group_interval = options.radial_ring_group_interval or RADIAL_RING_GROUP_INTERVAL
+    self.radial_ring_min_radius_scale = options.radial_ring_min_radius_scale or RADIAL_RING_MIN_RADIUS_SCALE
+    self.radial_ring_width_scale = options.radial_ring_width_scale or RADIAL_RING_WIDTH_SCALE
+    self.radial_ring_alpha = options.radial_ring_alpha or RADIAL_RING_ALPHA
     self.depth_echo_spawned = false
     self.white_fading = false
     self.white_timer = 0
@@ -366,6 +384,57 @@ function SoulDepthMask:getRadialParticleMaskRadius()
     return self.radius * self.radial_particle_mask_scale
 end
 
+function SoulDepthMask:getRadialRingInterval(index)
+    if index < 2 then
+        return self.radial_ring_life
+    elseif index == 2 then
+        return self.radial_ring_life + self.radial_ring_group_interval
+    elseif index == 3 then
+        return self.radial_ring_short_interval
+    elseif index == 4 then
+        return self.radial_ring_group_interval
+    elseif index == 5 or index == 6 then
+        return self.radial_ring_short_interval
+    end
+end
+
+function SoulDepthMask:spawnRadialRing()
+    table.insert(self.radial_rings, {
+        age = 0,
+        life = self.radial_ring_life,
+    })
+end
+
+function SoulDepthMask:updateRadialRings()
+    if not self.radial_rings_enabled then
+        return
+    end
+
+    self.radial_ring_elapsed = self.radial_ring_elapsed + DT
+
+    for i = #self.radial_rings, 1, -1 do
+        local ring = self.radial_rings[i]
+        ring.age = ring.age + DT
+        if ring.age >= ring.life then
+            table.remove(self.radial_rings, i)
+        end
+    end
+
+    while not self.white_fading
+        and self.radial_ring_spawn_index <= 7
+        and self.radial_ring_elapsed >= self.radial_ring_next_spawn do
+        self:spawnRadialRing()
+
+        local interval = self:getRadialRingInterval(self.radial_ring_spawn_index)
+        self.radial_ring_spawn_index = self.radial_ring_spawn_index + 1
+        if interval then
+            self.radial_ring_next_spawn = self.radial_ring_next_spawn + interval
+        else
+            self.radial_ring_next_spawn = math.huge
+        end
+    end
+end
+
 function SoulDepthMask:update()
     super.update(self)
 
@@ -396,6 +465,7 @@ function SoulDepthMask:update()
     self.texture_y = self.texture_y + SCROLL_SPEED * DT
     self:updateStarBursts()
     self:updateRadialParticles()
+    self:updateRadialRings()
 
     if self.white_fading then
         self.white_elapsed = self.white_elapsed + DT
@@ -424,6 +494,56 @@ function SoulDepthMask:update()
             love.graphics.captureScreenshot(path)
             print("[SoulDepthMask] captured " .. love.filesystem.getSaveDirectory() .. "/" .. path)
         end
+    end
+end
+
+function SoulDepthMask:drawRadialRings()
+    if not self.radial_rings_enabled or #self.radial_rings == 0 then
+        return
+    end
+
+    local mask_radius = self:getRadialParticleMaskRadius()
+    if mask_radius <= 0 then
+        return
+    end
+
+    local old_line_width = love.graphics.getLineWidth()
+    local old_blend, old_alpha_mode = love.graphics.getBlendMode()
+    local old_stencil_mode, old_stencil_value = love.graphics.getStencilTest()
+    local fade_with_white = 1 - (self.white_progress or 0)
+    local line_width = mask_radius * self.radial_ring_width_scale
+    local max_ring_radius = mask_radius + line_width * 0.5
+    local min_ring_radius = math.max(mask_radius * self.radial_ring_min_radius_scale, line_width * 0.5)
+    local ring_clip_radius = math.min(mask_radius + line_width, self.radius)
+
+    love.graphics.setStencilTest()
+    love.graphics.stencil(function()
+        love.graphics.circle("fill", 0, 0, ring_clip_radius)
+    end, "replace", 1)
+    love.graphics.setStencilTest("greater", 0)
+    love.graphics.setBlendMode("add")
+    love.graphics.setLineWidth(line_width)
+
+    for _, ring in ipairs(self.radial_rings) do
+        local progress = MathUtils.clamp(ring.age / ring.life, 0, 1)
+        local radius_progress = easeOutCubic(progress)
+        local ring_radius = lerp(max_ring_radius, min_ring_radius, radius_progress)
+        local fade_in = MathUtils.clamp(progress / 0.18, 0, 1)
+        local fade_out = MathUtils.clamp((1 - progress) / 0.22, 0, 1)
+        local alpha = self.radial_ring_alpha * fade_in * fade_out * fade_with_white
+
+        if alpha > 0 and ring_radius > line_width * 0.5 then
+            love.graphics.setColor(1, 1, 1, alpha)
+            love.graphics.circle("line", 0, 0, ring_radius, 96)
+        end
+    end
+
+    love.graphics.setBlendMode(old_blend, old_alpha_mode)
+    love.graphics.setLineWidth(old_line_width)
+    if old_stencil_mode then
+        love.graphics.setStencilTest(old_stencil_mode, old_stencil_value)
+    else
+        love.graphics.setStencilTest()
     end
 end
 
@@ -513,6 +633,7 @@ function SoulDepthMask:draw()
     love.graphics.setColor(1, 1, 1, DEPTH_ALPHA)
     love.graphics.draw(self.texture, self.quad, -self.radius, -self.radius, 0, TEXTURE_SCALE_X, TEXTURE_SCALE_Y)
     love.graphics.setShader(old_shader)
+    self:drawRadialRings()
     self:drawRadialParticles()
 
     if old_stencil_mode then
