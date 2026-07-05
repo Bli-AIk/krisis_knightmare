@@ -55,6 +55,7 @@ function KrisPhase1_06:spawnPlayerAfterImage()
     end
 
     local img = AfterImage(sprite, PLAYER_AFTERIMAGE_ALPHA, PLAYER_AFTERIMAGE_FADE_SPEED)
+    img.depth_mask_clip = self.depth_mask
     player_soul:addChild(img)
 end
 
