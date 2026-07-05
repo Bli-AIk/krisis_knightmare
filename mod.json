@@ -23,9 +23,9 @@
     // The party. The first character is the player.
     "party": ["vessel"],
 
-    // The inventory. Contains three darkburgers, a cell phone and a shadow crystal by default.
+    // The inventory. Contains starting combat items, a cell phone and a shadow crystal by default.
     "inventory": {
-        "items": ["glowshard", "darkburger", "darkburger", "darkburger"],
+        "items": ["emerfood", "goldentea", "goldentea", "holieggnog", "rhapsotea", "tvslop", "tvslop", "tvslop"],
         "key_items": ["cell_phone", "shadowcrystal"]
     },
 
@@ -155,6 +155,6 @@
     // Whether or not to enable dev mode. Dev mode enables debug keys and the console.
     "dev": true,
 
-    //"encounter": "kris"
+    "encounter": "kris"
   
 }
