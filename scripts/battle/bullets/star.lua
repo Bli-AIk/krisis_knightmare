@@ -6,7 +6,7 @@ function Star:init(x, y, dir, min_speed, max_speed, accel_duration)
 
 	self:setScale(0.8, 0.8)
 	self.damage = 50
-	self.inv_timer = 4 / 60
+	self.inv_timer = (4 / 60) * 32
 	self.destroy_on_hit = false
 	self.alpha = 0
 

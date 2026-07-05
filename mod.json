@@ -33,7 +33,7 @@
     "equipment": {
         "vessel": {
             "weapon": "wood_blade",
-            "armor": ["amber_card", "amber_card"]
+            "armor": ["zero_armor", "zero_armor"]
         },
         "susie": {
             "weapon": "mane_ax",

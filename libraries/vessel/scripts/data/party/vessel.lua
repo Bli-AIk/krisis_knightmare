@@ -26,7 +26,7 @@ function character:init()
     self.stats = {
         health = 300,
         attack = 17,
-        defense = 2,
+        defense = 0,
         magic = 0
     }
 
