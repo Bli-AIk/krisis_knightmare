@@ -207,6 +207,10 @@ function Kris:getPhaseSequenceLength(phase)
     return (phase.last - phase.first) + 1
 end
 
+function Kris:isPhaseSequenceComplete()
+    return (self.wave_phase_turns_played or 0) >= self:getPhaseSequenceLength()
+end
+
 function Kris:isRechargeSustaining()
     return Game.battle
         and Game.battle.encounter
@@ -269,11 +273,27 @@ function Kris:getEncounterTextWaveNumber()
 end
 
 function Kris:queueRechargeWavePhaseAdvance()
-    self.recharge_wave_phase_advance_pending = true
+    self.recharge_wave_phase_advance_pending = "recharge"
 end
 
 function Kris:finishRechargeWavePhaseAdvance()
-    if not self.recharge_wave_phase_advance_pending then
+    if self.recharge_wave_phase_advance_pending ~= "recharge" then
+        return false
+    end
+
+    if not self:isPhaseSequenceComplete() then
+        self.recharge_wave_phase_advance_pending = "sequence"
+        return false
+    end
+
+    self.recharge_wave_phase_advance_pending = false
+    return self:advanceWavePhase()
+end
+
+function Kris:tryFinishQueuedWavePhaseAdvance()
+    if self.recharge_wave_phase_advance_pending ~= "sequence"
+        or not self:isPhaseSequenceComplete()
+    then
         return false
     end
 
@@ -291,6 +311,7 @@ function Kris:advanceWavePhase()
     self.wave_select_turn_count = nil
     self.selected_wave = nil
     self.selected_wave_number = nil
+    self.recharge_wave_phase_advance_pending = false
     return true
 end
 
@@ -414,6 +435,11 @@ end
 
 function Kris:getHeartbeatInvTimerCap()
     return math.max(1 / 60, (5 - self.heartbeat_stacks) / 60)
+end
+
+function Kris:onTurnEnd()
+    self:tryFinishQueuedWavePhaseAdvance()
+    return super.onTurnEnd(self)
 end
 
 function Kris:onRemove(parent)
