@@ -16,6 +16,8 @@ local RECHARGE_ACT_FRAME_DELAY = 1 / 15
 local RECHARGE_SOUL_LAYER = BATTLE_LAYERS["above_bullets"] + 2
 local RECHARGE_RETURN_TARGET_OFFSET_X = -2
 local RECHARGE_RETURN_TARGET_OFFSET_Y = 1
+local PLATFORM_SPRITE = "battle/backgrounds/kris_platform_adjusted"
+local PLATFORM_LIGHT_SPRITE = "battle/backgrounds/kris_platform_light"
 
 function Kris:init()
     super.init(self)
@@ -211,6 +213,15 @@ function Kris:spawnRechargeWhiteFlash(battler)
     end
 end
 
+function Kris:setPlatformSprite(texture, fade_time)
+    if self.bg_platform then
+        self.bg_platform:crossFadeTo(texture, fade_time)
+    end
+    if self.bg_platform_particles then
+        self.bg_platform_particles:crossFadeTo(texture, fade_time)
+    end
+end
+
 function Kris:triggerRechargeActVisuals(battler)
     self:spawnRechargeRadialBurst(battler, {
         after_snapshot = function()
@@ -241,9 +252,7 @@ function Kris:playRechargeActAnimation(battler)
 end
 
 function Kris:ensureRechargeVisuals(enemy, battler)
-    if self.bg_platform then
-        self.bg_platform:crossFadeTo("battle/backgrounds/kris_platform_light", RECHARGE_PLATFORM_FADE_TIME)
-    end
+    self:setPlatformSprite(PLATFORM_LIGHT_SPRITE, RECHARGE_PLATFORM_FADE_TIME)
 
     local texture = Assets.getTexture(RECHARGE_LIGHT_SPRITE)
     self.recharge_light_radius = ((texture and texture:getWidth()) or 20) * RECHARGE_LIGHT_SCALE * RECHARGE_LIGHT_RADIUS_FACTOR
@@ -469,9 +478,7 @@ function Kris:beginRechargeDrain()
     self:restoreRechargePlayerLight()
     self:removeRechargeSoul(true)
 
-    if self.bg_platform then
-        self.bg_platform:crossFadeTo("battle/backgrounds/kris_platform_adjusted", RECHARGE_PLATFORM_FADE_TIME)
-    end
+    self:setPlatformSprite(PLATFORM_SPRITE, RECHARGE_PLATFORM_FADE_TIME)
 end
 
 function Kris:updateRechargeTension()
@@ -520,10 +527,14 @@ function Kris:update()
 end
 
 function Kris:setupBackground(battle)
-    self.bg_platform = Sprite("battle/backgrounds/kris_platform_adjusted", 0, 0)
+    self.bg_platform = Sprite(PLATFORM_SPRITE, 0, 0)
     self.bg_platform.layer = BATTLE_LAYERS["bottom"]
     self.bg_platform:setScale(2, 2)
     battle:addChild(self.bg_platform)
+
+    self.bg_platform_particles = KrisPlatformParticles(self.bg_platform, PLATFORM_SPRITE)
+    self.bg_platform_particles.layer = BATTLE_LAYERS["bottom"] + 0.25
+    battle:addChild(self.bg_platform_particles)
 
     self.bg_depth = KrisDepthBackground()
     self.bg_depth.layer = BATTLE_LAYERS["bottom"] + 0.5
