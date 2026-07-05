@@ -6,6 +6,9 @@ local ATTRACT_START_STRENGTH = 0.32
 local ATTRACT_RAMP_TIME = 0.18
 local ATTRACT_MIN_DISTANCE = 5
 local ATTRACT_ARENA_MARGIN = 2
+local PLAYER_AFTERIMAGE_INTERVAL = 0.09
+local PLAYER_AFTERIMAGE_ALPHA = 0.5
+local PLAYER_AFTERIMAGE_FADE_SPEED = 0.055
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -41,6 +44,36 @@ end
 function KrisPhase1_06:startPlayerAttraction()
     self.player_attraction_active = true
     self.player_attraction_timer = 0
+    self:startPlayerAfterImages()
+end
+
+function KrisPhase1_06:spawnPlayerAfterImage()
+    local player_soul = Game.battle and Game.battle.soul
+    local sprite = player_soul and player_soul.sprite
+    if not player_soul or not player_soul.parent or not sprite or not sprite.parent or sprite:isRemoved() then
+        return
+    end
+
+    local img = AfterImage(sprite, PLAYER_AFTERIMAGE_ALPHA, PLAYER_AFTERIMAGE_FADE_SPEED)
+    player_soul:addChild(img)
+end
+
+function KrisPhase1_06:startPlayerAfterImages()
+    if self.player_afterimage_handle then
+        return
+    end
+
+    self:spawnPlayerAfterImage()
+    self.player_afterimage_handle = self.timer:every(PLAYER_AFTERIMAGE_INTERVAL, function()
+        self:spawnPlayerAfterImage()
+    end)
+end
+
+function KrisPhase1_06:stopPlayerAfterImages()
+    if self.player_afterimage_handle then
+        self.timer:cancel(self.player_afterimage_handle)
+        self.player_afterimage_handle = nil
+    end
 end
 
 function KrisPhase1_06:onStart()
@@ -52,6 +85,7 @@ end
 
 function KrisPhase1_06:beginSoulDepthFinale()
     self.player_attraction_active = false
+    self:stopPlayerAfterImages()
     super.beginSoulDepthFinale(self)
 end
 
@@ -113,6 +147,11 @@ end
 function KrisPhase1_06:update()
     super.update(self)
     self:updatePlayerAttraction()
+end
+
+function KrisPhase1_06:onEnd(death)
+    self:stopPlayerAfterImages()
+    return super.onEnd(self, death)
 end
 
 return KrisPhase1_06
