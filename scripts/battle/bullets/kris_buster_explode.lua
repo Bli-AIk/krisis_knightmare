@@ -1,7 +1,7 @@
 ---@class KrisBusterExplode : Bullet
 local KrisBusterExplode, super = Class(Bullet)
 
-local FAST_SPEED = 4 / 30
+local EXPLODE_FRAME_DELAY = 3 / 60
 local BUSTER_SCALE = 1.5
 
 function KrisBusterExplode:init(x, y, options)
@@ -17,7 +17,7 @@ function KrisBusterExplode:init(x, y, options)
     self.layer = BATTLE_LAYERS["above_bullets"]
     self.rotation = options.rotation or 0
     self:setScale((options.scale or 1) * BUSTER_SCALE)
-    self:setSprite("bullets/buster/explode", FAST_SPEED, false, function()
+    self:setSprite("bullets/buster/explode", EXPLODE_FRAME_DELAY, false, function()
         if self.parent then
             self:remove()
         end

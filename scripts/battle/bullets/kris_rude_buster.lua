@@ -2,13 +2,22 @@
 local KrisRudeBuster, super = Class(Bullet)
 
 local TWO_PI = math.pi * 2
+local FPS = 30
 local DAMAGE = 100
 local MOVE_DURATION = 0.12
 local SHRINK_DURATION = 0.12
 local ROTATION = -math.pi / 2
 local SPAWN_INSET = 8
-local DIAMOND_MIN_COUNT = 4
-local DIAMOND_MAX_COUNT = 7
+local MIN_RANDOM_SPEED = 7.5
+local MAX_RANDOM_SPEED = 14
+local DIAMOND_START_MIN_COUNT = 4
+local DIAMOND_START_MAX_COUNT = 6
+local DIAMOND_MIN_SPEED_LEAD = 1.5
+local DIAMOND_MAX_SPEED_LEAD = 3.5
+local DIAMOND_MAX_SPEED = 8
+local MIN_BOUNCE_SECONDS = 0.5
+local SAFE_DIRECTION_ATTEMPTS = 48
+local RAY_EPSILON = 0.0001
 local BUSTER_SCALE = 0.5
 
 local function clamp(value, min, max)
@@ -71,9 +80,70 @@ local function getSpawnPosition(edge, x, y)
     return x, bottom - SPAWN_INSET
 end
 
-local function spawnDiamond(wave, edge, x, y)
+local function getTravelDistanceToArenaEdge(x, y, direction)
+    local left, right, top, bottom = getArenaBounds()
+    local dx = math.cos(direction)
+    local dy = math.sin(direction)
+    local distance
+
+    local function addCandidate(candidate)
+        if candidate and candidate > RAY_EPSILON then
+            distance = distance and math.min(distance, candidate) or candidate
+        end
+    end
+
+    if dx > RAY_EPSILON then
+        addCandidate((right - x) / dx)
+    elseif dx < -RAY_EPSILON then
+        addCandidate((left - x) / dx)
+    end
+
+    if dy > RAY_EPSILON then
+        addCandidate((bottom - y) / dy)
+    elseif dy < -RAY_EPSILON then
+        addCandidate((top - y) / dy)
+    end
+
+    return distance or math.huge
+end
+
+local function randomSafeInwardDirection(edge, x, y, speed, min_degrees, max_degrees)
+    local min_distance = speed * FPS * MIN_BOUNCE_SECONDS
+    local best_direction
+    local best_distance = -math.huge
+
+    for _ = 1, SAFE_DIRECTION_ATTEMPTS do
+        local direction = randomInwardDirection(edge, min_degrees, max_degrees)
+        local distance = getTravelDistanceToArenaEdge(x, y, direction)
+
+        if distance >= min_distance then
+            return direction, speed
+        end
+
+        if distance > best_distance then
+            best_direction = direction
+            best_distance = distance
+        end
+    end
+
+    if not best_direction then
+        best_direction = edgeNormal(edge)
+        best_distance = getTravelDistanceToArenaEdge(x, y, best_direction)
+    end
+
+    if best_distance == math.huge then
+        return best_direction, speed
+    end
+
+    return best_direction, math.max(best_distance / (FPS * MIN_BOUNCE_SECONDS), 1)
+end
+
+local function spawnDiamond(wave, edge, x, y, bullet_speed)
     local direction = randomInwardDirection(edge, 0, 180)
-    local speed = randomBetween(3.5, 9.5)
+    bullet_speed = bullet_speed or MIN_RANDOM_SPEED
+    local min_speed = math.min(bullet_speed + DIAMOND_MIN_SPEED_LEAD, DIAMOND_MAX_SPEED)
+    local max_speed = math.max(min_speed, math.min(bullet_speed + DIAMOND_MAX_SPEED_LEAD, DIAMOND_MAX_SPEED))
+    local speed = randomBetween(min_speed, max_speed)
     local easing = love.math.random() < 0.5 and "linear" or "in-cubic"
 
     return wave:spawnBullet("kris_buster_diamond", x, y, direction, {
@@ -90,13 +160,17 @@ local function spawnFollowup(wave, edge, impact_x, impact_y)
 
     wave:spawnBullet("kris_buster_explode", impact_x, impact_y)
 
+    local bullet_speed = randomBetween(MIN_RANDOM_SPEED, MAX_RANDOM_SPEED)
     local spawn_x, spawn_y = getSpawnPosition(edge, impact_x, impact_y)
-    wave:spawnBullet("kris_buster_bullet", spawn_x, spawn_y, randomInwardDirection(edge, 45, 135), {
-        speed = randomBetween(9.5, 13),
+    local direction
+    direction, bullet_speed = randomSafeInwardDirection(edge, spawn_x, spawn_y, bullet_speed, 45, 135)
+    wave:spawnBullet("kris_buster_bullet", spawn_x, spawn_y, direction, {
+        speed = bullet_speed,
+        chain_depth = 1,
     })
 
-    for _ = 1, love.math.random(DIAMOND_MIN_COUNT, DIAMOND_MAX_COUNT) do
-        spawnDiamond(wave, edge, spawn_x, spawn_y)
+    for _ = 1, love.math.random(DIAMOND_START_MIN_COUNT, DIAMOND_START_MAX_COUNT) do
+        spawnDiamond(wave, edge, spawn_x, spawn_y, bullet_speed)
     end
 end
 
