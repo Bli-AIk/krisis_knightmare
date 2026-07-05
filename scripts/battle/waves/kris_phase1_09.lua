@@ -1,4 +1,9 @@
-local KrisPhase1_09 = Class("kris_phase1_02")
+local KrisPhase1_09, super = Class("kris_phase1_02")
+
+function KrisPhase1_09:init()
+    super.init(self)
+    self.time = self.time - 3
+end
 
 function KrisPhase1_09:getSlashInterval()
     return 25 / 60

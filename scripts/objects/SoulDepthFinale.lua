@@ -29,6 +29,13 @@ local function randomFloat(min, max)
     return min + love.math.random() * (max - min)
 end
 
+local function default(value, fallback)
+    if value == nil then
+        return fallback
+    end
+    return value
+end
+
 local function shuffle(values)
     for i = #values, 2, -1 do
         local j = love.math.random(i)
@@ -47,13 +54,27 @@ local function stratifiedAngles(count)
     return shuffle(angles)
 end
 
-function SoulDepthFinale:init(x, y, wave, soul_echo)
+function SoulDepthFinale:init(x, y, wave, soul_echo, options)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    options = options or {}
 
     self.source_x = x or (SCREEN_WIDTH / 2)
     self.source_y = y or (SCREEN_HEIGHT / 2)
     self.wave = wave
     self.layer = BATTLE_LAYERS["top"] + 20
+    self.star_wave_count = default(options.star_wave_count, STAR_WAVE_COUNT)
+    self.star_wave_interval = default(options.star_wave_interval, STAR_WAVE_INTERVAL)
+    self.star_min_count = default(options.star_min_count, STAR_MIN_COUNT)
+    self.star_max_count = default(options.star_max_count, STAR_MAX_COUNT)
+    self.star_scale = default(options.star_scale, STAR_SCALE)
+    self.star_min_distance = default(options.star_min_distance, STAR_MIN_DISTANCE)
+    self.star_max_distance = default(options.star_max_distance, STAR_MAX_DISTANCE)
+    self.star_min_travel_time = default(options.star_min_travel_time, STAR_MIN_TRAVEL_TIME)
+    self.star_max_travel_time = default(options.star_max_travel_time, STAR_MAX_TRAVEL_TIME)
+    self.star_layer = default(options.star_layer, STAR_LAYER)
+    self.star_bullet = options.star_bullet or "soul_depth_star"
+    self.star_bullet_options = options.star_bullet_options
     self.waiting_for_snapshot = true
     self.time = 0
     self.next_star_wave = 1
@@ -113,38 +134,42 @@ function SoulDepthFinale:spawnStarWave()
         return
     end
 
-    local count = love.math.random(STAR_MIN_COUNT, STAR_MAX_COUNT)
+    local count = love.math.random(self.star_min_count, self.star_max_count)
     local angles = stratifiedAngles(count)
 
     for _, angle in ipairs(angles) do
-        local distance = randomFloat(STAR_MIN_DISTANCE, STAR_MAX_DISTANCE)
+        local distance = randomFloat(self.star_min_distance, self.star_max_distance)
         local target_x = self.source_x + math.cos(angle) * distance
         local target_y = self.source_y + math.sin(angle) * distance
-        local travel_time = randomFloat(STAR_MIN_TRAVEL_TIME, STAR_MAX_TRAVEL_TIME)
+        local travel_time = randomFloat(self.star_min_travel_time, self.star_max_travel_time)
+        local bullet_options = {
+            alpha = 1,
+            fade = false,
+            layer = self.star_layer,
+            rotation = angle,
+        }
+
+        for key, value in pairs(self.star_bullet_options or {}) do
+            bullet_options[key] = value
+        end
 
         wave:spawnBullet(
-            "soul_depth_star",
+            self.star_bullet,
             self.source_x,
             self.source_y,
             target_x,
             target_y,
             travel_time,
-            STAR_SCALE,
-            STAR_SCALE,
-            {
-                alpha = 1,
-                fade = false,
-                layer = STAR_LAYER,
-                rotation = angle,
-                spin_speed = math.rad(240),
-            }
+            self.star_scale,
+            self.star_scale,
+            bullet_options
         )
     end
 end
 
 function SoulDepthFinale:updateStarWaves()
-    while self.next_star_wave <= STAR_WAVE_COUNT
-        and self.time >= (self.next_star_wave - 1) * STAR_WAVE_INTERVAL do
+    while self.next_star_wave <= self.star_wave_count
+        and self.time >= (self.next_star_wave - 1) * self.star_wave_interval do
         self:spawnStarWave()
         self.next_star_wave = self.next_star_wave + 1
     end
@@ -177,7 +202,7 @@ function SoulDepthFinale:update()
     end
     self:updateStarWaves()
 
-    if self.time >= self.done_time and self.next_star_wave > STAR_WAVE_COUNT then
+    if self.time >= self.done_time and self.next_star_wave > self.star_wave_count then
         self:remove()
     end
 end

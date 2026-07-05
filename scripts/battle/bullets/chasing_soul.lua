@@ -70,11 +70,13 @@ function ChasingSoul:clampToBounds()
 end
 
 function ChasingSoul:getMoveSpeed()
+    local multiplier = self.speed_multiplier or 1
+
     if Game.battle and Game.battle.soul then
-        return Game.battle.soul.speed or DEFAULT_MOVE_SPEED
+        return (Game.battle.soul.speed or DEFAULT_MOVE_SPEED) * multiplier
     end
 
-    return DEFAULT_MOVE_SPEED
+    return DEFAULT_MOVE_SPEED * multiplier
 end
 
 function ChasingSoul:transitionTo(x, y)

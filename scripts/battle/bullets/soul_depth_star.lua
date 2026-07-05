@@ -6,7 +6,7 @@ local START_SCALE = 0.9
 local END_SCALE = 0.2
 local FADE_IN_END = 0.3
 local FADE_OUT_START = 0.52
-local SPIN_SPEED = math.rad(180)
+local SPIN_SPEED = 0
 
 local function lerp(from, to, t)
     return from + (to - from) * t
@@ -17,9 +17,9 @@ local function clamp(value, min, max)
 end
 
 function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end_scale, options)
-    super.init(self, x, y, "bullets/star")
-
     options = options or {}
+
+    super.init(self, x, y, options.texture or "bullets/star")
 
     self.layer = options.layer or -0.5
     self.damage = DAMAGE

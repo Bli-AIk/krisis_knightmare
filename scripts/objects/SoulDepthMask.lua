@@ -59,8 +59,10 @@ local function angleDistance(a, b)
     return diff
 end
 
-function SoulDepthMask:init(start_diameter, target_diameter)
+function SoulDepthMask:init(start_diameter, target_diameter, options)
     super.init(self, 0, 0)
+
+    options = options or {}
 
     self.layer = CHILD_LAYER
     self.start_diameter = start_diameter or 0
@@ -72,6 +74,9 @@ function SoulDepthMask:init(start_diameter, target_diameter)
     self.grow_timer = 0
     self.texture_x = TEXTURE_OFFSET_X
     self.texture_y = TEXTURE_OFFSET_Y
+    self.finale_options = options.finale_options
+    self.star_burst_min_count = options.star_burst_min_count or STAR_BURST_MIN_COUNT
+    self.star_burst_max_count = options.star_burst_max_count or STAR_BURST_MAX_COUNT
     self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
     self.star_bursts_enabled = true
     self.depth_echo_spawned = false
@@ -189,7 +194,7 @@ function SoulDepthMask:triggerFinale()
         x, y = self:getRelativePos(0, 0, Game.battle)
     end
 
-    local finale = SoulDepthFinale(x, y, self.wave, self.depth_echo)
+    local finale = SoulDepthFinale(x, y, self.wave, self.depth_echo, self.finale_options)
     if self.wave and self.wave.spawnObject then
         self.wave:spawnObject(finale)
     else
@@ -230,7 +235,7 @@ function SoulDepthMask:spawnStarBurst()
     end
 
     local center_x, center_y = self:getCenterInSoul()
-    local count = love.math.random(STAR_BURST_MIN_COUNT, STAR_BURST_MAX_COUNT)
+    local count = love.math.random(self.star_burst_min_count, self.star_burst_max_count)
     local angles = self:getStarBurstAngles(count)
     local distance = self.radius + STAR_EDGE_OFFSET
 
