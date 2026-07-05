@@ -72,7 +72,9 @@
             // Save five debug screenshots while the startup Recharge burst plays.
             "krisisDebugRechargeRadialCapture": false,
             // Quit automatically after the five debug screenshots are scheduled.
-            "krisisDebugRechargeRadialQuit": false
+            "krisisDebugRechargeRadialQuit": false,
+            // Save a screenshot when the first-turn SOUL depth mask is visible.
+            "krisisDebugSoulDepthCapture": false
             // End of config
         },
         "langLibZh": {
