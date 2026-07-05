@@ -6,6 +6,8 @@ local ATTRACT_START_STRENGTH = 0.32
 local ATTRACT_RAMP_TIME = 0.18
 local ATTRACT_MIN_DISTANCE = 5
 local ATTRACT_ARENA_MARGIN = 2
+local ATTRACT_FALLOFF_RADIUS_SCALE = 0.75
+local ATTRACT_MIN_STRENGTH = 0.25
 local PLAYER_AFTERIMAGE_INTERVAL = 0.09
 local PLAYER_AFTERIMAGE_ALPHA = 0.5
 local PLAYER_AFTERIMAGE_FADE_SPEED = 0.055
@@ -107,6 +109,19 @@ function KrisPhase1_06:clampPlayerSoulPosition(x, y)
         clamp(y, arena:getTop() + ATTRACT_ARENA_MARGIN, arena:getBottom() - ATTRACT_ARENA_MARGIN)
 end
 
+function KrisPhase1_06:getAttractionFalloff(distance)
+    local depth_mask = self.depth_mask
+    local falloff_radius = depth_mask and depth_mask.radius and depth_mask.radius * ATTRACT_FALLOFF_RADIUS_SCALE
+
+    if not falloff_radius or falloff_radius <= ATTRACT_MIN_DISTANCE then
+        return 1
+    end
+
+    local progress = clamp((distance - ATTRACT_MIN_DISTANCE) / (falloff_radius - ATTRACT_MIN_DISTANCE), 0, 1)
+    local eased = progress * progress
+    return ATTRACT_MIN_STRENGTH + (1 - ATTRACT_MIN_STRENGTH) * eased
+end
+
 function KrisPhase1_06:updatePlayerAttraction()
     if not self.player_attraction_active or self.depth_mask_finished then
         return
@@ -132,7 +147,8 @@ function KrisPhase1_06:updatePlayerAttraction()
     self.player_attraction_timer = self.player_attraction_timer + DT
     local progress = ATTRACT_RAMP_TIME > 0 and clamp(self.player_attraction_timer / ATTRACT_RAMP_TIME, 0, 1) or 1
     local ramp = ATTRACT_START_STRENGTH + (1 - ATTRACT_START_STRENGTH) * progress
-    local amount = math.min(distance - ATTRACT_MIN_DISTANCE, ATTRACT_MAX_SPEED * ramp * DTMULT)
+    local falloff = self:getAttractionFalloff(distance)
+    local amount = math.min(distance - ATTRACT_MIN_DISTANCE, ATTRACT_MAX_SPEED * ramp * falloff * DTMULT)
     local x = player_soul.x + dx / distance * amount
     local y = player_soul.y + dy / distance * amount
     x, y = self:clampPlayerSoulPosition(x, y)
