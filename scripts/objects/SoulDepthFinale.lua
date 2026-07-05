@@ -60,15 +60,39 @@ function SoulDepthFinale:init(x, y, wave, soul_echo)
     self.snapshot = nil
     self.soul_echo = soul_echo
     self.soul_echo_removed = false
+    self.soul_echo_snapshot_hidden = false
+    self.soul_echo_snapshot_visible = nil
     self.done_time = math.max(SNAPSHOT_FADE_TIME, FLASH_IN_TIME + FLASH_OUT_TIME)
 
+    self:hideSoulEchoForSnapshot()
     love.graphics.captureScreenshot(function(image_data)
+        self:restoreSoulEchoForSnapshot()
         if self.parent then
             self.snapshot = love.graphics.newImage(image_data)
             self.snapshot:setFilter("nearest", "nearest")
             self.waiting_for_snapshot = false
         end
     end)
+end
+
+function SoulDepthFinale:hideSoulEchoForSnapshot()
+    if self.soul_echo and self.soul_echo.parent then
+        self.soul_echo_snapshot_hidden = true
+        self.soul_echo_snapshot_visible = self.soul_echo.visible
+        self.soul_echo.visible = false
+    end
+end
+
+function SoulDepthFinale:restoreSoulEchoForSnapshot()
+    if not self.soul_echo_snapshot_hidden then
+        return
+    end
+
+    self.soul_echo_snapshot_hidden = false
+    if self.soul_echo and self.soul_echo.parent then
+        self.soul_echo.visible = self.soul_echo_snapshot_visible
+    end
+    self.soul_echo_snapshot_visible = nil
 end
 
 function SoulDepthFinale:removeSoulEcho()
@@ -187,6 +211,11 @@ function SoulDepthFinale:draw()
 
     love.graphics.setColor(old_r, old_g, old_b, old_a)
     love.graphics.pop()
+end
+
+function SoulDepthFinale:onRemove(parent)
+    self:restoreSoulEchoForSnapshot()
+    super.onRemove(self, parent)
 end
 
 return SoulDepthFinale

@@ -80,7 +80,7 @@ end
 
 function KrisPhase1_01:init()
     super.init(self)
-    self.time = 15
+    self.time = 8
     self.soul_offset_x = PLAYER_START_OFFSET_X
     self.soul_offset_y = 0
 end
