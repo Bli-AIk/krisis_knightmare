@@ -32,7 +32,7 @@ local KRIS_FAR_Y = 10000
 local BURST_CIRCLE_COUNT = 6
 local BURST_CIRCLE_DURATION = (20 / 60) * 3
 local BURST_CIRCLE_LINE_WIDTH = 2
-local BURST_CIRCLE_LAYER = 1.02
+local BURST_CIRCLE_LAYER = BATTLE_LAYERS["bullets"] - 1
 local BURST_CIRCLE_RADII = { 8, 10, 9, 11, 9.5, 8.5 }
 local BURST_CIRCLE_DISTANCES = { 66, 82, 74, 88, 78, 70 }
 local BURST_CIRCLE_ANGLE_OFFSET = math.rad(-14)
@@ -41,9 +41,19 @@ local SPLIT_SWORD_ROTATION_DURATION_SECONDS = 2
 local SPLIT_SWORD_INITIAL_ROTATION = math.pi
 local SPLIT_SWORD_CLOSED_HOLD_SECONDS = 0.2
 local SPLIT_SWORD_PULSE_DISTANCE = 46
+local CHIP_BURST_INTERVAL_SECONDS = 1.75
+local CHIP_BURST_MIN_COUNT = 4
+local CHIP_BURST_MAX_COUNT = 6
+local CHIP_QUADRANT_PADDING = math.rad(10)
+local CHIP_LIGHT_DURATION = 20 / 60
+local CHIP_LIGHT_LAYER = BATTLE_LAYERS["bullets"] - 2
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
+end
+
+local function randomBetween(min, max)
+    return min + (max - min) * love.math.random()
 end
 
 local function easeOutCubic(t)
@@ -192,6 +202,7 @@ function KrisPhase1_07:init()
     self.arena_shift_origin = nil
     self.kris_home_positions = nil
     self.ellipse_peak_effects_spawned = false
+    self.chip_burst_loop_started = false
 end
 
 function KrisPhase1_07:onStart()
@@ -346,6 +357,82 @@ function KrisPhase1_07:spawnSplitSwords()
         split_closed_hold_seconds = SPLIT_SWORD_CLOSED_HOLD_SECONDS,
         split_pulse_distance = SPLIT_SWORD_PULSE_DISTANCE,
     })
+    self:startChipBurstLoop()
+end
+
+function KrisPhase1_07:startChipBurstLoop()
+    if self.chip_burst_loop_started then
+        return
+    end
+
+    self.chip_burst_loop_started = true
+    self:spawnChipBurst()
+    self.timer:every(CHIP_BURST_INTERVAL_SECONDS, function()
+        self:spawnChipBurst()
+    end)
+end
+
+function KrisPhase1_07:spawnChipBurst()
+    self:spawnChipLight()
+
+    local x, y = self:getArenaCenter()
+    local angles = self:getChipBurstAngles()
+
+    for _, angle in ipairs(angles) do
+        self:spawnBullet("flying_sword_chip", x, y, angle)
+    end
+end
+
+function KrisPhase1_07:spawnChipLight()
+    local x, y = self:getArenaCenter()
+    local light = Sprite("bullets/flying_sword/light", x, y)
+
+    light:setOrigin(0.5, 0.5)
+    light.alpha = 0
+    light.layer = CHIP_LIGHT_LAYER
+    self:addChild(light)
+
+    self.timer:tween(CHIP_LIGHT_DURATION, light, {
+        alpha = 1,
+        scale_x = 1.5,
+        scale_y = 1.5,
+    }, "linear", function()
+        if not light.parent then
+            return
+        end
+
+        self.timer:tween(CHIP_LIGHT_DURATION, light, {
+            alpha = 0,
+            scale_x = 2,
+            scale_y = 2,
+        }, "linear", function()
+            if light.parent then
+                light:remove()
+            end
+        end)
+    end)
+end
+
+function KrisPhase1_07:getChipBurstAngles()
+    local count = love.math.random(CHIP_BURST_MIN_COUNT, CHIP_BURST_MAX_COUNT)
+    local angles = {}
+
+    for quadrant = 0, 3 do
+        local min_angle = quadrant * math.pi / 2 + CHIP_QUADRANT_PADDING
+        local max_angle = (quadrant + 1) * math.pi / 2 - CHIP_QUADRANT_PADDING
+        table.insert(angles, randomBetween(min_angle, max_angle))
+    end
+
+    for _ = #angles + 1, count do
+        table.insert(angles, randomBetween(0, TWO_PI))
+    end
+
+    for i = #angles, 2, -1 do
+        local j = love.math.random(i)
+        angles[i], angles[j] = angles[j], angles[i]
+    end
+
+    return angles
 end
 
 function KrisPhase1_07:spawnDistortedEllipse()
