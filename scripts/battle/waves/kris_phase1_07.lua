@@ -40,6 +40,7 @@ local SPLIT_SWORD_PULSE_INTERVAL_SECONDS = 50 * 2 / 60
 local SPLIT_SWORD_ROTATION_DURATION_SECONDS = 2
 local SPLIT_SWORD_INITIAL_ROTATION = math.pi
 local SPLIT_SWORD_CLOSED_HOLD_SECONDS = 0.2
+local SPLIT_SWORD_PULSE_DISTANCE = 46
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -333,6 +334,7 @@ function KrisPhase1_07:spawnSplitSwords()
         split_pulse_interval_seconds = SPLIT_SWORD_PULSE_INTERVAL_SECONDS,
         split_rotation_duration_seconds = SPLIT_SWORD_ROTATION_DURATION_SECONDS,
         split_closed_hold_seconds = SPLIT_SWORD_CLOSED_HOLD_SECONDS,
+        split_pulse_distance = SPLIT_SWORD_PULSE_DISTANCE,
     })
     self:spawnBullet("flying_sword", x, y, SPLIT_SWORD_INITIAL_ROTATION, {
         sprite = "half_down",
@@ -342,6 +344,7 @@ function KrisPhase1_07:spawnSplitSwords()
         split_pulse_interval_seconds = SPLIT_SWORD_PULSE_INTERVAL_SECONDS,
         split_rotation_duration_seconds = SPLIT_SWORD_ROTATION_DURATION_SECONDS,
         split_closed_hold_seconds = SPLIT_SWORD_CLOSED_HOLD_SECONDS,
+        split_pulse_distance = SPLIT_SWORD_PULSE_DISTANCE,
     })
 end
 
