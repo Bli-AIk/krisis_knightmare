@@ -33,8 +33,11 @@ local NORMAL_HITBOX_Y = 4
 local NORMAL_HITBOX_WIDTH = 10
 local NORMAL_HITBOX_HEIGHT = 54
 local HALF_HITBOX_HEIGHT = NORMAL_HITBOX_HEIGHT / 2
+local HALF_UP_HITBOX_HEIGHT = HALF_HITBOX_HEIGHT * 0.75
+local HALF_DOWN_HITBOX_HEIGHT = HALF_HITBOX_HEIGHT * 1.25
 local HALF_UP_HITBOX_Y = NORMAL_HITBOX_Y
-local HALF_DOWN_HITBOX_Y = NORMAL_HITBOX_Y + HALF_HITBOX_HEIGHT
+local HALF_DOWN_HITBOX_BOTTOM = NORMAL_HITBOX_Y + NORMAL_HITBOX_HEIGHT
+local HALF_DOWN_HITBOX_Y = HALF_DOWN_HITBOX_BOTTOM - HALF_DOWN_HITBOX_HEIGHT
 
 local SPLIT_PULSE_INTERVAL_SECONDS = 50 * 2 / 60
 local SPLIT_ROTATION_DURATION_SECONDS = 2
@@ -131,7 +134,8 @@ function FlyingSword:init(x, y, dir, spin, options)
         self:setSwordSprite(self.sword_sprite)
 
         local hitbox_y = self.sword_sprite == "half_down" and HALF_DOWN_HITBOX_Y or HALF_UP_HITBOX_Y
-        self:setHitbox(NORMAL_HITBOX_X, hitbox_y, NORMAL_HITBOX_WIDTH, HALF_HITBOX_HEIGHT)
+        local hitbox_height = self.sword_sprite == "half_down" and HALF_DOWN_HITBOX_HEIGHT or HALF_UP_HITBOX_HEIGHT
+        self:setHitbox(NORMAL_HITBOX_X, hitbox_y, NORMAL_HITBOX_WIDTH, hitbox_height)
     else
         self:setHitbox(NORMAL_HITBOX_X, NORMAL_HITBOX_Y, NORMAL_HITBOX_WIDTH, NORMAL_HITBOX_HEIGHT)
     end
