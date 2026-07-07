@@ -31,7 +31,7 @@ local RECHARGE_AVOID_WAVES = {
     [6] = true,
     [11] = true,
 }
-local FORCED_TURN = 10
+local FORCED_TURN = 7
 
 local function makeWaveList(first, last)
     local waves = {}

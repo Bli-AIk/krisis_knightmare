@@ -96,8 +96,8 @@
             "max_undo": 64
         },
         "wave-video-debug": {
-            "enabled": false,
-            //"enabled": true,
+            //"enabled": false,
+            "enabled": true,
             "debug_dir": "debug",
             "priority": "video",
             "alpha": 0.3,
