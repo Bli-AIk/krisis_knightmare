@@ -10,7 +10,8 @@ local BLOCK_HITBOX_WIDTH = 81
 local BLOCK_HITBOX_HEIGHT = 17
 local BLOCK_HITBOX_X = BLOCK_HITBOX_LEFT - (BLOCK_WIDTH / 2)
 local BLOCK_HITBOX_Y = BLOCK_HITBOX_TOP - (BLOCK_HEIGHT / 2)
-local BLOCK_Y_SPACING = 40
+local BLOCK_Y_SPACING = 35
+local BLOCK_SCALE = 0.7
 local BLOCK_LAYER = BATTLE_LAYERS["above_arena"]
 
 local CHIP_BURST_MIN_COUNT = 2
@@ -29,6 +30,7 @@ function BlockWall:init(texture, offset_y)
     self.offset_y = offset_y
     self.layer = BLOCK_LAYER
     self.squish_damage = 0
+    self:setScale(BLOCK_SCALE)
     self:setHitbox(BLOCK_HITBOX_X, BLOCK_HITBOX_Y, BLOCK_HITBOX_WIDTH, BLOCK_HITBOX_HEIGHT)
 
     self.sprite = Sprite(texture, -BLOCK_WIDTH / 2, -BLOCK_HEIGHT / 2)
