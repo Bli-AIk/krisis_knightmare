@@ -16,6 +16,27 @@ local DISTORTED_ELLIPSE_WIDTH_SCALE = 1 / 3
 local DISTORTED_ELLIPSE_HEIGHT_SCALE = 1.5
 local DISTORTED_ELLIPSE_LAYER = 2
 local DISTORTED_ELLIPSE_LIFETIME = 4 / 60
+local ARENA_SHIFT_X = -9
+local ARENA_SHIFT_Y = -6
+local ARENA_SHIFT_OUT_TIME = 4 / 60
+local ARENA_SHIFT_RETURN_TIME = 12 / 60
+local SCREEN_SHAKE_X = -10
+local SCREEN_SHAKE_Y = -8
+local SCREEN_SHAKE_FRICTION = 3
+local KRIS_SWORD_HALL_FRAME_TIME = 4 / 30
+local KRIS_SWORD_HALL_EFFECT_START_DELAY = (5.5 * KRIS_SWORD_HALL_FRAME_TIME)
+local KRIS_FAR_X = 10000
+local KRIS_FAR_Y = 10000
+
+local function moveAttackerTo(attacker, x, y)
+    attacker.target_x = x
+    attacker.target_y = y
+    attacker:setPosition(attacker.target_x, attacker.target_y)
+end
+
+local function moveAttackerAway(attacker)
+    moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
+end
 
 local DistortedArenaEllipse, distorted_super = Class(Object)
 
@@ -61,8 +82,13 @@ function DistortedArenaEllipse:init(x, y, width, height)
 end
 
 function DistortedArenaEllipse:update()
-    distorted_super.update(self)
     self.time = self.time + DT
+
+    if self.follow_arena and Game.battle and Game.battle.arena then
+        self:setPosition(Game.battle.arena:getCenter())
+    end
+
+    distorted_super.update(self)
 end
 
 function DistortedArenaEllipse:draw()
@@ -90,9 +116,29 @@ function KrisPhase1_07:init()
     self.black_ellipse_fill = nil
     self.black_ellipse_border = nil
     self.distorted_ellipse = nil
+    self.arena_shift_origin = nil
+    self.kris_home_positions = nil
 end
 
 function KrisPhase1_07:onStart()
+    self.kris_home_positions = {}
+
+    for _, attacker in ipairs(self:getAttackers()) do
+        self.kris_home_positions[attacker] = {
+            x = attacker.target_x or attacker.x,
+            y = attacker.target_y or attacker.y,
+        }
+        attacker:setAnimation("sword_hall_disappear", function()
+            moveAttackerAway(attacker)
+        end)
+    end
+
+    self.timer:after(KRIS_SWORD_HALL_EFFECT_START_DELAY, function()
+        self:startDelayedEffects()
+    end)
+end
+
+function KrisPhase1_07:startDelayedEffects()
     local rect = Rectangle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, RECT_WIDTH, RECT_HEIGHT)
     rect:setOrigin(0.5, 0.5)
     rect.color = { 1, 0, 0 }
@@ -182,6 +228,8 @@ function KrisPhase1_07:spawnBlackEllipse()
 end
 
 function KrisPhase1_07:spawnDistortedEllipse()
+    self:shiftArenaForDistortion()
+
     local arena_width = self:getArenaWidth()
     local arena_height = self:getArenaHeight()
     local x, y = self:getArenaCenter()
@@ -192,6 +240,7 @@ function KrisPhase1_07:spawnDistortedEllipse()
         arena_height * DISTORTED_ELLIPSE_HEIGHT_SCALE
     )
     ellipse.layer = DISTORTED_ELLIPSE_LAYER
+    ellipse.follow_arena = true
 
     self.distorted_ellipse = ellipse
     self:addChild(ellipse)
@@ -204,6 +253,59 @@ function KrisPhase1_07:spawnDistortedEllipse()
             self.distorted_ellipse = nil
         end
     end)
+end
+
+function KrisPhase1_07:shiftArenaForDistortion()
+    local battle = Game.battle
+    local arena = battle and battle.arena
+    if not arena then
+        return
+    end
+
+    local start_x = arena.x
+    local start_y = arena.y
+    local target_x = start_x + ARENA_SHIFT_X
+    local target_y = start_y + ARENA_SHIFT_Y
+    self.arena_shift_origin = { x = start_x, y = start_y }
+
+    if battle.shakeCamera then
+        battle:shakeCamera(SCREEN_SHAKE_X, SCREEN_SHAKE_Y, SCREEN_SHAKE_FRICTION)
+    end
+
+    self.timer:tween(ARENA_SHIFT_OUT_TIME, arena, {
+        x = target_x,
+        y = target_y,
+    }, "out-quad", function()
+        self.timer:tween(ARENA_SHIFT_RETURN_TIME, arena, {
+            x = start_x,
+            y = start_y,
+        }, "out-quad", function()
+            if self.arena_shift_origin
+                and self.arena_shift_origin.x == start_x
+                and self.arena_shift_origin.y == start_y
+            then
+                self.arena_shift_origin = nil
+            end
+        end)
+    end)
+end
+
+function KrisPhase1_07:onEnd(death)
+    local arena = Game.battle and Game.battle.arena
+    if arena and self.arena_shift_origin then
+        arena:setPosition(self.arena_shift_origin.x, self.arena_shift_origin.y)
+        self.arena_shift_origin = nil
+    end
+
+    for _, attacker in ipairs(self:getAttackers()) do
+        local home = self.kris_home_positions and self.kris_home_positions[attacker]
+        if home then
+            moveAttackerTo(attacker, home.x, home.y)
+        end
+        attacker:setAnimation("appear")
+    end
+
+    return super.onEnd(self, death)
 end
 
 function KrisPhase1_07:fadeBlackEllipse()
