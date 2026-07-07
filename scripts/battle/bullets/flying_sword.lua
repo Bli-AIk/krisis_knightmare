@@ -26,6 +26,19 @@ local LEFT_ROTATION = -math.pi / 2
 local STOP_FRAMES = 3
 local RETURN_FRAMES = 0.5 * 30
 local GRAZE_TP_MAX = 3
+local DAMAGE = 100
+
+local NORMAL_HITBOX_X = 25
+local NORMAL_HITBOX_Y = 4
+local NORMAL_HITBOX_WIDTH = 10
+local NORMAL_HITBOX_HEIGHT = 54
+local HALF_HITBOX_HEIGHT = NORMAL_HITBOX_HEIGHT / 2
+local HALF_UP_HITBOX_Y = NORMAL_HITBOX_Y
+local HALF_DOWN_HITBOX_Y = NORMAL_HITBOX_Y + HALF_HITBOX_HEIGHT
+
+local SPLIT_PULSE_INTERVAL_SECONDS = 50 * 2 / 60
+local SPLIT_ROTATION_DURATION_SECONDS = 2
+local SPLIT_CLOSED_HOLD_SECONDS = 0.2
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -46,17 +59,28 @@ local function nextRotationInSpinDirection(rotation, target)
     return target
 end
 
+local function isHalfSwordSprite(sprite)
+    return sprite == "half_up" or sprite == "half_down"
+end
+
 ---@param x number # The X position of the bullet
 ---@param y number # The Y position of the bullet
 ---@param dir number # The dir (in radians) of the bullet
 ---@param spin number? # Unused legacy argument
-function FlyingSword:init(x, y, dir, spin)
+function FlyingSword:init(x, y, dir, spin, options)
+    if type(spin) == "table" and options == nil then
+        options = spin
+        spin = nil
+    end
+
+    options = options or {}
+
     super.init(self, x, y, "bullets/flying_sword/enter_0")
 
     self.physics.direction = dir or 0
     self.graphics.spin = 0
     self.current_spin = 0
-    self.damage = 100
+    self.damage = DAMAGE
 
     self.target_spin = TARGET_SPIN
     self.frame_timer = 0
@@ -78,7 +102,39 @@ function FlyingSword:init(x, y, dir, spin)
     self.scale_x = 2.25
     self.scale_y = 2.25
 
-    self:setHitbox(25, 4, 10, 54)
+    self.sword_sprite = options.sprite or options.sword_sprite
+    self.split_mode = options.split_mode or isHalfSwordSprite(self.sword_sprite)
+    self.ignore_attacker_position = options.ignore_attacker_position == true
+
+    if self.split_mode then
+        self.sword_sprite = self.sword_sprite or "half_up"
+        self.state = "split"
+        self.rotation = dir or 0
+        self.split_elapsed = 0
+        self.split_graze_rotation_index = 0
+        self.split_base_x = x
+        self.split_base_y = y
+        self.split_follow_arena_center = options.follow_arena_center == true
+        self.split_motion_sign = options.split_motion_sign
+            or (self.sword_sprite == "half_up" and -1 or 1)
+        self.split_pulse_interval = options.split_pulse_interval_seconds
+            or options.split_pulse_interval
+            or SPLIT_PULSE_INTERVAL_SECONDS
+        self.split_rotation_duration = options.split_rotation_duration_seconds
+            or options.split_rotation_duration
+            or SPLIT_ROTATION_DURATION_SECONDS
+        self.split_closed_hold = options.split_closed_hold_seconds
+            or options.split_closed_hold
+            or SPLIT_CLOSED_HOLD_SECONDS
+        self.split_pulse_distance = options.split_pulse_distance
+            or (HALF_HITBOX_HEIGHT * self.scale_y * 0.5)
+        self:setSwordSprite(self.sword_sprite)
+
+        local hitbox_y = self.sword_sprite == "half_down" and HALF_DOWN_HITBOX_Y or HALF_UP_HITBOX_Y
+        self:setHitbox(NORMAL_HITBOX_X, hitbox_y, NORMAL_HITBOX_WIDTH, HALF_HITBOX_HEIGHT)
+    else
+        self:setHitbox(NORMAL_HITBOX_X, NORMAL_HITBOX_Y, NORMAL_HITBOX_WIDTH, NORMAL_HITBOX_HEIGHT)
+    end
 end
 
 function FlyingSword:getGrazeTension()
@@ -90,10 +146,21 @@ end
 function FlyingSword:onWaveSpawn(wave)
     super.onWaveSpawn(self, wave)
 
-    if self.attacker then
+    if self.attacker and not self.ignore_attacker_position then
         local parent = self.parent or Game.battle
         local x, y = self.attacker:getRelativePos(self.attacker.width / 2, self.attacker.height / 2, parent)
         self:setPosition(x, y)
+    end
+
+    if self.split_mode then
+        if self.split_follow_arena_center and Game.battle and Game.battle.arena then
+            self.split_base_x, self.split_base_y = Game.battle.arena:getCenter()
+            self:setPosition(self.split_base_x, self.split_base_y)
+        else
+            self.split_base_x = self.x
+            self.split_base_y = self.y
+        end
+        return
     end
 
     self.start_x = self.x
@@ -237,6 +304,47 @@ function FlyingSword:updateMove()
     self:updateMoveRotation(move_timer)
 end
 
+function FlyingSword:updateSplit()
+    self.split_elapsed = self.split_elapsed + DT
+    local rotation_duration = math.max(self.split_rotation_duration or SPLIT_ROTATION_DURATION_SECONDS, 0.001)
+    local rotation_speed = TWO_PI / rotation_duration
+    local rotation_index = math.floor(self.split_elapsed / rotation_duration)
+    if rotation_index ~= (self.split_graze_rotation_index or 0) then
+        self.grazed = false
+        self.split_graze_rotation_index = rotation_index
+    end
+
+    self.current_spin = rotation_speed / 30
+    self.rotation = (self.rotation or 0) + rotation_speed * DT
+
+    if self.split_follow_arena_center and Game.battle and Game.battle.arena then
+        self.split_base_x, self.split_base_y = Game.battle.arena:getCenter()
+    end
+
+    local interval = math.max(self.split_pulse_interval or SPLIT_PULSE_INTERVAL_SECONDS, 0.001)
+    local closed_hold = math.max(self.split_closed_hold or SPLIT_CLOSED_HOLD_SECONDS, 0)
+    local cycle_elapsed = self.split_elapsed % (interval + closed_hold)
+    local amount
+
+    if cycle_elapsed < closed_hold then
+        amount = 0
+    else
+        local cycle_t = (cycle_elapsed - closed_hold) / interval
+        if cycle_t < 0.5 then
+            amount = easeOutCubic(cycle_t * 2)
+        else
+            amount = 1 - easeInCubic((cycle_t - 0.5) * 2)
+        end
+    end
+
+    local offset = amount * (self.split_pulse_distance or 0) * (self.split_motion_sign or 1)
+    local axis_x = -math.sin(self.rotation)
+    local axis_y = math.cos(self.rotation)
+
+    self.x = self.split_base_x + axis_x * offset
+    self.y = self.split_base_y + axis_y * offset
+end
+
 function FlyingSword:update()
     if self.pause_timer > 0 then
         self.pause_timer = math.max(self.pause_timer - DTMULT, 0)
@@ -251,6 +359,8 @@ function FlyingSword:update()
         self:updateStop()
     elseif self.state == "return" then
         self:updateReturn()
+    elseif self.state == "split" then
+        self:updateSplit()
     end
 
     super.update(self)

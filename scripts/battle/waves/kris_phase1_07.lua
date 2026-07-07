@@ -1,5 +1,7 @@
 local KrisPhase1_07, super = Class(Wave)
 
+local TWO_PI = math.pi * 2
+
 local RECT_DURATION = 20 / 60
 local RECT_WIDTH = 24
 local RECT_HEIGHT = SCREEN_HEIGHT * 1.4
@@ -27,6 +29,26 @@ local KRIS_SWORD_HALL_FRAME_TIME = 4 / 30
 local KRIS_SWORD_HALL_EFFECT_START_DELAY = (5.5 * KRIS_SWORD_HALL_FRAME_TIME)
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
+local BURST_CIRCLE_COUNT = 6
+local BURST_CIRCLE_DURATION = (20 / 60) * 3
+local BURST_CIRCLE_LINE_WIDTH = 2
+local BURST_CIRCLE_LAYER = 1.02
+local BURST_CIRCLE_RADII = { 8, 10, 9, 11, 9.5, 8.5 }
+local BURST_CIRCLE_DISTANCES = { 66, 82, 74, 88, 78, 70 }
+local BURST_CIRCLE_ANGLE_OFFSET = math.rad(-14)
+local SPLIT_SWORD_PULSE_INTERVAL_SECONDS = 50 * 2 / 60
+local SPLIT_SWORD_ROTATION_DURATION_SECONDS = 2
+local SPLIT_SWORD_INITIAL_ROTATION = math.pi
+local SPLIT_SWORD_CLOSED_HOLD_SECONDS = 0.2
+
+local function clamp(value, min, max)
+    return math.max(min, math.min(max, value))
+end
+
+local function easeOutCubic(t)
+    t = clamp(t, 0, 1)
+    return 1 - (1 - t) * (1 - t) * (1 - t)
+end
 
 local function moveAttackerTo(attacker, x, y)
     attacker.target_x = x
@@ -36,6 +58,56 @@ end
 
 local function moveAttackerAway(attacker)
     moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
+end
+
+local BurstCircle, burst_circle_super = Class(Object)
+
+function BurstCircle:init(x, y, angle, distance, radius)
+    burst_circle_super.init(self, x, y)
+
+    self.origin_x = x
+    self.origin_y = y
+    self.angle = angle
+    self.distance = distance
+    self.radius = radius
+    self.time = 0
+    self.duration = BURST_CIRCLE_DURATION
+    self.line_width = BURST_CIRCLE_LINE_WIDTH
+    self.layer = BURST_CIRCLE_LAYER
+end
+
+function BurstCircle:update()
+    self.time = self.time + DT
+
+    local progress = clamp(self.time / self.duration, 0, 1)
+    local eased = easeOutCubic(progress)
+    self.x = self.origin_x + math.cos(self.angle) * self.distance * eased
+    self.y = self.origin_y + math.sin(self.angle) * self.distance * eased
+    self.alpha = 1 - easeOutCubic(progress)
+
+    if progress >= 1 then
+        self:remove()
+        return
+    end
+
+    burst_circle_super.update(self)
+end
+
+function BurstCircle:draw()
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+    local old_line_width = love.graphics.getLineWidth()
+    local alpha = self.alpha or 1
+
+    love.graphics.setColor(0, 0, 0, alpha)
+    love.graphics.circle("fill", 0, 0, self.radius, 48)
+    love.graphics.setLineWidth(self.line_width)
+    love.graphics.setColor(1, 1, 1, alpha)
+    love.graphics.circle("line", 0, 0, self.radius, 48)
+
+    love.graphics.setLineWidth(old_line_width)
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
+
+    burst_circle_super.draw(self)
 end
 
 local DistortedArenaEllipse, distorted_super = Class(Object)
@@ -118,6 +190,7 @@ function KrisPhase1_07:init()
     self.distorted_ellipse = nil
     self.arena_shift_origin = nil
     self.kris_home_positions = nil
+    self.ellipse_peak_effects_spawned = false
 end
 
 function KrisPhase1_07:onStart()
@@ -215,6 +288,7 @@ function KrisPhase1_07:spawnBlackEllipse()
         width = ELLIPSE_TARGET_WIDTH,
         height = SCREEN_HEIGHT,
     }, "out-quad", function()
+        self:spawnEllipsePeakEffects()
         self:fadeBlackEllipse()
     end)
     self.timer:tween(ELLIPSE_GROW_TIME, border, {
@@ -225,6 +299,50 @@ function KrisPhase1_07:spawnBlackEllipse()
     self.timer:after(DISTORTED_ELLIPSE_DELAY, function()
         self:spawnDistortedEllipse()
     end)
+end
+
+function KrisPhase1_07:spawnEllipsePeakEffects()
+    if self.ellipse_peak_effects_spawned then
+        return
+    end
+
+    self.ellipse_peak_effects_spawned = true
+    self:spawnBurstCircles()
+    self:spawnSplitSwords()
+end
+
+function KrisPhase1_07:spawnBurstCircles()
+    local x, y = self:getArenaCenter()
+
+    for i = 1, BURST_CIRCLE_COUNT do
+        local angle = BURST_CIRCLE_ANGLE_OFFSET + ((i - 1) / BURST_CIRCLE_COUNT) * TWO_PI
+        local radius = BURST_CIRCLE_RADII[i] or BURST_CIRCLE_RADII[#BURST_CIRCLE_RADII]
+        local distance = BURST_CIRCLE_DISTANCES[i] or BURST_CIRCLE_DISTANCES[#BURST_CIRCLE_DISTANCES]
+        self:addChild(BurstCircle(x, y, angle, distance, radius))
+    end
+end
+
+function KrisPhase1_07:spawnSplitSwords()
+    local x, y = self:getArenaCenter()
+
+    self:spawnBullet("flying_sword", x, y, SPLIT_SWORD_INITIAL_ROTATION, {
+        sprite = "half_up",
+        split_motion_sign = -1,
+        ignore_attacker_position = true,
+        follow_arena_center = true,
+        split_pulse_interval_seconds = SPLIT_SWORD_PULSE_INTERVAL_SECONDS,
+        split_rotation_duration_seconds = SPLIT_SWORD_ROTATION_DURATION_SECONDS,
+        split_closed_hold_seconds = SPLIT_SWORD_CLOSED_HOLD_SECONDS,
+    })
+    self:spawnBullet("flying_sword", x, y, SPLIT_SWORD_INITIAL_ROTATION, {
+        sprite = "half_down",
+        split_motion_sign = 1,
+        ignore_attacker_position = true,
+        follow_arena_center = true,
+        split_pulse_interval_seconds = SPLIT_SWORD_PULSE_INTERVAL_SECONDS,
+        split_rotation_duration_seconds = SPLIT_SWORD_ROTATION_DURATION_SECONDS,
+        split_closed_hold_seconds = SPLIT_SWORD_CLOSED_HOLD_SECONDS,
+    })
 end
 
 function KrisPhase1_07:spawnDistortedEllipse()
