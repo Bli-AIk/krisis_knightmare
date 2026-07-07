@@ -1,110 +1,103 @@
-local KrisPhase1_13, super = Class("kris_phase1_02")
+local KrisPhase1_13, super = Class("kris_phase1_07")
 
-local SLASH_START_DELAY = 16 / 30
-local DOUBLE_SLASH_INTERVAL = 46 / 60
-local INITIAL_DOUBLE_SLASH_DELAY = 38 / 60
-local KRIS_FAR_X = 10000
-local KRIS_FAR_Y = 10000
+local BLOCK_TEXTURE_TOP = "bullets/block/0"
+local BLOCK_TEXTURE_BOTTOM = "bullets/block/1"
+local BLOCK_WIDTH = 153
+local BLOCK_HEIGHT = 80
+local BLOCK_HITBOX_LEFT = 37
+local BLOCK_HITBOX_TOP = 31
+local BLOCK_HITBOX_WIDTH = 81
+local BLOCK_HITBOX_HEIGHT = 17
+local BLOCK_HITBOX_X = BLOCK_HITBOX_LEFT - (BLOCK_WIDTH / 2)
+local BLOCK_HITBOX_Y = BLOCK_HITBOX_TOP - (BLOCK_HEIGHT / 2)
+local BLOCK_Y_SPACING = 40
+local BLOCK_LAYER = BATTLE_LAYERS["above_arena"]
 
-local DOUBLE_SLASH_GROUPS = {
-    {
-        x = 515, y = 156, kris_x = 550, kris_y = 205,
-        slashes = { math.rad(158), math.rad(202) },
-    },
-    {
-        x = 510, y = 204, kris_x = 550, kris_y = 286,
-        slashes = { math.rad(166), math.rad(194) },
-    },
-    {
-        x = 530, y = 166, kris_x = 550, kris_y = 215,
-        slashes = { math.rad(154), math.rad(206) },
-    },
-    {
-        x = 520, y = 196, kris_x = 550, kris_y = 278,
-        slashes = { math.rad(170), math.rad(190) },
-    },
-    {
-        x = 508, y = 174, kris_x = 550, kris_y = 224,
-        slashes = { math.rad(150), math.rad(210) },
-    },
-    {
-        x = 526, y = 212, kris_x = 550, kris_y = 296,
-        slashes = { math.rad(162), math.rad(198) },
-    },
-    {
-        x = 512, y = 160, kris_x = 550, kris_y = 210,
-        slashes = { math.rad(146), math.rad(214) },
-    },
-}
+local CHIP_BURST_MIN_COUNT = 2
+local CHIP_BURST_MAX_COUNT = 3
+local CHIP_QUADRANT_PADDING = math.rad(10)
 
-local function moveAttackerTo(attacker, x, y)
-    attacker.target_x = x
-    attacker.target_y = y
-    attacker:setPosition(attacker.target_x, attacker.target_y)
+local function randomBetween(min, max)
+    return min + (max - min) * love.math.random()
 end
 
-local function moveAttackerAway(attacker)
-    moveAttackerTo(attacker, KRIS_FAR_X, KRIS_FAR_Y)
+local BlockWall, block_wall_super = Class(Solid)
+
+function BlockWall:init(texture, offset_y)
+    block_wall_super.init(self, false, 0, 0, BLOCK_WIDTH, BLOCK_HEIGHT)
+
+    self.offset_y = offset_y
+    self.layer = BLOCK_LAYER
+    self.squish_damage = 0
+    self:setHitbox(BLOCK_HITBOX_X, BLOCK_HITBOX_Y, BLOCK_HITBOX_WIDTH, BLOCK_HITBOX_HEIGHT)
+
+    self.sprite = Sprite(texture, -BLOCK_WIDTH / 2, -BLOCK_HEIGHT / 2)
+    self:addChild(self.sprite)
+    self:syncToArena()
+end
+
+function BlockWall:syncToArena()
+    local arena = Game.battle and Game.battle.arena
+    local x, y
+
+    if arena then
+        x, y = arena:getCenter()
+    else
+        x, y = SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
+    end
+
+    self:setPosition(x, y + self.offset_y)
+end
+
+function BlockWall:update()
+    self:syncToArena()
+    block_wall_super.update(self)
 end
 
 function KrisPhase1_13:init()
     super.init(self)
-    self.time = 8
-end
-
-function KrisPhase1_13:getSlashInterval()
-    return DOUBLE_SLASH_INTERVAL
-end
-
-function KrisPhase1_13:getInitialSlashDelay()
-    return INITIAL_DOUBLE_SLASH_DELAY
-end
-
-function KrisPhase1_13:getDoubleSlashGroups()
-    return DOUBLE_SLASH_GROUPS
+    self.block_y_spacing = BLOCK_Y_SPACING
 end
 
 function KrisPhase1_13:onStart()
-    self.kris_home_positions = {}
-
-    for _, attacker in ipairs(self:getAttackers()) do
-        self.kris_home_positions[attacker] = {
-            x = attacker.target_x or attacker.x,
-            y = attacker.target_y or attacker.y,
-        }
-        attacker:setAnimation("flying_sword_disappear", function()
-            moveAttackerAway(attacker)
-        end)
-    end
-
-    self.slashes = self:getDoubleSlashGroups()
-    self.slash_index = 0
-
-    local function slashNext()
-        self.slash_index = self.slash_index + 1
-        local group = self.slashes[self.slash_index]
-        if not group then
-            return
-        end
-
-        local animation = self.slash_index % 2 == 0 and "slash1" or "slash2"
-        self:spawnKrisSlashAnimation(group.kris_x, group.kris_y, animation)
-        self.timer:after(SLASH_START_DELAY, function()
-            for _, rotation in ipairs(group.slashes) do
-                self:spawnSlash(group.x, group.y, rotation, group.kris_x, group.kris_y)
-            end
-        end)
-
-        if self.slashes[self.slash_index + 1] then
-            self.timer:after(self:getSlashInterval(), slashNext)
-        end
-    end
-
-    self.timer:after(self:getInitialSlashDelay(), slashNext)
+    super.onStart(self)
+    self:spawnBlockWalls()
 end
 
-function KrisPhase1_13:update()
-    super.update(self)
+function KrisPhase1_13:spawnBlockWalls()
+    local spacing = self:getBlockYSpacing()
+
+    self:spawnObject(BlockWall(BLOCK_TEXTURE_TOP, -spacing))
+    self:spawnObject(BlockWall(BLOCK_TEXTURE_BOTTOM, spacing))
+end
+
+function KrisPhase1_13:getBlockYSpacing()
+    return self.block_y_spacing or BLOCK_Y_SPACING
+end
+
+function KrisPhase1_13:getChipBurstAngles()
+    local count = love.math.random(CHIP_BURST_MIN_COUNT, CHIP_BURST_MAX_COUNT)
+    local quadrants = { 0, 1, 2, 3 }
+    local angles = {}
+
+    for i = #quadrants, 2, -1 do
+        local j = love.math.random(i)
+        quadrants[i], quadrants[j] = quadrants[j], quadrants[i]
+    end
+
+    for i = 1, count do
+        local quadrant = quadrants[i]
+        local min_angle = quadrant * math.pi / 2 + CHIP_QUADRANT_PADDING
+        local max_angle = (quadrant + 1) * math.pi / 2 - CHIP_QUADRANT_PADDING
+        table.insert(angles, randomBetween(min_angle, max_angle))
+    end
+
+    for i = #angles, 2, -1 do
+        local j = love.math.random(i)
+        angles[i], angles[j] = angles[j], angles[i]
+    end
+
+    return angles
 end
 
 return KrisPhase1_13
