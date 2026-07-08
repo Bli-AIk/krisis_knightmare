@@ -46,29 +46,46 @@ if [ -n "$repo_url" ]; then
 fi
 
 cat > "$output_file" <<EOF
-## 官方发布源 / Official Release Sources
+## 中文
 
-**GitHub Release 和（即将发布的）Game Jolt 页面是本游戏的官方发布源！**  
+**GitHub Release 和（即将发布的）Game Jolt 页面，是本游戏的官方发布源！**
+
+本游戏是开源的。请务必在官方发布源下载游戏，以确保你获得的是未经篡改、来源明确、版本正确的官方构建，避免第三方重新打包带来的安全风险。
+
+### 版本说明
+
+- **debug 版本**：开启了 Kristal dev 模式，且支持外部 \`mod.json\` 覆盖。
+- **release 版本**：常规版本。
+
+### 下载建议
+
+- 对于 Windows 一般玩家，一般使用 \`*-win64.zip\`，解压即可运行游戏。
+- 对于其他用户，可以酌情使用 \`*.love\`，配合 LÖVE 本体运行游戏。
+
+---
+
+## English
+
 **GitHub Releases and the (coming soon) Game Jolt page are the official distribution sources for this game.**
 
-本游戏是开源项目。请务必从官方发布源下载，以降低下载到被篡改、夹带恶意文件、版本过旧或来源不明构建的风险。  
-This game is open source. Download only from official sources to reduce the risk of tampered builds, bundled malware, outdated packages, or unknown third-party builds.
+This game is open source. Please download it only from official sources to make sure you get an untampered, clearly sourced, correct official build, and to avoid security risks from third-party repackaging.
 
-## 版本说明 / Build Types
+### Build Types
 
-- **debug 版本 / Debug build**：开启 Kristal dev 模式，且支持外部 \`mod.json\` 覆盖。  
-  Enables Kristal dev mode and supports external \`mod.json\` overrides.
-- **release 版本 / Release build**：常规版本，适合正常游玩。  
-  Standard build for normal play.
+- **Debug build**: Enables Kristal dev mode and supports external \`mod.json\` overrides.
+- **Release build**: Standard build for normal play.
 
-## 下载建议 / Download Guide
+### Download Guide
 
-- Windows 一般玩家：下载 \`*-win64.zip\`，解压后直接运行游戏。  
-  Most Windows players should download \`*-win64.zip\`, extract it, and run the game directly.
-- 其他用户：可按需下载 \`*.love\`，配合 LÖVE 本体运行游戏。  
-  Other users may download \`*.love\` and run it with the LÖVE runtime.
+- Most Windows players should use \`*-win64.zip\`; extract it and run the game directly.
+- Other users may use \`*.love\` with the LÖVE runtime as needed.
 
-## 更新日志 / Changelog
+---
+
+<details>
+<summary><strong>CHANGELOG</strong></summary>
 
 ${generated_notes}
+
+</details>
 EOF
