@@ -1,5 +1,7 @@
 default: run
 
+build_script := "./build_standalone.sh"
+
 # Run this mod through Kristal in the current terminal.
 run:
     #!/usr/bin/env sh
@@ -54,6 +56,41 @@ term:
 hold:
     @.helix/run-kristal-terminal.sh --hold
 
+# Build release and debug standalone packages.
+build:
+    @{{build_script}}
+
+# Build only the release standalone packages.
+build-release:
+    @BUILD_VARIANTS=release {{build_script}}
+
+# Build only the debug standalone packages.
+build-debug:
+    @BUILD_VARIANTS=debug {{build_script}}
+
+# Build only .love archives, without Windows fused zips.
+build-love:
+    @BUILD_WINDOWS_EXE=0 {{build_script}}
+
+# Build only the release .love archive.
+build-love-release:
+    @BUILD_VARIANTS=release BUILD_WINDOWS_EXE=0 {{build_script}}
+
+# Build only the debug .love archive.
+build-love-debug:
+    @BUILD_VARIANTS=debug BUILD_WINDOWS_EXE=0 {{build_script}}
+
+# Remove standalone build intermediates and artifacts.
+clean-build:
+    rm -rf .build dist
+
+# List generated standalone artifacts.
+artifacts:
+    @find dist -maxdepth 1 -type f -print 2>/dev/null | sort || true
+
 alias l := run
 alias t := term
 alias L := hold
+alias b := build
+alias br := build-release
+alias bd := build-debug
