@@ -114,6 +114,19 @@ local function debugJoinPath(left, right)
     return left .. "/" .. right
 end
 
+local function debugDirName(path)
+    if not path or path == "" then
+        return nil
+    end
+
+    local normalized = path:gsub("\\", "/")
+    local directory = normalized:match("^(.*)/[^/]*$")
+    if directory and directory ~= "" then
+        return directory
+    end
+    return nil
+end
+
 local function debugIsAbsolutePath(path)
     if not path or path == "" then
         return false
@@ -151,6 +164,11 @@ local function debugAddRelativeCandidate(candidates, seen, base_dir, relative_pa
         return
     end
     debugAddCandidate(candidates, seen, debugJoinPath(base_dir, relative_path))
+end
+
+local function debugAddModJsonCandidates(candidates, seen, base_dir)
+    debugAddRelativeCandidate(candidates, seen, base_dir, "mod.json")
+    debugAddRelativeCandidate(candidates, seen, base_dir, "mods/" .. DEBUG_EXTERNAL_MOD_JSON_ID .. "/mod.json")
 end
 
 local function debugIsArray(value)
@@ -193,6 +211,21 @@ local function debugMergeModJson(base, override)
     return base
 end
 
+local function debugExternalModJsonLog(save_dir, message)
+    print(message)
+
+    if not save_dir or not io or not io.open then
+        return
+    end
+
+    local file = io.open(debugJoinPath(save_dir, "external_mod_json.log"), "a")
+    if not file then
+        return
+    end
+    file:write(message, "\n")
+    file:close()
+end
+
 local function applyExternalModJsonOverride(path, mod)
     if path ~= DEBUG_EXTERNAL_MOD_JSON_ID and mod.id ~= DEBUG_EXTERNAL_MOD_JSON_ID then
         return mod
@@ -201,20 +234,30 @@ local function applyExternalModJsonOverride(path, mod)
     local candidates = {{}}
     local seen = {{}}
     local env_path = os.getenv("KRISIS_MOD_JSON")
+    local source_path = love.filesystem.getSource and love.filesystem.getSource() or nil
+    local source_dir = debugDirName(source_path)
     local source_base = love.filesystem.getSourceBaseDirectory and love.filesystem.getSourceBaseDirectory() or nil
+    local working_dir = love.filesystem.getWorkingDirectory and love.filesystem.getWorkingDirectory() or nil
     local save_dir = love.filesystem.getSaveDirectory and love.filesystem.getSaveDirectory() or nil
 
     if env_path and env_path ~= "" then
         debugAddCandidate(candidates, seen, env_path)
+        if working_dir and not debugIsAbsolutePath(env_path) then
+            debugAddRelativeCandidate(candidates, seen, working_dir, env_path)
+        end
+        if source_dir and not debugIsAbsolutePath(env_path) then
+            debugAddRelativeCandidate(candidates, seen, source_dir, env_path)
+        end
         if source_base and not debugIsAbsolutePath(env_path) then
             debugAddRelativeCandidate(candidates, seen, source_base, env_path)
         end
     end
 
-    debugAddRelativeCandidate(candidates, seen, source_base, "mod.json")
-    debugAddRelativeCandidate(candidates, seen, source_base, "mods/" .. DEBUG_EXTERNAL_MOD_JSON_ID .. "/mod.json")
-    debugAddRelativeCandidate(candidates, seen, save_dir, "mod.json")
-    debugAddRelativeCandidate(candidates, seen, save_dir, "mods/" .. DEBUG_EXTERNAL_MOD_JSON_ID .. "/mod.json")
+    debugAddModJsonCandidates(candidates, seen, source_path)
+    debugAddModJsonCandidates(candidates, seen, source_dir)
+    debugAddModJsonCandidates(candidates, seen, source_base)
+    debugAddModJsonCandidates(candidates, seen, working_dir)
+    debugAddModJsonCandidates(candidates, seen, save_dir)
 
     for _, candidate in ipairs(candidates) do
         local contents = debugReadHostFile(candidate)
@@ -225,13 +268,14 @@ local function applyExternalModJsonOverride(path, mod)
                 debugMergeModJson(mod, external)
                 mod.id = embedded_id
                 mod.external_mod_json_path = candidate
-                print("[DEBUG] Loaded external mod.json override: " .. candidate)
+                debugExternalModJsonLog(save_dir, "[DEBUG] Loaded external mod.json override: " .. candidate)
                 return mod
             end
-            print("[WARNING] External mod.json override is invalid: " .. candidate .. ": " .. tostring(external))
+            debugExternalModJsonLog(save_dir, "[WARNING] External mod.json override is invalid: " .. candidate .. ": " .. tostring(external))
         end
     end
 
+    debugExternalModJsonLog(save_dir, "[DEBUG] No external mod.json override found. Checked: " .. table.concat(candidates, " | "))
     return mod
 end
 '''

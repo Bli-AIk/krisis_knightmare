@@ -300,7 +300,7 @@ build_variant() {
   if [ "$BUILD_WINDOWS_EXE" = "1" ]; then
     love_dir="$CACHE_DIR/love-$LOVE_VERSION-$LOVE_ARCH"
     package_name="$OUTPUT_BASENAME-$variant-$LOVE_ARCH"
-    package_dir="$BUILD_ROOT/$variant/$package_name"
+    package_dir="$OUTPUT_DIR/$package_name"
     win_zip="$OUTPUT_DIR/$package_name.zip"
     exe_name="$EXE_BASENAME-$variant.exe"
 
@@ -312,6 +312,7 @@ build_variant() {
     cp "$love_dir/license.txt" "$package_dir"/
     if [ "$variant" = "debug" ]; then
       mkdir -p "$package_dir/mods/$MOD_ID"
+      cp "$stage_dir/mods/$MOD_ID/mod.json" "$package_dir/mod.json"
       cp "$stage_dir/mods/$MOD_ID/mod.json" "$package_dir/mods/$MOD_ID/mod.json"
       {
         printf 'Debug mod.json override / Debug 版 mod.json 外部覆盖\n'
@@ -319,8 +320,9 @@ build_variant() {
         printf '中文说明\n'
         printf '\n'
         printf '这个 debug 版会先读取 exe 内置的 mod.json，然后尝试读取外部覆盖文件。\n'
-        printf '你可以直接编辑本目录下的 mods/%s/mod.json 来覆盖内置配置。\n' "$MOD_ID"
+        printf '你可以直接编辑本目录下的 mod.json 或 mods/%s/mod.json 来覆盖内置配置。\n' "$MOD_ID"
         printf '也可以设置环境变量 KRISIS_MOD_JSON，指向另一个 mod.json 文件路径。\n'
+        printf '读取日志会写到 LÖVE 存档目录的 external_mod_json.log；如果没生效，先看这个日志里实际检查了哪些路径。\n'
         printf '\n'
         printf '覆盖规则：\n'
         printf '%s\n' '- 对象会递归合并。'
@@ -345,8 +347,9 @@ build_variant() {
         printf 'English\n'
         printf '\n'
         printf 'This debug build reads the embedded mod.json first, then tries to merge an external override file.\n'
-        printf 'Edit mods/%s/mod.json next to this executable to override embedded mod.json values.\n' "$MOD_ID"
+        printf 'Edit mod.json or mods/%s/mod.json next to this executable to override embedded mod.json values.\n' "$MOD_ID"
         printf 'You may also set KRISIS_MOD_JSON to an absolute or relative mod.json path.\n'
+        printf 'A lookup log is written to external_mod_json.log in the LÖVE save directory.\n'
         printf 'Objects are merged recursively; arrays and scalar values replace the embedded value.\n'
         printf 'The id, folder, and path fields are intentionally ignored when overriding.\n'
       } > "$package_dir/README_DEBUG_MOD_JSON.txt"
