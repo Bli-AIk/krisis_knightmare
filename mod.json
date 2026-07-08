@@ -7,7 +7,7 @@
     "subtitle": "",
 
     // The version of your project.
-    "version": "v1.0.0",
+    "version": "v0.1.0",
     // What version of the engine your project was made with.
     "engineVer": "v0.10.0",
 
@@ -157,6 +157,6 @@
     // Whether or not to enable dev mode. Dev mode enables debug keys and the console.
     "dev": true,
 
-    "encounter": "kris"
+    //"encounter": "kris"
   
 }
