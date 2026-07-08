@@ -62,5 +62,18 @@
     "act_kris_recharge_text": "* Your SOUL emitted a strange glow!",
     "act_kris_heartbeat": "Heartbeat",
     "act_kris_heartbeat_description": "Raise\nDefend",
-    "act_kris_heartbeat_text": "* Your heartbeat quickened.\n[wait:5]* Your DEF raised.\n[wait:5]* Your Invincible shorter."
+    "act_kris_heartbeat_text": "* Your heartbeat quickened.\n[wait:5]* Your DEF raised.\n[wait:5]* Your Invincible shorter.",
+
+    "update_check.current_version_label": "Current version: [var:version]",
+    "update_check.checking": "Checking for updates...",
+    "update_check.new_found_prefix": "New version found ",
+    "update_check.copy_prompt_left": "Press ",
+    "update_check.copy_prompt_right": " to copy the download link",
+    "update_check.failed": "Update check failed",
+    "update_check.latest": "Current version [var:version] is the latest",
+    "update_check.copy_copied": "Copied!",
+    "update_check.copy_opened": "Download page opened",
+    "update_check.copy_failed": "Unable to copy download link",
+    "update_check.skip_left": "Hold ",
+    "update_check.skip_right": " to skip"
 }

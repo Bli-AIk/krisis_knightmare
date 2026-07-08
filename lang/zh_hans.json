@@ -63,5 +63,18 @@
     "act_kris_recharge_text": "* 你的【灵魂】散发出怪异的光芒！",
     "act_kris_heartbeat": "心跳加速",
     "act_kris_heartbeat_description": "增加\n防御力",
-    "act_kris_heartbeat_text": "* 你的心跳加快了。\n[wait:5]* 防御力增加，[wait:2]但无敌时间减少了！"
+    "act_kris_heartbeat_text": "* 你的心跳加快了。\n[wait:5]* 防御力增加，[wait:2]但无敌时间减少了！",
+
+    "update_check.current_version_label": "当前版本：[var:version]",
+    "update_check.checking": "正在检测新版本……",
+    "update_check.new_found_prefix": "发现新版本 ",
+    "update_check.copy_prompt_left": "按 ",
+    "update_check.copy_prompt_right": " 复制下载链接",
+    "update_check.failed": "检测失败",
+    "update_check.latest": "当前版本 [var:version] 即为最新版",
+    "update_check.copy_copied": "已复制！",
+    "update_check.copy_opened": "已打开下载页",
+    "update_check.copy_failed": "无法复制下载链接",
+    "update_check.skip_left": "长按 ",
+    "update_check.skip_right": " 跳过"
 }
