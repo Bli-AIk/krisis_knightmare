@@ -10,6 +10,7 @@ MOD_DIR="${MOD_DIR:-$SCRIPT_DIR}"
 BUILD_ROOT="${BUILD_ROOT:-$MOD_DIR/.build/standalone}"
 OUTPUT_DIR="${OUTPUT_DIR:-$MOD_DIR/dist}"
 CACHE_DIR="${CACHE_DIR:-$MOD_DIR/.build/cache}"
+BUILD_HELPER="$SCRIPT_DIR/build_standalone.py"
 
 KRISTAL_DIR="${KRISTAL_DIR:-${KRISTAL_ROOT:-}}"
 if [ -z "$KRISTAL_DIR" ]; then
@@ -129,34 +130,12 @@ zip_dir() {
       (cd "$source_dir" && zip -9 -q -r "$output_file" .)
     fi
   else
-    python3 - "$output_file" "$source_dir" "$prefix" <<'PY'
-import os
-import sys
-import zipfile
-from pathlib import Path
-
-output_file = Path(sys.argv[1])
-source_dir = Path(sys.argv[2])
-prefix = sys.argv[3].strip("/")
-
-with zipfile.ZipFile(output_file, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-    for path in sorted(source_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(source_dir).as_posix()
-        arcname = f"{prefix}/{rel}" if prefix else rel
-        archive.write(path, arcname)
-PY
+    python3 "$BUILD_HELPER" zip-dir "$output_file" "$source_dir" "$prefix"
   fi
 }
 
 lua_string() {
-  python3 - "$1" <<'PY'
-import sys
-value = sys.argv[1]
-value = value.replace("\\", "\\\\").replace('"', '\\"')
-print(f'"{value}"')
-PY
+  python3 "$BUILD_HELPER" lua-string "$1"
 }
 
 patch_lua_config() {
@@ -172,234 +151,29 @@ patch_lua_config() {
     title="$PROJECT_TITLE"
   fi
 
-  python3 - "$stage_dir/src/engine/vendcust.lua" "$MOD_ID" "$release_mode" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-mod_id = sys.argv[2].replace("\\", "\\\\").replace('"', '\\"')
-release_mode = sys.argv[3]
-text = path.read_text()
-replacements = {
-    r"(?m)^TARGET_MOD\s*=.*$": f'TARGET_MOD = "{mod_id}"',
-    r"(?m)^AUTO_MOD_START\s*=.*$": "AUTO_MOD_START = true",
-    r"(?m)^RELEASE_MODE\s*=.*$": f"RELEASE_MODE = {release_mode}",
-}
-for pattern, replacement in replacements.items():
-    text, count = re.subn(pattern, replacement, text, count=1)
-    if count != 1:
-        raise SystemExit(f"Could not patch {pattern} in {path}")
-path.write_text(text)
-PY
-
-  python3 - "$stage_dir/conf.lua" "$(lua_string "$identity")" "$(lua_string "$title")" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-identity = sys.argv[2]
-title = sys.argv[3]
-text = path.read_text()
-replacements = {
-    r"(?m)^(\s*t\.identity\s*=\s*).*$": rf"\g<1>{identity}",
-    r"(?m)^(\s*t\.window\.title\s*=\s*).*$": rf"\g<1>{title}",
-}
-for pattern, replacement in replacements.items():
-    text, count = re.subn(pattern, replacement, text, count=1)
-    if count != 1:
-        raise SystemExit(f"Could not patch {pattern} in {path}")
-path.write_text(text)
-PY
+  python3 "$BUILD_HELPER" patch-lua-config "$stage_dir" "$MOD_ID" "$release_mode" "$identity" "$title"
 }
 
 patch_mod_manifest() {
   mod_dir="$1"
   mod_dev="$2"
+  object_editor_enabled="$3"
   manifest="$mod_dir/mod.json"
 
-  python3 - "$manifest" "$mod_dev" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-mod_dev = sys.argv[2]
-text = path.read_text()
-text, count = re.subn(r'("dev"\s*:\s*)(true|false)', rf"\g<1>{mod_dev}", text, count=1)
-if count != 1:
-    raise SystemExit(f'Could not patch "dev" in {path}')
-path.write_text(text)
-PY
+  python3 "$BUILD_HELPER" patch-mod-manifest "$manifest" "$mod_dev" "$object_editor_enabled"
 }
 
 patch_debug_external_mod_json_support() {
   stage_dir="$1"
   loadthread="$stage_dir/src/engine/loadthread.lua"
 
-  python3 - "$loadthread" "$MOD_ID" <<'PY'
-import sys
-from pathlib import Path
+  python3 "$BUILD_HELPER" patch-debug-external-mod-json "$loadthread" "$MOD_ID"
+}
 
-path = Path(sys.argv[1])
-mod_id = sys.argv[2]
-mod_id_lua = mod_id.replace("\\", "\\\\").replace('"', '\\"')
-text = path.read_text()
+patch_kristal_release_debug_input() {
+  stage_dir="$1"
 
-helper = f'''
-local DEBUG_EXTERNAL_MOD_JSON_ID = "{mod_id_lua}"
-
-local function debugJoinPath(left, right)
-    if not left or left == "" then
-        return right
-    end
-    if not right or right == "" then
-        return left
-    end
-    if left:sub(-1) == "/" or left:sub(-1) == "\\\\" then
-        return left .. right
-    end
-    return left .. "/" .. right
-end
-
-local function debugIsAbsolutePath(path)
-    if not path or path == "" then
-        return false
-    end
-    return path:sub(1, 1) == "/"
-        or path:match("^%a:[/\\\\]") ~= nil
-        or path:sub(1, 2) == "\\\\\\\\"
-end
-
-local function debugReadHostFile(path)
-    if not path or path == "" or not io or not io.open then
-        return nil
-    end
-
-    local file = io.open(path, "rb")
-    if not file then
-        return nil
-    end
-
-    local contents = file:read("*a")
-    file:close()
-    return contents
-end
-
-local function debugAddCandidate(candidates, seen, path)
-    if not path or path == "" or seen[path] then
-        return
-    end
-    seen[path] = true
-    table.insert(candidates, path)
-end
-
-local function debugAddRelativeCandidate(candidates, seen, base_dir, relative_path)
-    if not base_dir or base_dir == "" then
-        return
-    end
-    debugAddCandidate(candidates, seen, debugJoinPath(base_dir, relative_path))
-end
-
-local function debugIsArray(value)
-    if type(value) ~= "table" then
-        return false
-    end
-
-    local count = 0
-    for key, _ in pairs(value) do
-        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
-            return false
-        end
-        if key > count then
-            count = key
-        end
-    end
-    for index = 1, count do
-        if value[index] == nil then
-            return false
-        end
-    end
-    return true
-end
-
-local function debugMergeModJson(base, override)
-    for key, value in pairs(override) do
-        if key ~= "id" and key ~= "folder" and key ~= "path" then
-            local base_value = base[key]
-            if type(base_value) == "table"
-                and type(value) == "table"
-                and not debugIsArray(base_value)
-                and not debugIsArray(value)
-            then
-                debugMergeModJson(base_value, value)
-            else
-                base[key] = value
-            end
-        end
-    end
-    return base
-end
-
-local function applyExternalModJsonOverride(path, mod)
-    if path ~= DEBUG_EXTERNAL_MOD_JSON_ID and mod.id ~= DEBUG_EXTERNAL_MOD_JSON_ID then
-        return mod
-    end
-
-    local candidates = {{}}
-    local seen = {{}}
-    local env_path = os.getenv("KRISIS_MOD_JSON")
-    local source_base = love.filesystem.getSourceBaseDirectory and love.filesystem.getSourceBaseDirectory() or nil
-    local save_dir = love.filesystem.getSaveDirectory and love.filesystem.getSaveDirectory() or nil
-
-    if env_path and env_path ~= "" then
-        debugAddCandidate(candidates, seen, env_path)
-        if source_base and not debugIsAbsolutePath(env_path) then
-            debugAddRelativeCandidate(candidates, seen, source_base, env_path)
-        end
-    end
-
-    debugAddRelativeCandidate(candidates, seen, source_base, "mod.json")
-    debugAddRelativeCandidate(candidates, seen, source_base, "mods/" .. DEBUG_EXTERNAL_MOD_JSON_ID .. "/mod.json")
-    debugAddRelativeCandidate(candidates, seen, save_dir, "mod.json")
-    debugAddRelativeCandidate(candidates, seen, save_dir, "mods/" .. DEBUG_EXTERNAL_MOD_JSON_ID .. "/mod.json")
-
-    for _, candidate in ipairs(candidates) do
-        local contents = debugReadHostFile(candidate)
-        if contents then
-            local ok, external = pcall(json.decode, contents)
-            if ok and type(external) == "table" then
-                local embedded_id = mod.id
-                debugMergeModJson(mod, external)
-                mod.id = embedded_id
-                mod.external_mod_json_path = candidate
-                print("[DEBUG] Loaded external mod.json override: " .. candidate)
-                return mod
-            end
-            print("[WARNING] External mod.json override is invalid: " .. candidate .. ": " .. tostring(external))
-        end
-    end
-
-    return mod
-end
-'''
-
-marker = "verbose = false\n"
-if marker not in text:
-    raise SystemExit(f"Could not find insertion marker in {path}")
-text = text.replace(marker, marker + helper, 1)
-
-needle = '            local ok, mod = pcall(json.decode, love.filesystem.read(full_path .. "/mod.json"))\n'
-replacement = needle + '''            if ok then
-                mod = applyExternalModJsonOverride(path, mod)
-            end
-'''
-if needle not in text:
-    raise SystemExit(f"Could not find mod.json decode site in {path}")
-text = text.replace(needle, replacement, 1)
-path.write_text(text)
-PY
+  python3 "$BUILD_HELPER" patch-kristal-v010-release-debug-input "$stage_dir"
 }
 
 copy_overlay_if_set() {
@@ -425,10 +199,12 @@ prepare_stage() {
     release)
       release_mode="true"
       mod_dev="false"
+      object_editor_enabled="false"
       ;;
     debug)
       release_mode="false"
       mod_dev="true"
+      object_editor_enabled="true"
       ;;
     *)
       printf 'Unknown variant: %s\n' "$variant" >&2
@@ -456,13 +232,20 @@ prepare_stage() {
     --exclude='/dist/' \
     --exclude='/target/' \
     --exclude='/build_standalone.sh' \
+    --exclude='/build_standalone.py' \
     --exclude='/justfile' \
     --exclude='*.tiled-session' \
     "$MOD_DIR"/ "$staged_mod_dir"/
 
   copy_overlay_if_set "$variant" "$staged_mod_dir"
+  if [ "$variant" = "release" ]; then
+    rm -rf "$staged_mod_dir/libraries/object-editor"
+  fi
   patch_lua_config "$variant" "$stage_dir" "$release_mode"
-  patch_mod_manifest "$staged_mod_dir" "$mod_dev"
+  patch_mod_manifest "$staged_mod_dir" "$mod_dev" "$object_editor_enabled"
+  if [ "$variant" = "release" ]; then
+    patch_kristal_release_debug_input "$stage_dir"
+  fi
   if [ "$variant" = "debug" ]; then
     patch_debug_external_mod_json_support "$stage_dir"
   fi
@@ -579,6 +362,11 @@ main() {
   need_cmd rsync
   need_cmd tar
   need_cmd python3
+
+  if [ ! -f "$BUILD_HELPER" ]; then
+    printf 'Build helper not found: %s\n' "$BUILD_HELPER" >&2
+    exit 1
+  fi
 
   ensure_repo "$KRISTAL_REPO" "$KRISTAL_DIR"
   ensure_kristal_ref
