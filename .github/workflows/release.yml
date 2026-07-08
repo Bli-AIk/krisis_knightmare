@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install build dependencies
         run: |
@@ -83,6 +85,12 @@ jobs:
             dist/krisis-knightmare-debug-win64.zip
           if-no-files-found: error
 
+      - name: Generate release notes
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/generate_release_notes.sh "$GITHUB_REF_NAME" release_notes.md
+
       - name: Publish GitHub release
         if: github.ref_type == 'tag'
         env:
@@ -99,7 +107,8 @@ jobs:
           )
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "$title" --notes-file release_notes.md
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "$title" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "$title" --notes-file release_notes.md
           fi
