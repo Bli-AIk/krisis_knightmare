@@ -1,8 +1,45 @@
+local function escapeLocPattern(value)
+    return tostring(value):gsub("([^%w])", "%%%1")
+end
+
+local function applyLocVars(text, vars)
+    if type(text) ~= "string" or type(vars) ~= "table" then
+        return text
+    end
+
+    for key, value in pairs(vars) do
+        text = text:gsub("%[var:" .. escapeLocPattern(key) .. "%]", tostring(value))
+    end
+    return text
+end
+
+local function ensureLocalizationFallbacks()
+    if not Game then
+        return
+    end
+
+    -- Kristal v0.10 runs mod.lua before localization libraries install these helpers.
+    if not Game.loc then
+        function Game:loc(default, id, var)
+            return applyLocVars(default, var)
+        end
+    end
+
+    if not Game.locName then
+        function Game:locName(category, id, default)
+            return tostring(default or id)
+        end
+    end
+end
+
+ensureLocalizationFallbacks()
+
 local function loc(default, id, var)
+    ensureLocalizationFallbacks()
     if Game and Game.loc then
         return Game:loc(default, id, var)
     end
-    return default
+    return applyLocVars(default, var)
 end
 
 local localizeChapterSelectText
