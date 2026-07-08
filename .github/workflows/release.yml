@@ -30,13 +30,14 @@ jobs:
 
           tag="${GITHUB_REF_NAME}"
           manifest_version="$(python3 - <<'PY'
-          import json
           import re
           from pathlib import Path
 
           text = Path("mod.json").read_text(encoding="utf-8")
-          text = re.sub(r"//.*", "", text)
-          print(json.loads(text)["version"])
+          match = re.search(r'(?m)^\s*"version"\s*:\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit("Could not find version in mod.json")
+          print(match.group(1))
           PY
           )"
 
