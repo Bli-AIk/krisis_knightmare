@@ -1,0 +1,104 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build GitHub release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync zip unzip
+
+      - name: Validate tag version
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          manifest_version="$(python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          text = Path("mod.json").read_text(encoding="utf-8")
+          text = re.sub(r"//.*", "", text)
+          print(json.loads(text)["version"])
+          PY
+          )"
+
+          if [ "$manifest_version" != "$tag" ]; then
+            echo "mod.json version ($manifest_version) does not match tag ($tag)" >&2
+            exit 1
+          fi
+
+      - name: Build standalone packages
+        run: ./build_standalone.sh
+
+      - name: Verify release artifacts
+        run: |
+          set -euo pipefail
+
+          files=(
+            dist/krisis-knightmare-release.love
+            dist/krisis-knightmare-debug.love
+            dist/krisis-knightmare-release-win64.zip
+            dist/krisis-knightmare-debug-win64.zip
+          )
+
+          for file in "${files[@]}"; do
+            test -s "$file"
+          done
+
+          unzip -t dist/krisis-knightmare-release.love >/dev/null
+          unzip -t dist/krisis-knightmare-debug.love >/dev/null
+          unzip -t dist/krisis-knightmare-release-win64.zip >/dev/null
+          unzip -t dist/krisis-knightmare-debug-win64.zip >/dev/null
+
+          unzip -l dist/krisis-knightmare-release-win64.zip | grep -F "KRISIS-KNIGHTMARE-release.exe"
+          unzip -l dist/krisis-knightmare-debug-win64.zip | grep -F "KRISIS-KNIGHTMARE-debug.exe"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: krisis-knightmare-${{ github.ref_name || github.sha }}
+          path: |
+            dist/krisis-knightmare-release.love
+            dist/krisis-knightmare-debug.love
+            dist/krisis-knightmare-release-win64.zip
+            dist/krisis-knightmare-debug-win64.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          title="KRISIS KNIGHTMARE ${GITHUB_REF_NAME}"
+          files=(
+            dist/krisis-knightmare-release.love
+            dist/krisis-knightmare-debug.love
+            dist/krisis-knightmare-release-win64.zip
+            dist/krisis-knightmare-debug-win64.zip
+          )
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "$title" --generate-notes
+          fi
