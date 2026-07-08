@@ -69,7 +69,7 @@
     "update_check.new_found_prefix": "New version found ",
     "update_check.copy_prompt_left": "Press ",
     "update_check.copy_prompt_right": " to copy the download link",
-    "update_check.failed": "Update check failed",
+    "update_check.failed": "Failed to check for updates\nPlease check your network settings",
     "update_check.latest": "Current version [var:version] is the latest",
     "update_check.copy_copied": "Copied!",
     "update_check.copy_opened": "Download page opened",

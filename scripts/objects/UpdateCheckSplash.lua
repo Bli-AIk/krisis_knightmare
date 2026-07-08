@@ -1,7 +1,7 @@
 local UpdateCheckSplash, super = Class(Object)
 
-local RELEASE_API_URL = "https://api.github.com/repos/Bli-AIk/krisis_knightmare/releases/latest"
-local RELEASE_DOWNLOAD_URL = "https://github.com/Bli-AIk/krisis_knightmare/releases/latest"
+local RELEASE_API_URL = "https://api.github.com/repos/Bli-AIk/krisis_knightmare/releases"
+local RELEASE_DOWNLOAD_URL = "https://github.com/Bli-AIk/krisis_knightmare/releases"
 local CHECK_TIMEOUT = 8
 local HOLD_TO_SKIP_TIME = 0.35
 local COPY_MESSAGE_HOLD_TIME = 0.5
@@ -64,6 +64,32 @@ end
 local function drawCenteredSpacedText(text, x, y)
     local font = love.graphics.getFont()
     drawSpacedText(text, x - (getSpacedTextWidth(font, text) / 2), y)
+end
+
+local function drawCenteredSpacedLines(text, x, y, line_height)
+    local lines = {}
+    local text_value = tostring(text)
+    local position = 1
+
+    while true do
+        local newline_start = text_value:find("\n", position, true)
+        if not newline_start then
+            table.insert(lines, text_value:sub(position))
+            break
+        end
+
+        table.insert(lines, text_value:sub(position, newline_start - 1))
+        position = newline_start + 1
+    end
+
+    if #lines == 0 then
+        return
+    end
+
+    local start_y = y - ((#lines - 1) * line_height / 2)
+    for index, line in ipairs(lines) do
+        drawCenteredSpacedText(line, x, start_y + ((index - 1) * line_height))
+    end
 end
 
 local function getSpacedSegmentsWidth(font, segments)
@@ -141,6 +167,34 @@ local function compareVersions(left, right)
     return 0
 end
 
+local function isUsableRelease(release)
+    return type(release) == "table"
+        and release.draft ~= true
+        and type(release.tag_name) == "string"
+        and parseVersion(release.tag_name) ~= nil
+end
+
+local function getNewestRelease(data)
+    if type(data) ~= "table" then
+        return nil
+    end
+
+    if isUsableRelease(data) then
+        return data
+    end
+
+    local newest = nil
+    for _, release in ipairs(data) do
+        if isUsableRelease(release) then
+            if not newest or compareVersions(release.tag_name, newest.tag_name) > 0 then
+                newest = release
+            end
+        end
+    end
+
+    return newest
+end
+
 function UpdateCheckSplash:init(done_callback)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
@@ -213,13 +267,19 @@ function UpdateCheckSplash:onResponse(response, body)
     end
 
     local ok, data = pcall(JSON.decode, body)
-    if not ok or type(data) ~= "table" or type(data.tag_name) ~= "string" then
+    if not ok then
         self:setStatus("failed")
         return
     end
 
-    self.remote_version = data.tag_name
-    self.download_url = data.html_url or RELEASE_DOWNLOAD_URL
+    local release = getNewestRelease(data)
+    if not release then
+        self:setStatus("failed")
+        return
+    end
+
+    self.remote_version = release.tag_name
+    self.download_url = release.html_url or RELEASE_DOWNLOAD_URL
 
     local current_version = Mod and Mod.info and Mod.info.version
     local comparison = compareVersions(self.remote_version, current_version)
@@ -376,7 +436,7 @@ function UpdateCheckSplash:drawStatusMessage()
 
     love.graphics.setFont(self.font)
     Draw.setColor(1, 1, 1, self.alpha)
-    drawCenteredSpacedText(self.message, SCREEN_WIDTH / 2, 220)
+    drawCenteredSpacedLines(self.message, SCREEN_WIDTH / 2, 220, 36)
 end
 
 function UpdateCheckSplash:drawNewVersionMessage()

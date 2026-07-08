@@ -70,7 +70,7 @@
     "update_check.new_found_prefix": "发现新版本 ",
     "update_check.copy_prompt_left": "按 ",
     "update_check.copy_prompt_right": " 复制下载链接",
-    "update_check.failed": "检测失败",
+    "update_check.failed": "检测新版本失败\n请检查网络设置",
     "update_check.latest": "当前版本 [var:version] 即为最新版",
     "update_check.copy_copied": "已复制！",
     "update_check.copy_opened": "已打开下载页",
