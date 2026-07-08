@@ -45,13 +45,22 @@ if [ -n "$repo_url" ]; then
   fi
 fi
 
+pre_1_notice_zh=""
+pre_1_notice_en=""
+version_text="${tag#v}"
+major_version="${version_text%%.*}"
+if [[ "$major_version" =~ ^[0-9]+$ ]] && [ "$major_version" -lt 1 ]; then
+  pre_1_notice_zh=$'\n> 这是测试版本，可能不稳定，内容、存档兼容性和功能表现都可能在后续版本中发生变化。请优先下载最新版本；如果遇到问题，反馈时请附上版本号和复现步骤。\n'
+  pre_1_notice_en=$'\n> This is a test build and may be unstable. Content, save compatibility, and feature behavior may change in later versions. Please use the latest build when possible; if you run into issues, include the version number and reproduction steps when reporting them.\n'
+fi
+
 cat > "$output_file" <<EOF
 ## 中文
 
-**GitHub Release 和（即将发布的）Game Jolt 页面，是本游戏的官方发布源！**
+**GitHub Release 和（即将发布的）Gamejolt 页面，是本游戏的官方发布源！**
 
 本游戏是开源的。请务必在官方发布源下载游戏，以确保你获得的是未经篡改、来源明确、版本正确的官方构建，避免第三方重新打包带来的安全风险。
-
+${pre_1_notice_zh}
 ### 版本说明
 
 - **debug 版本**：开启了 Kristal dev 模式，且支持外部 \`mod.json\` 覆盖。
@@ -66,10 +75,10 @@ cat > "$output_file" <<EOF
 
 ## English
 
-**GitHub Releases and the (coming soon) Game Jolt page are the official distribution sources for this game.**
+**GitHub Releases and the (coming soon) Gamejolt page are the official distribution sources for this game.**
 
 This game is open source. Please download it only from official sources to make sure you get an untampered, clearly sourced, correct official build, and to avoid security risks from third-party repackaging.
-
+${pre_1_notice_en}
 ### Build Types
 
 - **Debug build**: Enables Kristal dev mode and supports external \`mod.json\` overrides.
