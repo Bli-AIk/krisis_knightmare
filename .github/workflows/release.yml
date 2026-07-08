@@ -105,10 +105,17 @@ jobs:
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
           )
+          release_flags=()
+
+          version="${GITHUB_REF_NAME#v}"
+          major="${version%%.*}"
+          if [[ "$major" =~ ^[0-9]+$ ]] && [ "$major" -lt 1 ]; then
+            release_flags+=(--prerelease)
+          fi
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "$title" --notes-file release_notes.md
+            gh release edit "$GITHUB_REF_NAME" --title "$title" --notes-file release_notes.md "${release_flags[@]}"
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "$title" --notes-file release_notes.md
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "$title" --notes-file release_notes.md "${release_flags[@]}"
           fi
