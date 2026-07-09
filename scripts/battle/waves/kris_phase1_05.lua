@@ -12,6 +12,8 @@ local END_DELAY_FRAMES = 5
 local DISAPPEAR_HOLD_FRAME = 1
 local DISAPPEAR_HOLD_SECONDS = 1.25
 local SWORD_SPAWN_DELAY_SECONDS = DISAPPEAR_FRAME_SECONDS * DISAPPEAR_HOLD_FRAME + DISAPPEAR_HOLD_SECONDS
+local APPEAR_SOUND = "grab"
+local BIG_SWORD_SWING_SOUND = "swing"
 
 local CATCH_KRIS_OFFSET_X = 24
 
@@ -60,6 +62,7 @@ local function playDisappearingWithHold(attacker, callback)
 end
 
 function KrisPhase1_05:spawnFlyingSword()
+    Assets.playSound(BIG_SWORD_SWING_SOUND)
     local sword = self:spawnBullet("flying_sword", 320, 240, 0, math.rad(12))
     sword.on_catch_ready = function()
         self:startCatchSword()
@@ -71,6 +74,8 @@ function KrisPhase1_05:spawnFlyingSword()
 end
 
 function KrisPhase1_05:onStart()
+    Assets.playSound(APPEAR_SOUND, 0.8)
+
     self.kris_home_positions = {}
     self.can_finish = false
     self.catch_ready_started = false
@@ -128,6 +133,8 @@ function KrisPhase1_05:finishCatchSword()
 end
 
 function KrisPhase1_05:onEnd(death)
+    Assets.playSound(APPEAR_SOUND, 0.8)
+
     for _, attacker in ipairs(self:getAttackers()) do
         local home = self.kris_home_positions and self.kris_home_positions[attacker]
         if home then
