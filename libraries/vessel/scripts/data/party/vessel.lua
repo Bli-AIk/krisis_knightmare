@@ -55,7 +55,7 @@ function character:init()
     self.name_sprite = "party/vessel/name"
 
     self.attack_sprite = "battle/attack/spr_quiz_lightning_big"
-    self.attack_sound = "laz_c"
+    self.attack_sound = "vessel_thunder"
     self.attack_pitch = 1
 
     self.battle_offset = { 19, 3 }
@@ -63,6 +63,13 @@ function character:init()
     self.menu_icon_offset = nil
 
     self.gameover_message = nil
+end
+
+function character:getAttackSound()
+    if Mod and Mod.queueSuppressVesselAttackSound then
+        Mod:queueSuppressVesselAttackSound()
+    end
+    return self.attack_sound
 end
 
 function character:onLevelUp(level)

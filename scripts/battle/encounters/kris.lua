@@ -238,6 +238,7 @@ function Kris:setPlatformSprite(texture, fade_time)
 end
 
 function Kris:triggerRechargeActVisuals(battler)
+    Assets.playSound("vessel_charge")
     self:spawnRechargeRadialBurst(battler, {
         after_snapshot = function()
             self:spawnRechargeWhiteFlash(battler)

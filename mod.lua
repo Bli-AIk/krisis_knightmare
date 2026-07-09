@@ -44,6 +44,7 @@ end
 
 local localizeChapterSelectText
 local CHAPTER_SELECT_CJK_TEXT_SPACING = 4
+local VESSEL_ATTACK_SOUND = "vessel_thunder"
 
 local function isChapterSelectCjkCodepoint(codepoint)
     return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
@@ -446,6 +447,28 @@ function Mod:hookTemporaryDefaultBattleEntry()
     end)
 end
 
+function Mod:queueSuppressVesselAttackSound()
+    self.suppress_next_vessel_attack_sound = true
+end
+
+function Mod:hookVesselAttackSound()
+    if self.vessel_attack_sound_hooked or not Assets then
+        return
+    end
+    self.vessel_attack_sound_hooked = true
+
+    HookSystem.hook(Assets, "stopAndPlaySound", function(orig, sound, volume, pitch, actually_stop)
+        if self.suppress_next_vessel_attack_sound then
+            self.suppress_next_vessel_attack_sound = false
+            if sound == VESSEL_ATTACK_SOUND then
+                return orig(sound, 0, pitch, actually_stop)
+            end
+        end
+
+        return orig(sound, volume, pitch, actually_stop)
+    end)
+end
+
 function Mod:setTemporaryDefaultBattleEntry(encounter)
     self.krisis_default_battle_entry = encounter
     if Kristal then
@@ -511,6 +534,7 @@ function Mod:init()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
+    self:hookVesselAttackSound()
     self:loadKrisisRunOptions()
 
     Game:registerEvent("squeak", function(data)
@@ -536,6 +560,7 @@ function Mod:postUpdate()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
+    self:hookVesselAttackSound()
 
     if Game.getLanguage then
         local language = Game:getLanguage()

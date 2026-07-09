@@ -3,6 +3,8 @@ local Sprite, super = HookSystem.hookScript(Sprite)
 local VESSEL_ATTACK_SPRITE = "battle/attack/spr_quiz_lightning_big"
 local VESSEL_ATTACK_ORIGIN_UP = 48 - 13 - 1
 local VESSEL_ATTACK_SCALE = 0.5
+local VESSEL_ATTACK_SOUND = "vessel_thunder"
+local VESSEL_ATTACK_SOUND_FRAME = 2
 
 local function getVesselAttackFrames()
     local frames = {}
@@ -31,15 +33,42 @@ local function applyVesselAttackOrigin(sprite)
     sprite.origin_exact = true
 end
 
+local function isVesselAttackDamageSprite(sprite)
+    if not sprite.krisis_vessel_attack_origin or not sprite.battler_id then
+        return false
+    end
+
+    local battler = Game.battle and Game.battle.party and Game.battle.party[sprite.battler_id]
+    return battler and battler.chara and battler.chara.id == "vessel"
+end
+
+local function playVesselAttackSoundOnFrame(sprite)
+    if sprite.frame ~= VESSEL_ATTACK_SOUND_FRAME
+        or sprite.krisis_vessel_attack_sound_played
+        or not isVesselAttackDamageSprite(sprite)
+    then
+        return
+    end
+
+    sprite.krisis_vessel_attack_sound_played = true
+    Assets.stopAndPlaySound(VESSEL_ATTACK_SOUND)
+end
+
 function Sprite:setSprite(texture, keep_anim)
     if type(texture) == "string" then
         self.krisis_vessel_attack_origin = self:getPath(texture) == VESSEL_ATTACK_SPRITE
     else
         self.krisis_vessel_attack_origin = false
     end
+    self.krisis_vessel_attack_sound_played = false
 
     super.setSprite(self, texture, keep_anim)
     applyVesselAttackOrigin(self)
+end
+
+function Sprite:setFrame(frame)
+    super.setFrame(self, frame)
+    playVesselAttackSoundOnFrame(self)
 end
 
 function Sprite:setFrames(frames, keep_anim)
