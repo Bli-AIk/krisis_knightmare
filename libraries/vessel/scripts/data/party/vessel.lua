@@ -69,6 +69,15 @@ function character:getAttackSound()
     if Mod and Mod.queueSuppressVesselAttackSound then
         Mod:queueSuppressVesselAttackSound()
     end
+
+    local battle = Game.battle
+    local action = battle and battle.getCurrentAction and battle:getCurrentAction()
+    local battler = action and battle.party and battle.party[action.character_id]
+    local target = action and action.target
+    if battler and battler.chara == self and target and target.preHurtVesselOnAttackStart then
+        target:preHurtVesselOnAttackStart(battler, action.points, action)
+    end
+
     return self.attack_sound
 end
 

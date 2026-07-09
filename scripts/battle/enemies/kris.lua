@@ -89,6 +89,19 @@ local function liftMercyTextLayer(enemy, mercy_text)
     )
 end
 
+local function getVesselAttackResults(points)
+    points = tonumber(points) or 0
+    if points <= 0 then
+        return nil
+    end
+
+    local t = (points - 100) / 50
+    if t < 0 then t = 0 elseif t > 1 then t = 1 end
+
+    return math.floor(40 - 20 * t + 0.5),
+        math.floor(4 + 4 * t + 0.5)
+end
+
 function Kris:init()
     super.init(self)
 
@@ -447,16 +460,36 @@ function Kris:getAttackDamage(damage, battler, points)
     return super.getAttackDamage(self, damage, battler, points)
 end
 
+function Kris:preHurtVesselOnAttackStart(battler, points, action)
+    if not battler or not battler.chara or battler.chara.id ~= "vessel" then
+        return false
+    end
+
+    if action and action.krisis_vessel_attack_pre_hurt then
+        return true
+    end
+
+    local vessel_damage = getVesselAttackResults(points)
+    if not vessel_damage then
+        return false
+    end
+
+    if action then
+        action.krisis_vessel_attack_pre_hurt = true
+    end
+    battler:hurt(vessel_damage, true)
+    return true
+end
+
 function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
     if battler and battler.chara.id == "vessel" then
-        local points = amount
-        if points > 0 then
-            local t = (points - 100) / 50
-            if t < 0 then t = 0 elseif t > 1 then t = 1 end
-            local vessel_damage = math.floor(40 - 20 * t + 0.5)
-            local mercy = math.floor(4 + 4 * t + 0.5)
+        local vessel_damage, mercy = getVesselAttackResults(amount)
+        if vessel_damage then
             self:addMercy(mercy)
-            battler:hurt(vessel_damage, true)
+            local action = Game.battle and Game.battle.getCurrentAction and Game.battle:getCurrentAction()
+            if not action or not action.krisis_vessel_attack_pre_hurt then
+                battler:hurt(vessel_damage, true)
+            end
             return
         end
     end
