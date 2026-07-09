@@ -19,6 +19,26 @@ local NAME_STYLE_PROMPT_COLOR_CURRENT = { 0.45, 1, 0.45 }
 local NAME_STYLE_PROMPT_COLOR_KEY = { 0, 0.95, 1 }
 local NAME_STYLE_PROMPT_COLOR_TEXT = { 1, 1, 1 }
 local NAME_STYLE_PROMPT_CJK_TEXT_SPACING = 4
+local KRIS_SHORTCUT_CHAPTER_INDEX = 6
+local KRIS_SHORTCUT_SEQUENCE_MAX_GAP = 0.55
+local KRIS_SHORTCUT_PROMPT_INPUT_DELAY = 0.5
+local KRIS_SHORTCUT_HOLD_TIME = 0.65
+local KRIS_SHORTCUT_SEQUENCE = { "confirm", "cancel", "confirm", "cancel", "confirm", "cancel" }
+local KRIS_SHORTCUT_YELLOW = { 1, 1, 0 }
+local KRIS_SHORTCUT_WHITE = { 1, 1, 1 }
+
+local function loc(default, id, vars)
+    if Game and Game.loc then
+        return Game:loc(default, id, vars)
+    end
+
+    if type(default) == "string" and type(vars) == "table" then
+        for key, value in pairs(vars) do
+            default = default:gsub("%[var:" .. tostring(key) .. "%]", tostring(value))
+        end
+    end
+    return default
+end
 
 local function isNameStylePromptCjkCodepoint(codepoint)
     return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
@@ -52,6 +72,40 @@ local function drawNameStylePromptText(text, x, y)
             cursor_x = cursor_x + NAME_STYLE_PROMPT_CJK_TEXT_SPACING
         end
     end
+end
+
+local function getPromptSegmentsWidth(font, segments)
+    local width = 0
+    for _, segment in ipairs(segments) do
+        width = width + getNameStylePromptTextWidth(font, tostring(segment.text or ""))
+    end
+    return width
+end
+
+local function drawPromptSegments(segments, x, y, align, alpha)
+    local font = love.graphics.getFont()
+    local width = getPromptSegmentsWidth(font, segments)
+    local cursor_x = x
+
+    if align == "center" then
+        cursor_x = x - (width / 2)
+    elseif align == "right" then
+        cursor_x = x - width
+    end
+
+    for _, segment in ipairs(segments) do
+        local text = tostring(segment.text or "")
+        local color = segment.color or KRIS_SHORTCUT_WHITE
+        Draw.setColor(color[1], color[2], color[3], alpha or 1)
+        drawNameStylePromptText(text, cursor_x, y)
+        cursor_x = cursor_x + getNameStylePromptTextWidth(font, text)
+    end
+end
+
+local function cleanInputText(text, fallback)
+    text = tostring(text or fallback or "")
+    text = text:gsub("^%[", ""):gsub("%]$", "")
+    return text ~= "" and text or tostring(fallback or "")
 end
 
 ---@class ChapterSelect.Chapter
@@ -102,10 +156,22 @@ function ChapterSelect:init()
     self.name_style_prompt_last_name_style = name_style
     self.name_style_prompt_pending_initial = self:shouldShowInitialNameStylePrompt(language)
     self.name_style_prompt_loaded_frames = 0
+    self.kris_shortcut_sequence_position = 1
+    self.kris_shortcut_last_input_time = nil
+    self.kris_shortcut_prompt = false
+    self.kris_shortcut_prompt_time = 0
+    self.kris_shortcut_hold_time = 0
+    self.kris_shortcut_starting = false
 end
 
 function ChapterSelect:update()
     super.update(self)
+
+    if self.kris_shortcut_prompt then
+        self:updateKrisShortcutPrompt()
+        return
+    end
+
     self:updateNameStylePromptTrigger()
     self:updateInitialNameStylePrompt()
 
@@ -185,6 +251,11 @@ end
 
 function ChapterSelect:draw()
     self:updateFonts()
+    if self.kris_shortcut_prompt then
+        self:drawKrisShortcutPrompt()
+        return
+    end
+
     super.draw(self)
     local canvas = Draw.pushCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
     love.graphics.setFont(self.font)
@@ -432,6 +503,231 @@ function ChapterSelect:drawNameStylePrompt()
     love.graphics.setFont(old_font)
 end
 
+function ChapterSelect:getKrisShortcutKeyText(alias, fallback)
+    if Input and Input.getText then
+        return cleanInputText(Input.getText(alias), fallback)
+    end
+    return fallback
+end
+
+function ChapterSelect:getKrisShortcutKrisName()
+    if Game and Game.locName then
+        return Game:locName("actor", "kris", "KRIS")
+    end
+    return "KRIS"
+end
+
+function ChapterSelect:getKrisShortcutInput(key)
+    if Input.isConfirm(key) then
+        return "confirm"
+    elseif Input.isCancel(key) then
+        return "cancel"
+    end
+    return nil
+end
+
+function ChapterSelect:isKrisShortcutChapterSelected()
+    local chapter = self.chapters and self.chapters[self.selected_y]
+    return chapter and chapter.index == KRIS_SHORTCUT_CHAPTER_INDEX
+end
+
+function ChapterSelect:resetKrisShortcutSequence()
+    self.kris_shortcut_sequence_position = 1
+    self.kris_shortcut_last_input_time = nil
+end
+
+function ChapterSelect:updateKrisShortcutSequence(input)
+    if not input then
+        return false
+    end
+
+    if not self:isKrisShortcutChapterSelected() then
+        self:resetKrisShortcutSequence()
+        return false
+    end
+
+    local now = love.timer and love.timer.getTime and love.timer.getTime() or 0
+    if self.kris_shortcut_last_input_time
+        and now - self.kris_shortcut_last_input_time > KRIS_SHORTCUT_SEQUENCE_MAX_GAP
+    then
+        self:resetKrisShortcutSequence()
+    end
+
+    local position = self.kris_shortcut_sequence_position or 1
+    if input == KRIS_SHORTCUT_SEQUENCE[position] then
+        self.kris_shortcut_sequence_position = position + 1
+    elseif input == KRIS_SHORTCUT_SEQUENCE[1] then
+        self.kris_shortcut_sequence_position = 2
+    else
+        self:resetKrisShortcutSequence()
+    end
+
+    self.kris_shortcut_last_input_time = now
+
+    if (self.kris_shortcut_sequence_position or 1) > #KRIS_SHORTCUT_SEQUENCE then
+        self:openKrisShortcutPrompt()
+        return true
+    end
+
+    return false
+end
+
+function ChapterSelect:openKrisShortcutPrompt()
+    self.kris_shortcut_prompt = true
+    self.kris_shortcut_prompt_time = 0
+    self.kris_shortcut_hold_time = 0
+    self.kris_shortcut_starting = false
+    self.selected_x = 1
+    self.state = "SELECT"
+    self:resetKrisShortcutSequence()
+    self:hideNameStylePrompt()
+
+    if Game.world and Game.world.music then
+        Game.world.music:stop()
+    end
+    if Assets.stopAllSounds then
+        Assets.stopAllSounds()
+    end
+    Input.clear("confirm", true)
+    Input.clear("cancel", true)
+end
+
+function ChapterSelect:closeKrisShortcutPrompt()
+    self.kris_shortcut_prompt = false
+    self.kris_shortcut_prompt_time = 0
+    self.kris_shortcut_hold_time = 0
+    self.kris_shortcut_starting = false
+    self.selected_x = 1
+    self.state = "SELECT"
+    self:resetKrisShortcutSequence()
+
+    Input.clear("confirm", true)
+    Input.clear("cancel", true)
+    if Game.world and Game.world.transitionMusic then
+        Game.world:transitionMusic("AUDIO_DRONE")
+    end
+end
+
+function ChapterSelect:startKrisShortcutBattle()
+    if self.kris_shortcut_starting then
+        return
+    end
+
+    self.kris_shortcut_starting = true
+    if Mod.setTemporaryDefaultBattleEntry then
+        Mod:setTemporaryDefaultBattleEntry("kris")
+    else
+        Mod.krisis_default_battle_entry = "kris"
+        if Kristal then
+            Kristal.krisis_default_battle_entry = "kris"
+        end
+        if Mod.info then
+            Mod.info.encounter = "kris"
+        end
+    end
+
+    if Game.world and Game.world.music then
+        Game.world.music:stop()
+    end
+    if Assets.stopAllSounds then
+        Assets.stopAllSounds()
+    end
+
+    Input.clear("confirm", true)
+    Input.clear("cancel", true)
+
+    if Game.world then
+        Game.world:closeMenu()
+    end
+    Game:encounter("kris", false)
+end
+
+function ChapterSelect:updateKrisShortcutPrompt()
+    self.kris_shortcut_prompt_time = (self.kris_shortcut_prompt_time or 0) + DT
+    if self.kris_shortcut_prompt_time < KRIS_SHORTCUT_PROMPT_INPUT_DELAY then
+        self.kris_shortcut_hold_time = 0
+        return
+    end
+
+    if Input.down("confirm") then
+        self.kris_shortcut_hold_time = self.kris_shortcut_hold_time + DT
+        if self.kris_shortcut_hold_time >= KRIS_SHORTCUT_HOLD_TIME then
+            self:startKrisShortcutBattle()
+        end
+    else
+        self.kris_shortcut_hold_time = 0
+    end
+end
+
+function ChapterSelect:onKeyPressedKrisShortcut(key)
+    if (self.kris_shortcut_prompt_time or 0) < KRIS_SHORTCUT_PROMPT_INPUT_DELAY then
+        return
+    end
+
+    if Input.isCancel(key) then
+        self:closeKrisShortcutPrompt()
+    end
+end
+
+function ChapterSelect:drawKrisShortcutPrompt()
+    local old_font = love.graphics.getFont()
+    local language = Game.getLanguage and Game:getLanguage() or nil
+    local z_text = self:getKrisShortcutKeyText("confirm", "Z")
+    local x_text = self:getKrisShortcutKeyText("cancel", "X")
+
+    Draw.setColor(0, 0, 0, 1)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    love.graphics.setFont(self:getFontForLanguage(language))
+    drawPromptSegments({
+        {
+            text = loc("Jump directly to the battle with [var:kris]?", "chapter_select.kris_shortcut_question", {
+                kris = self:getKrisShortcutKrisName(),
+            }),
+        },
+    }, SCREEN_WIDTH / 2, 220, "center", 1)
+
+    love.graphics.setFont(self:getFontForLanguage(language, 16))
+    if (self.kris_shortcut_prompt_time or 0) < KRIS_SHORTCUT_PROMPT_INPUT_DELAY then
+        love.graphics.setFont(old_font)
+        return
+    end
+
+    drawPromptSegments({
+        { text = loc("Hold ", "chapter_select.kris_shortcut_hold_left") },
+        { text = z_text, color = KRIS_SHORTCUT_YELLOW },
+        { text = loc(" to jump", "chapter_select.kris_shortcut_hold_right") },
+    }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 82, "right", 1)
+    drawPromptSegments({
+        { text = loc("This will temporarily set the game to ", "chapter_select.kris_shortcut_default_left") },
+        {
+            text = loc("default battle entry", "chapter_select.kris_shortcut_default_highlight"),
+            color = KRIS_SHORTCUT_YELLOW,
+        },
+        { text = loc("", "chapter_select.kris_shortcut_default_right") },
+    }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 58, "right", 1)
+    drawPromptSegments({
+        { text = loc("Press ", "chapter_select.kris_shortcut_return_left") },
+        { text = x_text, color = KRIS_SHORTCUT_YELLOW },
+        { text = loc(" to return to Chapter Select", "chapter_select.kris_shortcut_return_right") },
+    }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 34, "right", 1)
+
+    if self.kris_shortcut_hold_time > 0 then
+        local width = 224
+        local height = 4
+        local x = SCREEN_WIDTH - width - 20
+        local y = SCREEN_HEIGHT - 10
+        local progress = math.min(self.kris_shortcut_hold_time / KRIS_SHORTCUT_HOLD_TIME, 1)
+
+        Draw.setColor(0.28, 0.28, 0.28, 1)
+        love.graphics.rectangle("fill", x, y, width, height)
+        Draw.setColor(1, 1, 1, 1)
+        love.graphics.rectangle("fill", x, y, width * progress, height)
+    end
+
+    love.graphics.setFont(old_font)
+end
+
 function ChapterSelect:switchNameStyle()
     if not self:canUseNameStylePrompt(Game.getLanguage and Game:getLanguage() or nil) then
         return false
@@ -550,11 +846,19 @@ function ChapterSelect:onKeyPressed(key)
     if not Kristal.getLibConfig("obscurachapters", "interactable_while_fading") and self.alpha < 1 then
         return
     end
+    if self.kris_shortcut_prompt then
+        self:onKeyPressedKrisShortcut(key)
+        return
+    end
     if key == "escape" then
         self:openOptions()
         return
     end
     if key == "c" and self:switchNameStyle() then
+        return
+    end
+    local kris_shortcut_input = self:getKrisShortcutInput(key)
+    if self:updateKrisShortcutSequence(kris_shortcut_input) then
         return
     end
     if self.state == "SELECT" then

@@ -6,6 +6,10 @@ local function openChapterSelect(world)
     world:openMenu(ChapterSelect())
 end
 
+local function hasDefaultEncounter()
+    return Kristal and Kristal.getModOption and Kristal.getModOption("encounter") ~= nil
+end
+
 function map:init(world,data)
     super.init(self,world,data)
     self.music = nil
@@ -16,6 +20,11 @@ function map:onEnter()
     -- It's the funniest thing ever! If you press F6, you'll see A SINGLE GREEN PIXEL!!!
     self.world.player:setPosition(-4,19)
     self.world.can_open_menu = false
+
+    if hasDefaultEncounter() then
+        Mod.krisis_update_check_seen = true
+        return
+    end
 
     if Mod.krisis_update_check_seen then
         openChapterSelect(self.world)

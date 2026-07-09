@@ -392,7 +392,35 @@ function Mod:hookWorldMenuRestore()
     end)
 end
 
+function Mod:hookTemporaryDefaultBattleEntry()
+    if self.temporary_default_battle_entry_hooked or not Kristal then
+        return
+    end
+    self.temporary_default_battle_entry_hooked = true
+
+    HookSystem.hook(Kristal, "getModOption", function(orig, key, ...)
+        if key == "encounter" and Kristal.krisis_default_battle_entry then
+            return Kristal.krisis_default_battle_entry
+        end
+        if key == "map" and (Kristal.krisis_default_battle_entry or orig("encounter")) then
+            return nil
+        end
+        return orig(key, ...)
+    end)
+end
+
+function Mod:setTemporaryDefaultBattleEntry(encounter)
+    self.krisis_default_battle_entry = encounter
+    if Kristal then
+        Kristal.krisis_default_battle_entry = encounter
+    end
+    if self.info then
+        self.info.encounter = encounter
+    end
+end
+
 function Mod:init()
+    self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
 
@@ -416,6 +444,7 @@ function Mod:updateBattleLocalization()
 end
 
 function Mod:postUpdate()
+    self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
 
