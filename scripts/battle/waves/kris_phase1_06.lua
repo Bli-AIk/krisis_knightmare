@@ -31,10 +31,10 @@ function KrisPhase1_06:spawnSoulDepthMask()
     end
 
     local arena_height = self:getArenaHeight()
-    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8, {
+    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8, self:getSoulDepthMaskOptions({
         radial_particles = true,
         radial_rings = true,
-    })
+    }))
     self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
     self:startPlayerAttraction()
 
