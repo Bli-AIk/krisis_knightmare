@@ -66,6 +66,7 @@ This project is a fan-game adaptation of the Bilibili animation [KRISIS KNIGHTMA
 | Role | Name |
 |------|------|
 | Game Developer | Bli_AIk |
+| Game Testing | church\_wafer, Nahisa图文, 滑稽体验镇魂曲, Gpie\_A, Anskiyy |
 | Engine | [Kristal](https://github.com/KristalTeam/Kristal) |
 
 ## How to Use

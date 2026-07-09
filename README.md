@@ -66,6 +66,7 @@
 | 职责 | 人员 |
 |------|------|
 | 游戏化开发 | Bli_AIk |
+| 游戏测试 | church\_wafer, Nahisa图文, 滑稽体验镇魂曲, Gpie\_A, Anskiyy |
 | 引擎 | [Kristal](https://github.com/KristalTeam/Kristal) |
 
 ## 使用方式
