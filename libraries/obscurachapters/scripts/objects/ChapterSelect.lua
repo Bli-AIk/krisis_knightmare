@@ -889,7 +889,7 @@ end
 ---@param chapter ChapterSelect.Chapter
 function ChapterSelect:startEnterChapter(chapter)
     if chapter.index and chapter.index <= 5 then
-        -- TODO: 之后这里得放个音效
+        Assets.playSound("ui_cancel")
         self:shake(12, 6, 0.7)
     else
         local texture = love.graphics.newImage(Draw.captureObject(self, "none"):newImageData())
