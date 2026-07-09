@@ -605,7 +605,7 @@ function KrisPhase1_03:onEnd(death)
         if home then
             moveAttackerTo(attacker, home.x, home.y)
         end
-        Assets.playSound(APPEAR_SOUND)
+        Assets.playSound(APPEAR_SOUND, 0.8)
         attacker:setAnimation("appear")
     end
 

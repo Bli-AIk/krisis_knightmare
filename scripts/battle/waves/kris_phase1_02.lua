@@ -395,7 +395,7 @@ end
 
 function KrisPhase1_02:spawnSlash(x, y, rotation, kris_x, kris_y)
     self:setupSlashAssets()
-    Assets.playSound(SLASH_SOUND, 2.0)
+    Assets.playSound(SLASH_SOUND)
     shakeArena(kris_x, kris_y)
 
     x = x or SCREEN_WIDTH / 2
@@ -522,7 +522,7 @@ function KrisPhase1_02:onEnd(death)
         if home then
             moveAttackerTo(attacker, home.x, home.y)
         end
-        Assets.playSound(APPEAR_SOUND)
+        Assets.playSound(APPEAR_SOUND, 0.8)
         attacker:setAnimation("appear")
     end
 
