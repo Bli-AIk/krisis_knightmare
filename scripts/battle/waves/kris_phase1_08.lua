@@ -30,6 +30,7 @@ local PAIR_SCALE_MAX = 3
 local SINGLE_CLOSE_Y_DISTANCE = 56
 local SINGLE_FORCED_SEPARATION_DISTANCE = 96
 local SINGLE_HISTORY_LIMIT = 2
+local SHARP_SWORD_FIRE_SOUND = "kris_wild_slash"
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -51,6 +52,7 @@ function KrisPhase1_08:init()
     self.fire_started = false
     self.minimum_fire_phase_elapsed = false
     self.fire_release_timer_started = false
+    self.final_fire_sound_played = false
     self.recent_single_sharp_swords = {}
 end
 
@@ -382,7 +384,21 @@ function KrisPhase1_08:onSharpSwordFireStarted()
     self:finishIfReady()
 end
 
+function KrisPhase1_08:playSharpSwordFireSound()
+    Assets.playSound(SHARP_SWORD_FIRE_SOUND)
+end
+
+function KrisPhase1_08:playFinalSharpSwordFireSound()
+    if self.final_fire_sound_played then
+        return
+    end
+
+    self.final_fire_sound_played = true
+    self:playSharpSwordFireSound()
+end
+
 function KrisPhase1_08:onSharpSwordFireLaunched()
+    self:playFinalSharpSwordFireSound()
     self.launched_fire_count = (self.launched_fire_count or 0) + 1
     self:finishIfReady()
 end
@@ -424,6 +440,7 @@ function KrisPhase1_08:onStart()
     self.fire_started = false
     self.minimum_fire_phase_elapsed = false
     self.fire_release_timer_started = false
+    self.final_fire_sound_played = false
     self.recent_single_sharp_swords = {}
     super.onStart(self)
 end
