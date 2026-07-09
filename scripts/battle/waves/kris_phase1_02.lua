@@ -10,6 +10,8 @@ local SLASH_CIRCLE_SIZE = 200
 local SLASH_START_DELAY = 16 / 30
 local DEFAULT_SLASH_INTERVAL = 50 / 60
 local SLASH_SOUND = "kris_wild_slash"
+local DISAPPEAR_SOUND = "kris_disappear"
+local APPEAR_SOUND = "grab"
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
 local TOP_SLASH_Y = 88
@@ -486,6 +488,7 @@ function KrisPhase1_02:onStart()
             x = attacker.target_x or attacker.x,
             y = attacker.target_y or attacker.y,
         }
+        Assets.playSound(DISAPPEAR_SOUND)
         attacker:setAnimation("flying_sword_disappear", function()
             moveAttackerAway(attacker)
         end)
@@ -519,6 +522,7 @@ function KrisPhase1_02:onEnd(death)
         if home then
             moveAttackerTo(attacker, home.x, home.y)
         end
+        Assets.playSound(APPEAR_SOUND)
         attacker:setAnimation("appear")
     end
 

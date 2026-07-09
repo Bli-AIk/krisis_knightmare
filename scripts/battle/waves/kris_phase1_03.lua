@@ -41,8 +41,11 @@ local SIDE_PATTERN = { "top", "bottom" }
 
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
+local DISAPPEAR_SOUND = "kris_disappear"
+local APPEAR_SOUND = "grab"
 local KRIS_SWORD_HALL_FRAME_FRAMES = 4
 local KRIS_SWORD_HALL_BULLET_START_FRAME = 6
+local KRIS_SWORD_HALL_DISAPPEAR_SOUND_FRAME = 5
 local KRIS_SWORD_HALL_BULLET_START_WAVE_FRAME =
     (KRIS_SWORD_HALL_BULLET_START_FRAME - 1) * KRIS_SWORD_HALL_FRAME_FRAMES
 
@@ -72,6 +75,10 @@ local function playSwordHallDisappear(attacker, on_bullet_start, on_finished)
             local frame_count = sprite.frames and #sprite.frames or 0
             for frame = 1, frame_count do
                 sprite:setFrame(frame)
+
+                if frame == KRIS_SWORD_HALL_DISAPPEAR_SOUND_FRAME then
+                    Assets.playSound(DISAPPEAR_SOUND)
+                end
 
                 if frame == KRIS_SWORD_HALL_BULLET_START_FRAME and on_bullet_start then
                     on_bullet_start()
@@ -598,6 +605,7 @@ function KrisPhase1_03:onEnd(death)
         if home then
             moveAttackerTo(attacker, home.x, home.y)
         end
+        Assets.playSound(APPEAR_SOUND)
         attacker:setAnimation("appear")
     end
 
