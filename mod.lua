@@ -211,6 +211,15 @@ local function parsePositiveInteger(value)
     return number
 end
 
+local function parseNonNegativeNumber(value)
+    local number = tonumber(value)
+    if not number or number < 0 then
+        return nil
+    end
+
+    return number
+end
+
 local function chapterNameKey(index)
     return "chapter_select.chapter_" .. tostring(index) .. "_name"
 end
@@ -292,7 +301,12 @@ function Mod:getKrisisConfiguredSeed()
 end
 
 function Mod:getConfig(key)
-    if key == "krisisDebugRechargeRadial" then
+    if key == "krisisInitialTP" then
+        self:loadKrisisRunOptions()
+        if self.krisis_run_initial_tp ~= nil then
+            return self.krisis_run_initial_tp
+        end
+    elseif key == "krisisDebugRechargeRadial" then
         return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL")
     elseif key == "krisisDebugRechargeRadialCapture" then
         return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL_CAPTURE")
@@ -455,6 +469,10 @@ function Mod:loadKrisisRunOptions()
 
     local wave, has_wave = getKristalArg("wave")
     local wave_force, has_wave_force = getKristalArg("wave-force")
+    local initial_tp, has_initial_tp = getKristalArg("tp")
+    if not has_initial_tp then
+        initial_tp, has_initial_tp = getKristalArg("initial-tp")
+    end
 
     if has_wave then
         self.krisis_run_wave = parsePositiveInteger(wave)
@@ -470,7 +488,16 @@ function Mod:loadKrisisRunOptions()
         end
     end
 
-    if (self.krisis_run_wave or self.krisis_run_wave_force) and not has_encounter then
+    if has_initial_tp then
+        self.krisis_run_initial_tp = parseNonNegativeNumber(initial_tp)
+        if self.krisis_run_initial_tp == nil then
+            print("Ignoring invalid --tp value: " .. tostring(initial_tp))
+        end
+    end
+
+    if (self.krisis_run_wave or self.krisis_run_wave_force or self.krisis_run_initial_tp ~= nil)
+        and not has_encounter
+    then
         self:setTemporaryDefaultBattleEntry("kris")
     end
 end
