@@ -89,7 +89,11 @@ function KrisPhase1_01:spawnSoulDepthMask()
     end
 
     local arena_height = self:getArenaHeight()
-    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8)
+    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8, {
+        finale_options = {
+            first_star_wave_sound = "flicker_burst",
+        },
+    })
     self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
     if self.depth_mask_finished and self.depth_mask.beginWhiteFade then
         self.depth_mask:beginWhiteFade()
@@ -166,10 +170,12 @@ function KrisPhase1_01:onStart()
 
     self.timer:after(DEPTH_MASK_SPAWN_TIME, function()
         self:spawnSoulDepthMask()
+        Assets.playSound("soul_charge")
     end)
 
     self.timer:after(DEPTH_MASK_FINISH_TIME, function()
         self:beginSoulDepthFinale()
+        Assets.playSound("soul_absorb")
     end)
 end
 
