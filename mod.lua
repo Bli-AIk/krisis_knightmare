@@ -188,6 +188,29 @@ local function envFlag(name)
     return value == "1" or value == "true" or value == "yes" or value == "on"
 end
 
+local function getKristalArg(name)
+    local args = Kristal and Kristal.Args and Kristal.Args[name]
+    if type(args) ~= "table" then
+        return nil, false
+    end
+
+    return args[1], true
+end
+
+local function parsePositiveInteger(value)
+    local number = tonumber(value)
+    if not number then
+        return nil
+    end
+
+    number = math.floor(number)
+    if number < 1 then
+        return nil
+    end
+
+    return number
+end
+
 local function chapterNameKey(index)
     return "chapter_select.chapter_" .. tostring(index) .. "_name"
 end
@@ -419,10 +442,49 @@ function Mod:setTemporaryDefaultBattleEntry(encounter)
     end
 end
 
+function Mod:loadKrisisRunOptions()
+    if self.krisis_run_options_loaded then
+        return
+    end
+    self.krisis_run_options_loaded = true
+
+    local encounter, has_encounter = getKristalArg("encounter")
+    if has_encounter then
+        self:setTemporaryDefaultBattleEntry(encounter or "kris")
+    end
+
+    local wave, has_wave = getKristalArg("wave")
+    local wave_force, has_wave_force = getKristalArg("wave-force")
+
+    if has_wave then
+        self.krisis_run_wave = parsePositiveInteger(wave)
+        if not self.krisis_run_wave then
+            print("Ignoring invalid --wave value: " .. tostring(wave))
+        end
+    end
+
+    if has_wave_force then
+        self.krisis_run_wave_force = parsePositiveInteger(wave_force)
+        if not self.krisis_run_wave_force then
+            print("Ignoring invalid --wave-force value: " .. tostring(wave_force))
+        end
+    end
+
+    if (self.krisis_run_wave or self.krisis_run_wave_force) and not has_encounter then
+        self:setTemporaryDefaultBattleEntry("kris")
+    end
+end
+
+function Mod:getKrisisRunWaveOptions()
+    self:loadKrisisRunOptions()
+    return self.krisis_run_wave, self.krisis_run_wave_force
+end
+
 function Mod:init()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
+    self:loadKrisisRunOptions()
 
     Game:registerEvent("squeak", function(data)
         return Squeak(data.x, data.y, {data.width, data.height, data.polygon})

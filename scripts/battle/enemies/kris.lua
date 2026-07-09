@@ -31,7 +31,6 @@ local RECHARGE_AVOID_WAVES = {
     [6] = true,
     [11] = true,
 }
-local FORCED_TURN = nil
 
 local function makeWaveList(first, last)
     local waves = {}
@@ -46,6 +45,37 @@ local function randomWaveNumber(first, last)
         return love.math.random(first, last)
     end
     return math.random(first, last)
+end
+
+local function normalizeWaveNumber(value)
+    local number = tonumber(value)
+    if not number then
+        return nil
+    end
+
+    number = math.floor(number)
+    if not TURN_WAVES[number] then
+        return nil
+    end
+
+    return number
+end
+
+local function getConfiguredWaveOptions()
+    if not Mod or not Mod.getKrisisRunWaveOptions then
+        return nil, nil
+    end
+
+    local start_wave, forced_wave = Mod:getKrisisRunWaveOptions()
+    return normalizeWaveNumber(start_wave), normalizeWaveNumber(forced_wave)
+end
+
+local function getWavePhaseForNumber(wave_number)
+    for phase_index, phase in ipairs(WAVE_PHASES) do
+        if wave_number >= phase.first and wave_number <= phase.last then
+            return phase_index, phase
+        end
+    end
 end
 
 local function liftMercyTextLayer(enemy, mercy_text)
@@ -86,6 +116,15 @@ function Kris:init()
     self.wave_select_turn_count = nil
     self.selected_wave_number = nil
     self.recharge_wave_phase_advance_pending = false
+
+    self.start_wave_number, self.forced_wave_number = getConfiguredWaveOptions()
+    if self.start_wave_number then
+        local phase_index, phase = getWavePhaseForNumber(self.start_wave_number)
+        if phase_index and phase then
+            self.wave_phase = phase_index
+            self.wave_phase_turns_played = self.start_wave_number - phase.first
+        end
+    end
 
     self.dialogue = {}
 
@@ -253,8 +292,8 @@ function Kris:getNextPhaseWaveNumber()
 end
 
 function Kris:getEncounterTextWaveNumber()
-    if FORCED_TURN then
-        return FORCED_TURN
+    if self.forced_wave_number then
+        return self.forced_wave_number
     end
 
     local battle_turn = Game.battle and Game.battle.turn_count
@@ -316,11 +355,11 @@ function Kris:advanceWavePhase()
 end
 
 function Kris:selectWave()
-    if FORCED_TURN then
-        local forced_wave = TURN_WAVES[FORCED_TURN]
+    if self.forced_wave_number then
+        local forced_wave = TURN_WAVES[self.forced_wave_number]
         if forced_wave then
             self.selected_wave = forced_wave
-            self.selected_wave_number = FORCED_TURN
+            self.selected_wave_number = self.forced_wave_number
             print("playing wave: " .. self.selected_wave)
             return self.selected_wave
         end
