@@ -48,7 +48,7 @@ local CHIP_QUADRANT_PADDING = math.rad(10)
 local CHIP_LIGHT_DURATION = 20 / 60
 local CHIP_LIGHT_LAYER = BATTLE_LAYERS["bullets"] - 2
 local RED_RECT_APPEAR_SOUND = "big_sword_appear"
-local CHIP_LIGHT_SPAWN_SOUND = "swing"
+local CHIP_LIGHT_SPAWN_SOUND = "kris_phase1_07_swing"
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
