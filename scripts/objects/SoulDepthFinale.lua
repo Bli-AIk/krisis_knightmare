@@ -75,6 +75,8 @@ function SoulDepthFinale:init(x, y, wave, soul_echo, options)
     self.star_layer = default(options.star_layer, STAR_LAYER)
     self.star_bullet = options.star_bullet or "soul_depth_star"
     self.star_bullet_options = options.star_bullet_options
+    self.first_star_wave_sound = options.first_star_wave_sound
+    self.first_star_wave_sound_played = false
     self.waiting_for_snapshot = true
     self.time = 0
     self.next_star_wave = 1
@@ -132,6 +134,11 @@ function SoulDepthFinale:spawnStarWave()
     local wave = self.wave
     if not wave or not wave.parent then
         return
+    end
+
+    if self.first_star_wave_sound and not self.first_star_wave_sound_played then
+        Assets.playSound(self.first_star_wave_sound)
+        self.first_star_wave_sound_played = true
     end
 
     local count = love.math.random(self.star_min_count, self.star_max_count)

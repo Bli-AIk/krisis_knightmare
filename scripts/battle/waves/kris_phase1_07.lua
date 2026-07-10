@@ -47,6 +47,8 @@ local CHIP_BURST_MAX_COUNT = 6
 local CHIP_QUADRANT_PADDING = math.rad(10)
 local CHIP_LIGHT_DURATION = 20 / 60
 local CHIP_LIGHT_LAYER = BATTLE_LAYERS["bullets"] - 2
+local RED_RECT_APPEAR_SOUND = "big_sword_appear"
+local CHIP_LIGHT_SPAWN_SOUND = "swing"
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -224,6 +226,8 @@ function KrisPhase1_07:onStart()
 end
 
 function KrisPhase1_07:startDelayedEffects()
+    Assets.playSound(RED_RECT_APPEAR_SOUND)
+
     local rect = Rectangle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, RECT_WIDTH, RECT_HEIGHT)
     rect:setOrigin(0.5, 0.5)
     rect.color = { 1, 0, 0 }
@@ -384,6 +388,8 @@ function KrisPhase1_07:spawnChipBurst()
 end
 
 function KrisPhase1_07:spawnChipLight()
+    Assets.playSound(CHIP_LIGHT_SPAWN_SOUND)
+
     local x, y = self:getArenaCenter()
     local light = Sprite("bullets/flying_sword/light", x, y)
 

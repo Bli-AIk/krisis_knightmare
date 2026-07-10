@@ -10,16 +10,18 @@ run *args:
 
     usage() {
       printf '%s\n' \
-        'usage: just run [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n]' \
+        'usage: just run [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n]' \
         '' \
         '  --encounter, -e       Start directly in an encounter. Defaults to "kris".' \
         '  --wave, -w            Start the encounter from a specific wave number.' \
-        '  --wave-force, -wf     Lock the encounter to a specific wave number.'
+        '  --wave-force, -wf     Lock the encounter to a specific wave number.' \
+        '  --tp, --initial-tp    Set the starting battle TP. Use -tp as shorthand.'
     }
 
     kristal_args=()
     encounter_requested=0
     wave_requested=0
+    tp_requested=0
 
     require_value() {
       local flag=$1
@@ -59,6 +61,25 @@ run *args:
         -e?*)
           encounter_requested=1
           kristal_args+=(--encounter "${1#-e}")
+          shift
+          ;;
+        --initial-tp=*|--tp=*)
+          tp_requested=1
+          kristal_args+=(--tp "$(require_value --tp "${1#*=}")")
+          shift
+          ;;
+        --initial-tp|--tp|-tp)
+          tp_requested=1
+          if [ "$#" -le 1 ]; then
+            echo "$1 requires a value." >&2
+            exit 64
+          fi
+          kristal_args+=(--tp "$2")
+          shift 2
+          ;;
+        -tp?*)
+          tp_requested=1
+          kristal_args+=(--tp "$(require_value -tp "${1#-tp}")")
           shift
           ;;
         --wave-force=*)
@@ -111,7 +132,7 @@ run *args:
       esac
     done
 
-    if [ "$wave_requested" -eq 1 ] && [ "$encounter_requested" -eq 0 ]; then
+    if { [ "$wave_requested" -eq 1 ] || [ "$tp_requested" -eq 1 ]; } && [ "$encounter_requested" -eq 0 ]; then
       kristal_args+=(--encounter kris)
     fi
 

@@ -94,7 +94,7 @@ function KrisPhase1_11:spawnSoulDepthMask()
     local arena_height = self:getArenaHeight()
     local start_diameter = arena_height * 0.5
     local target_diameter = arena_height * DEPTH_MASK_DIAMETER_SCALE
-    local depth_mask = SoulDepthMask(start_diameter, target_diameter, {
+    local depth_mask = SoulDepthMask(start_diameter, target_diameter, self:getSoulDepthMaskOptions({
         star_burst_min_count = 1,
         star_burst_max_count = 2,
         finale_options = {
@@ -103,7 +103,7 @@ function KrisPhase1_11:spawnSoulDepthMask()
             star_min_count = 8,
             star_max_count = 16,
         },
-    })
+    }))
 
     self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
     self.fixed_invert_star_bursts = self:spawnObjectTo(

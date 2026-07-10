@@ -24,6 +24,15 @@ function KrisPhase1_12:getSharpSwordBulletOptions(y, scale_y, flip_y)
     options.fire_accel_duration = FIRE_ACCEL_DURATION
     options.skip_left_fade_alpha = true
 
+    local on_fire_launched = options.on_fire_launched
+    options.on_fire_launched = function(sword)
+        if on_fire_launched then
+            on_fire_launched(sword)
+        elseif self.playSharpSwordFireSound then
+            self:playSharpSwordFireSound()
+        end
+    end
+
     return options
 end
 

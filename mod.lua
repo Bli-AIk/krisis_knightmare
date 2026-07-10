@@ -44,6 +44,7 @@ end
 
 local localizeChapterSelectText
 local CHAPTER_SELECT_CJK_TEXT_SPACING = 4
+local VESSEL_ATTACK_SOUND = "vessel_thunder"
 
 local function isChapterSelectCjkCodepoint(codepoint)
     return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
@@ -211,6 +212,15 @@ local function parsePositiveInteger(value)
     return number
 end
 
+local function parseNonNegativeNumber(value)
+    local number = tonumber(value)
+    if not number or number < 0 then
+        return nil
+    end
+
+    return number
+end
+
 local function chapterNameKey(index)
     return "chapter_select.chapter_" .. tostring(index) .. "_name"
 end
@@ -292,7 +302,12 @@ function Mod:getKrisisConfiguredSeed()
 end
 
 function Mod:getConfig(key)
-    if key == "krisisDebugRechargeRadial" then
+    if key == "krisisInitialTP" then
+        self:loadKrisisRunOptions()
+        if self.krisis_run_initial_tp ~= nil then
+            return self.krisis_run_initial_tp
+        end
+    elseif key == "krisisDebugRechargeRadial" then
         return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL")
     elseif key == "krisisDebugRechargeRadialCapture" then
         return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL_CAPTURE")
@@ -432,6 +447,28 @@ function Mod:hookTemporaryDefaultBattleEntry()
     end)
 end
 
+function Mod:queueSuppressVesselAttackSound()
+    self.suppress_next_vessel_attack_sound = true
+end
+
+function Mod:hookVesselAttackSound()
+    if self.vessel_attack_sound_hooked or not Assets then
+        return
+    end
+    self.vessel_attack_sound_hooked = true
+
+    HookSystem.hook(Assets, "stopAndPlaySound", function(orig, sound, volume, pitch, actually_stop)
+        if self.suppress_next_vessel_attack_sound then
+            self.suppress_next_vessel_attack_sound = false
+            if sound == VESSEL_ATTACK_SOUND then
+                return orig(sound, 0, pitch, actually_stop)
+            end
+        end
+
+        return orig(sound, volume, pitch, actually_stop)
+    end)
+end
+
 function Mod:setTemporaryDefaultBattleEntry(encounter)
     self.krisis_default_battle_entry = encounter
     if Kristal then
@@ -455,6 +492,10 @@ function Mod:loadKrisisRunOptions()
 
     local wave, has_wave = getKristalArg("wave")
     local wave_force, has_wave_force = getKristalArg("wave-force")
+    local initial_tp, has_initial_tp = getKristalArg("tp")
+    if not has_initial_tp then
+        initial_tp, has_initial_tp = getKristalArg("initial-tp")
+    end
 
     if has_wave then
         self.krisis_run_wave = parsePositiveInteger(wave)
@@ -470,7 +511,16 @@ function Mod:loadKrisisRunOptions()
         end
     end
 
-    if (self.krisis_run_wave or self.krisis_run_wave_force) and not has_encounter then
+    if has_initial_tp then
+        self.krisis_run_initial_tp = parseNonNegativeNumber(initial_tp)
+        if self.krisis_run_initial_tp == nil then
+            print("Ignoring invalid --tp value: " .. tostring(initial_tp))
+        end
+    end
+
+    if (self.krisis_run_wave or self.krisis_run_wave_force or self.krisis_run_initial_tp ~= nil)
+        and not has_encounter
+    then
         self:setTemporaryDefaultBattleEntry("kris")
     end
 end
@@ -484,6 +534,7 @@ function Mod:init()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
+    self:hookVesselAttackSound()
     self:loadKrisisRunOptions()
 
     Game:registerEvent("squeak", function(data)
@@ -509,6 +560,7 @@ function Mod:postUpdate()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
+    self:hookVesselAttackSound()
 
     if Game.getLanguage then
         local language = Game:getLanguage()

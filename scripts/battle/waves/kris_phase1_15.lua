@@ -3,6 +3,7 @@ local KrisPhase1_15, super = Class("kris_phase1_02")
 local SLASH_START_DELAY = 16 / 30
 local DOUBLE_SLASH_INTERVAL = 46 / 60
 local INITIAL_DOUBLE_SLASH_DELAY = 38 / 60
+local DISAPPEAR_SOUND = "kris_disappear"
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
 
@@ -72,6 +73,7 @@ function KrisPhase1_15:onStart()
             x = attacker.target_x or attacker.x,
             y = attacker.target_y or attacker.y,
         }
+        Assets.playSound(DISAPPEAR_SOUND)
         attacker:setAnimation("flying_sword_disappear", function()
             moveAttackerAway(attacker)
         end)

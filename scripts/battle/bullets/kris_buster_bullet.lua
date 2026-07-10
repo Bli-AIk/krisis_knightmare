@@ -23,6 +23,7 @@ local DIAMOND_MAX_SPEED = 8
 local MIN_BOUNCE_SECONDS = 0.5
 local SAFE_DIRECTION_ATTEMPTS = 48
 local RAY_EPSILON = 0.0001
+local WALL_IMPACT_SOUND = "kris_buster_wall"
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -179,6 +180,7 @@ local function spawnFollowup(wave, edge, impact_x, impact_y, options)
 
     options = options or {}
 
+    Assets.playSound(WALL_IMPACT_SOUND)
     wave:spawnBullet("kris_buster_explode", impact_x, impact_y)
 
     local chain_depth = options.chain_depth or 1

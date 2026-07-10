@@ -7,6 +7,11 @@ local READY_TIME = 0.75
 local THRUST_HOLD_TIME = 2
 local RUDE_BUSTER_SPAWN_FRAMES_EARLY = 1
 local RUDE_BUSTER_FALLBACK_X = 390
+local APPEAR_SOUND = "grab"
+local RUDE_BUSTER_APPEAR_SOUND = "big_sword_appear"
+local RUDE_BUSTER_APPEAR_SOUND_LEAD_TIME = 0.25
+local RUDE_BUSTER_APPEAR_SOUND_LEAD_FRAMES =
+    math.max(math.floor(RUDE_BUSTER_APPEAR_SOUND_LEAD_TIME / FAST_SPEED + 0.5), 1)
 
 local function getFrameCount(path)
     local frames = Assets.getFrames(path)
@@ -25,6 +30,7 @@ function KrisPhase1_04:init()
     super.init(self)
     self.time = WAVE_SECONDS
     self.initial_buster_spawned = false
+    self.initial_buster_sound_played = false
     self.kris_home_positions = {}
 end
 
@@ -36,6 +42,15 @@ function KrisPhase1_04:getArenaCenterY()
     end
 
     return (SCREEN_HEIGHT - 155) / 2 + 10
+end
+
+function KrisPhase1_04:playInitialRudeBusterSound()
+    if self.initial_buster_sound_played then
+        return
+    end
+
+    self.initial_buster_sound_played = true
+    Assets.playSound(RUDE_BUSTER_APPEAR_SOUND)
 end
 
 function KrisPhase1_04:spawnInitialRudeBuster(attacker)
@@ -51,6 +66,7 @@ end
 
 function KrisPhase1_04:playThrust(attacker)
     if not attacker or not attacker.parent or not attacker.setAnimation then
+        self:playInitialRudeBusterSound()
         self:spawnInitialRudeBuster(attacker)
         return
     end
@@ -60,8 +76,14 @@ function KrisPhase1_04:playThrust(attacker)
         function(sprite, wait)
             local frame_count = sprite.frames and #sprite.frames or getFrameCount("enemies/kris/thrust")
             local buster_spawn_frame = math.max(frame_count - RUDE_BUSTER_SPAWN_FRAMES_EARLY, 1)
+            local buster_sound_frame =
+                math.max(buster_spawn_frame - RUDE_BUSTER_APPEAR_SOUND_LEAD_FRAMES, 1)
             for frame = 1, frame_count do
                 sprite:setFrame(frame)
+
+                if frame == buster_sound_frame then
+                    self:playInitialRudeBusterSound()
+                end
 
                 if frame == buster_spawn_frame then
                     self:spawnInitialRudeBuster(attacker)
@@ -79,6 +101,8 @@ function KrisPhase1_04:playThrust(attacker)
 end
 
 function KrisPhase1_04:onStart()
+    Assets.playSound(APPEAR_SOUND, 0.8)
+
     local attacker_count = 0
 
     for _, attacker in ipairs(self:getAttackers()) do
@@ -91,6 +115,12 @@ function KrisPhase1_04:onStart()
         if attacker.setAnimation then
             attacker:setAnimation({ "thrust_ready", FAST_SPEED, true })
         end
+    end
+
+    if attacker_count == 0 then
+        self.timer:after(math.max(READY_TIME - RUDE_BUSTER_APPEAR_SOUND_LEAD_TIME, 0), function()
+            self:playInitialRudeBusterSound()
+        end)
     end
 
     self.timer:after(READY_TIME, function()

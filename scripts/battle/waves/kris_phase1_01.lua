@@ -8,6 +8,17 @@ local ACT_FRAME_DELAY = 4 / 30
 local RETURN_TARGET_OFFSET_X = -2
 local RETURN_TARGET_OFFSET_Y = 1
 local SOUL_BULLET_LAYER = BATTLE_LAYERS["above_bullets"] + 2
+local SOUL_DEPTH_SPAWN_SOUND = "soul_charge"
+local SOUL_DEPTH_FINISH_SOUND = "soul_absorb"
+local SOUL_DEPTH_FIRST_STAR_WAVE_SOUND = "flicker_burst"
+
+local function copyTable(source)
+    local copied = {}
+    for key, value in pairs(source or {}) do
+        copied[key] = value
+    end
+    return copied
+end
 
 local function removeValue(list, value)
     if not list then
@@ -82,6 +93,18 @@ function KrisPhase1_01:getArenaHeight()
     return 142
 end
 
+function KrisPhase1_01:getSoulDepthMaskOptions(options)
+    local mask_options = copyTable(options)
+    local finale_options = copyTable(mask_options.finale_options)
+
+    if finale_options.first_star_wave_sound == nil then
+        finale_options.first_star_wave_sound = SOUL_DEPTH_FIRST_STAR_WAVE_SOUND
+    end
+
+    mask_options.finale_options = finale_options
+    return mask_options
+end
+
 function KrisPhase1_01:spawnSoulDepthMask()
     local soul = self.chaser_soul
     if not soul or not soul.parent then
@@ -89,7 +112,7 @@ function KrisPhase1_01:spawnSoulDepthMask()
     end
 
     local arena_height = self:getArenaHeight()
-    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8)
+    local depth_mask = SoulDepthMask(arena_height * 0.5, arena_height * 0.8, self:getSoulDepthMaskOptions())
     self.depth_mask = self:spawnObjectTo(soul, depth_mask, soul.width / 2, soul.height / 2)
     if self.depth_mask_finished and self.depth_mask.beginWhiteFade then
         self.depth_mask:beginWhiteFade()
@@ -166,10 +189,12 @@ function KrisPhase1_01:onStart()
 
     self.timer:after(DEPTH_MASK_SPAWN_TIME, function()
         self:spawnSoulDepthMask()
+        Assets.playSound(SOUL_DEPTH_SPAWN_SOUND)
     end)
 
     self.timer:after(DEPTH_MASK_FINISH_TIME, function()
         self:beginSoulDepthFinale()
+        Assets.playSound(SOUL_DEPTH_FINISH_SOUND)
     end)
 end
 

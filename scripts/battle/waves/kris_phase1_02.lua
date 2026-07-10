@@ -9,6 +9,9 @@ end
 local SLASH_CIRCLE_SIZE = 200
 local SLASH_START_DELAY = 16 / 30
 local DEFAULT_SLASH_INTERVAL = 50 / 60
+local SLASH_SOUND = "kris_wild_slash"
+local DISAPPEAR_SOUND = "kris_disappear"
+local APPEAR_SOUND = "grab"
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
 local TOP_SLASH_Y = 88
@@ -20,13 +23,13 @@ local UPPER_KRIS_Y = 155
 local LOWER_KRIS_Y = 327
 
 local DEFAULT_SLASHES = {
-    { x = 480 + 50 - 15, y = TOP_SLASH_Y,   r = math.rad(360 - 199), kris_x = 550, kris_y = TOP_KRIS_Y },
+    { x = 480 + 50 - 15, y = TOP_SLASH_Y,    r = math.rad(360 - 199), kris_x = 550, kris_y = TOP_KRIS_Y },
     { x = 480 + 50 - 20, y = BOTTOM_SLASH_Y, r = math.rad(360 - 167), kris_x = 550, kris_y = LOWER_KRIS_Y },
-    { x = 480 + 50,      y = UPPER_SLASH_Y, r = math.rad(360 - 199), kris_x = 550, kris_y = UPPER_KRIS_Y },
-    { x = 480 + 50 - 15, y = LOWER_SLASH_Y, r = math.rad(360 - 173), kris_x = 550, kris_y = LOWER_KRIS_Y },
-    { x = 480 + 50 - 15, y = UPPER_SLASH_Y, r = math.rad(360 - 205), kris_x = 550, kris_y = UPPER_KRIS_Y },
-    { x = 480 + 50 - 15, y = LOWER_SLASH_Y, r = math.rad(360 - 173), kris_x = 550, kris_y = LOWER_KRIS_Y },
-    { x = 480 + 50 - 15, y = TOP_SLASH_Y,   r = math.rad(360 - 212), kris_x = 550, kris_y = TOP_KRIS_Y },
+    { x = 480 + 50,      y = UPPER_SLASH_Y,  r = math.rad(360 - 199), kris_x = 550, kris_y = UPPER_KRIS_Y },
+    { x = 480 + 50 - 15, y = LOWER_SLASH_Y,  r = math.rad(360 - 173), kris_x = 550, kris_y = LOWER_KRIS_Y },
+    { x = 480 + 50 - 15, y = UPPER_SLASH_Y,  r = math.rad(360 - 205), kris_x = 550, kris_y = UPPER_KRIS_Y },
+    { x = 480 + 50 - 15, y = LOWER_SLASH_Y,  r = math.rad(360 - 173), kris_x = 550, kris_y = LOWER_KRIS_Y },
+    { x = 480 + 50 - 15, y = TOP_SLASH_Y,    r = math.rad(360 - 212), kris_x = 550, kris_y = TOP_KRIS_Y },
 }
 
 local function moveAttackerTo(attacker, x, y)
@@ -392,6 +395,7 @@ end
 
 function KrisPhase1_02:spawnSlash(x, y, rotation, kris_x, kris_y)
     self:setupSlashAssets()
+    Assets.playSound(SLASH_SOUND)
     shakeArena(kris_x, kris_y)
 
     x = x or SCREEN_WIDTH / 2
@@ -484,6 +488,7 @@ function KrisPhase1_02:onStart()
             x = attacker.target_x or attacker.x,
             y = attacker.target_y or attacker.y,
         }
+        Assets.playSound(DISAPPEAR_SOUND)
         attacker:setAnimation("flying_sword_disappear", function()
             moveAttackerAway(attacker)
         end)
@@ -517,6 +522,7 @@ function KrisPhase1_02:onEnd(death)
         if home then
             moveAttackerTo(attacker, home.x, home.y)
         end
+        Assets.playSound(APPEAR_SOUND, 0.8)
         attacker:setAnimation("appear")
     end
 

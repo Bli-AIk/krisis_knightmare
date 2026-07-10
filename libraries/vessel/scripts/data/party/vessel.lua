@@ -55,7 +55,7 @@ function character:init()
     self.name_sprite = "party/vessel/name"
 
     self.attack_sprite = "battle/attack/spr_quiz_lightning_big"
-    self.attack_sound = "laz_c"
+    self.attack_sound = "vessel_thunder"
     self.attack_pitch = 1
 
     self.battle_offset = { 19, 3 }
@@ -63,6 +63,22 @@ function character:init()
     self.menu_icon_offset = nil
 
     self.gameover_message = nil
+end
+
+function character:getAttackSound()
+    if Mod and Mod.queueSuppressVesselAttackSound then
+        Mod:queueSuppressVesselAttackSound()
+    end
+
+    local battle = Game.battle
+    local action = battle and battle.getCurrentAction and battle:getCurrentAction()
+    local battler = action and battle.party and battle.party[action.character_id]
+    local target = action and action.target
+    if battler and battler.chara == self and target and target.preHurtVesselOnAttackStart then
+        target:preHurtVesselOnAttackStart(battler, action.points, action)
+    end
+
+    return self.attack_sound
 end
 
 function character:onLevelUp(level)
