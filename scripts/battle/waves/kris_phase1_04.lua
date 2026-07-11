@@ -3,6 +3,9 @@ local KrisPhase1_04, super = Class(Wave)
 local FPS = 30
 local WAVE_SECONDS = 8
 local FAST_SPEED = 4 / FPS
+local FOLLOWUP_SPEED_FACTOR = 0.9
+local FOLLOWUP_MAX_DIAMOND_COUNT = 5
+local FOLLOWUP_BOUNCE_SPEED_FACTORS = { 1, 0.9 }
 local READY_TIME = 0.75
 local THRUST_HOLD_TIME = 2
 local RUDE_BUSTER_SPAWN_FRAMES_EARLY = 1
@@ -44,6 +47,14 @@ function KrisPhase1_04:getArenaCenterY()
     return (SCREEN_HEIGHT - 155) / 2 + 10
 end
 
+function KrisPhase1_04:getInitialRudeBusterOptions()
+    return {
+        followup_speed_factor = FOLLOWUP_SPEED_FACTOR,
+        followup_max_diamond_count = FOLLOWUP_MAX_DIAMOND_COUNT,
+        followup_bounce_speed_factors = FOLLOWUP_BOUNCE_SPEED_FACTORS,
+    }
+end
+
 function KrisPhase1_04:playInitialRudeBusterSound()
     if self.initial_buster_sound_played then
         return
@@ -61,7 +72,7 @@ function KrisPhase1_04:spawnInitialRudeBuster(attacker)
     self.initial_buster_spawned = true
     local x = getAttackerBusterX(attacker)
     local y = self:getArenaCenterY()
-    self:spawnBullet("kris_rude_buster", x, y)
+    self:spawnBullet("kris_rude_buster", x, y, self:getInitialRudeBusterOptions())
 end
 
 function KrisPhase1_04:playThrust(attacker)

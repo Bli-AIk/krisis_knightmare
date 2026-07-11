@@ -141,12 +141,12 @@ local function randomSafeInwardDirection(edge, x, y, speed, min_degrees, max_deg
     return best_direction, math.max(best_distance / (FPS * MIN_BOUNCE_SECONDS), 1)
 end
 
-local function spawnDiamond(wave, edge, x, y, bullet_speed)
+local function spawnDiamond(wave, edge, x, y, bullet_speed, speed_factor)
     local direction = randomInwardDirection(edge, 0, 180)
     bullet_speed = bullet_speed or MIN_RANDOM_SPEED
     local min_speed = math.min(bullet_speed + DIAMOND_MIN_SPEED_LEAD, DIAMOND_MAX_SPEED)
     local max_speed = math.max(min_speed, math.min(bullet_speed + DIAMOND_MAX_SPEED_LEAD, DIAMOND_MAX_SPEED))
-    local speed = randomBetween(min_speed, max_speed)
+    local speed = randomBetween(min_speed, max_speed) * (speed_factor or 1)
     local easing = love.math.random() < 0.5 and "linear" or "in-cubic"
 
     return wave:spawnBullet("kris_buster_diamond", x, y, direction, {
@@ -180,26 +180,35 @@ local function spawnFollowup(wave, edge, impact_x, impact_y, options)
 
     local spawn_x, spawn_y = getSpawnPosition(edge, impact_x, impact_y)
     local bullet_count = math.max(options.bullet_count or 1, 1)
-    local total_diamond_count = love.math.random(DIAMOND_START_MIN_COUNT, DIAMOND_START_MAX_COUNT)
+    local max_diamond_count = math.max(
+        options.max_diamond_count or DIAMOND_START_MAX_COUNT,
+        DIAMOND_START_MIN_COUNT
+    )
+    local total_diamond_count = DIAMOND_START_MIN_COUNT
     local diamond_count_divisor = options.diamond_count_divisor or 1
+    local speed_factor = options.speed_factor or 1
 
     for bullet_index = 1, bullet_count do
-        local bullet_speed = randomBetween(MIN_RANDOM_SPEED, MAX_RANDOM_SPEED)
+        local bullet_speed = options.bullet_speed
+            or randomBetween(MIN_RANDOM_SPEED, MAX_RANDOM_SPEED) * speed_factor
         local direction
         direction, bullet_speed = randomSafeInwardDirection(edge, spawn_x, spawn_y, bullet_speed, 45, 135)
         wave:spawnBullet("kris_buster_bullet", spawn_x, spawn_y, direction, {
             speed = bullet_speed,
             chain_depth = 1,
             diamond_count_divisor = diamond_count_divisor,
+            max_diamond_count = max_diamond_count,
             bounce_speed_factor = options.bounce_speed_factor,
+            bounce_speed_factors = options.bounce_speed_factors,
             max_chain_speed = options.max_chain_speed,
+            speed_factor = speed_factor,
         })
 
         local diamond_count = options.split_diamonds
             and getSplitDiamondCount(total_diamond_count, bullet_count, bullet_index)
             or total_diamond_count
         for _ = 1, diamond_count do
-            spawnDiamond(wave, edge, spawn_x, spawn_y, bullet_speed)
+            spawnDiamond(wave, edge, spawn_x, spawn_y, bullet_speed, speed_factor)
         end
     end
 end
@@ -223,8 +232,15 @@ function KrisRudeBuster:init(x, y, options)
     self.followup_bullet_count = options.followup_bullet_count or 1
     self.followup_split_diamonds = options.followup_split_diamonds == true
     self.followup_diamond_count_divisor = options.followup_diamond_count_divisor or 1
+    self.followup_max_diamond_count = math.max(
+        options.followup_max_diamond_count or DIAMOND_START_MAX_COUNT,
+        DIAMOND_START_MIN_COUNT
+    )
+    self.followup_speed_factor = options.followup_speed_factor or 1
     self.followup_bounce_speed_factor = options.followup_bounce_speed_factor
-    self.followup_max_chain_speed = options.followup_max_chain_speed or MAX_CHAIN_SPEED
+    self.followup_bounce_speed_factors = options.followup_bounce_speed_factors
+    self.followup_max_chain_speed =
+        (options.followup_max_chain_speed or MAX_CHAIN_SPEED) * self.followup_speed_factor
     self.start_scale_x = BUSTER_SCALE
     self.start_scale_y = BUSTER_SCALE
     self:setScale(self.start_scale_x, self.start_scale_y)
@@ -256,7 +272,10 @@ function KrisRudeBuster:startShrink()
             bullet_count = self.followup_bullet_count,
             split_diamonds = self.followup_split_diamonds,
             diamond_count_divisor = self.followup_diamond_count_divisor,
+            max_diamond_count = self.followup_max_diamond_count,
+            speed_factor = self.followup_speed_factor,
             bounce_speed_factor = self.followup_bounce_speed_factor,
+            bounce_speed_factors = self.followup_bounce_speed_factors,
             max_chain_speed = self.followup_max_chain_speed,
         })
     end
