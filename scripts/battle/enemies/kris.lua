@@ -29,8 +29,18 @@ local WAVE_PHASES = {
 }
 local RECHARGE_AVOID_WAVES = {
     [1] = true,
+    [2] = true,
+    [3] = true,
     [6] = true,
+    [8] = true,
+    [9] = true,
     [11] = true,
+    [12] = true,
+    [15] = true,
+}
+local RECHARGE_FALLBACK_WAVES = {
+    [10] = 4,
+    [14] = 4,
 }
 
 local function makeWaveList(first, last)
@@ -100,7 +110,7 @@ local function getVesselAttackResults(points)
     if t < 0 then t = 0 elseif t > 1 then t = 1 end
 
     return math.floor(40 - 20 * t + 0.5),
-        math.floor(4 + 4 * t + 0.5)
+        math.floor(4 + 2 * t + 0.5)
 end
 
 function Kris:init()
@@ -305,6 +315,14 @@ function Kris:shouldAvoidWaveNumber(wave_number)
     return self:isRechargeSustaining() and RECHARGE_AVOID_WAVES[wave_number] == true
 end
 
+function Kris:getRechargeWaveNumber(wave_number)
+    if not self:isRechargeSustaining() then
+        return wave_number
+    end
+
+    return RECHARGE_FALLBACK_WAVES[wave_number] or wave_number
+end
+
 function Kris:getRandomPhaseWaveNumber(phase)
     local candidates = {}
     for i = phase.first, phase.last do
@@ -349,7 +367,7 @@ function Kris:getEncounterTextWaveNumber()
     local played = self.wave_phase_turns_played or 0
     if played < self:getPhaseSequenceLength(phase) then
         local wave_number = self:getNextPhaseWaveNumber()
-        return wave_number
+        return self:getRechargeWaveNumber(wave_number)
     end
 
     return phase.last
@@ -415,10 +433,11 @@ function Kris:selectWave()
     end
 
     local wave_number, next_phase_turns_played = self:getNextPhaseWaveNumber()
-    local turn_wave = TURN_WAVES[wave_number]
+    local selected_wave_number = self:getRechargeWaveNumber(wave_number)
+    local turn_wave = TURN_WAVES[selected_wave_number]
     if turn_wave then
         self.selected_wave = turn_wave
-        self.selected_wave_number = wave_number
+        self.selected_wave_number = selected_wave_number
         self.wave_select_turn_count = battle_turn
         self.wave_phase_turns_played = next_phase_turns_played or ((self.wave_phase_turns_played or 0) + 1)
         print("playing wave: " .. self.selected_wave)
