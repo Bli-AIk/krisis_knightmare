@@ -3,6 +3,7 @@ local KrisBusterDiamond, super = Class(Bullet)
 
 local END_SPEED_FACTOR = 0.82
 local MIN_SPEED = 4
+local DIAMOND_FRAME_DURATION = 2 / 30
 
 local function easeInCubic(t)
     return t * t * t
@@ -13,7 +14,7 @@ local function clamp(value, min, max)
 end
 
 function KrisBusterDiamond:init(x, y, direction, options)
-    super.init(self, x, y, "bullets/buster/diamond_0")
+    super.init(self, x, y, "bullets/buster/diamond")
 
     options = options or {}
 
@@ -30,6 +31,7 @@ function KrisBusterDiamond:init(x, y, direction, options)
     self.elapsed = 0
 
     self:setScale(1, 1)
+    self.sprite:play(DIAMOND_FRAME_DURATION, true)
     self.rotation = (direction or 0) + math.pi / 2
     self:setHitbox(4, 6, self.width - 8, self.height - 12)
 end

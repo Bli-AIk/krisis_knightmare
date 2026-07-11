@@ -6,18 +6,12 @@ local MOVE_DURATION = 2.0
 local SPEED_RANDOM_MIN = 0.96
 local SPEED_RANDOM_MAX = 1.04
 local OFFSCREEN_MARGIN = 56
-local CHIP_TEXTURE = "bullets/flying_sword/chip"
-local CHIP_FRAME_TEXTURE = CHIP_TEXTURE .. "/chip"
-local CHIP_FRAME_DURATION = 2 / 30
 local CHIP_INITIAL_SPEED = 1 -- Pixels per frame at 30 FPS.
 local FRAMES_PER_SECOND = 30
-local OPAQUE_ALPHA_THRESHOLD = 0
 local CONTROL_ONE_DISTANCE_RATIO = 0.32 / 4
 local CONTROL_TWO_DISTANCE_RATIO = 1.0
 local CONTROL_OFFSET_MIN = 28
 local CONTROL_OFFSET_MAX = 72
-
-local opaque_bounds_cache = {}
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -35,71 +29,6 @@ end
 
 local function easeInWithInitialSpeed(t, initial_slope)
     return initial_slope * t + (1 - initial_slope) * t * t
-end
-
-local function getChipFrames()
-    local frames = { Assets.getTexture(CHIP_TEXTURE) }
-
-    for _, frame in ipairs(Assets.getFrames(CHIP_FRAME_TEXTURE) or {}) do
-        table.insert(frames, frame)
-    end
-
-    return frames
-end
-
-local function getOpaqueBounds(texture)
-    local texture_id = Assets.getTextureID(texture)
-    local cache_key = texture_id or texture
-    local cached = opaque_bounds_cache[cache_key]
-    if cached then
-        return cached
-    end
-
-    local image_data = texture_id and Assets.getTextureData(texture_id)
-    if not image_data then
-        local bounds = {
-            x = 0,
-            y = 0,
-            width = texture:getWidth(),
-            height = texture:getHeight(),
-        }
-        opaque_bounds_cache[cache_key] = bounds
-        return bounds
-    end
-
-    local image_width = image_data:getWidth()
-    local image_height = image_data:getHeight()
-    local left = image_width
-    local top = image_height
-    local right = -1
-    local bottom = -1
-
-    for y = 0, image_height - 1 do
-        for x = 0, image_width - 1 do
-            local _, _, _, alpha = image_data:getPixel(x, y)
-            if alpha > OPAQUE_ALPHA_THRESHOLD then
-                left = math.min(left, x)
-                top = math.min(top, y)
-                right = math.max(right, x)
-                bottom = math.max(bottom, y)
-            end
-        end
-    end
-
-    local bounds
-    if right < left or bottom < top then
-        bounds = { x = 0, y = 0, width = 0, height = 0 }
-    else
-        bounds = {
-            x = left,
-            y = top,
-            width = right - left + 1,
-            height = bottom - top + 1,
-        }
-    end
-
-    opaque_bounds_cache[cache_key] = bounds
-    return bounds
 end
 
 local function randomBetween(min, max)
@@ -131,7 +60,7 @@ local function getOffscreenTarget(x, y, angle)
 end
 
 function FlyingSwordChip:init(x, y, angle, options)
-    super.init(self, x, y, getChipFrames())
+    super.init(self, x, y, "bullets/flying_sword/chip")
 
     options = options or {}
 
@@ -146,9 +75,7 @@ function FlyingSwordChip:init(x, y, angle, options)
 
     self:setScale(1, 1)
     self:setOrigin(0.5, 0.5)
-    self.sprite:play(CHIP_FRAME_DURATION, true)
-    self.chip_texture = nil
-    self:updateChipHitbox()
+    self:setHitbox(3, 3, self.width - 6, self.height - 6)
 
     self.start_x = x
     self.start_y = y
@@ -183,25 +110,6 @@ function FlyingSwordChip:init(x, y, angle, options)
     self.rotation = self.path_rotation
 end
 
-function FlyingSwordChip:updateChipHitbox()
-    local texture = self.sprite and self.sprite:getTexture()
-    if not texture or texture == self.chip_texture then
-        return
-    end
-
-    self.chip_texture = texture
-    self.width = texture:getWidth()
-    self.height = texture:getHeight()
-
-    local bounds = getOpaqueBounds(texture)
-    self:setHitbox(
-        bounds.x,
-        bounds.y,
-        bounds.width,
-        bounds.height
-    )
-end
-
 function FlyingSwordChip:update()
     self.elapsed = self.elapsed + DT
 
@@ -219,7 +127,6 @@ function FlyingSwordChip:update()
     self.rotation = self.path_rotation
 
     super.update(self)
-    self:updateChipHitbox()
 
     if t >= 1 then
         self:remove()
