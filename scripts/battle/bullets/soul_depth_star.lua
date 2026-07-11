@@ -1,7 +1,6 @@
 local SoulDepthStar, super = Class(Bullet)
 
 local DAMAGE = 50
-local INV_TIMER = 4 / 60
 local START_SCALE = 0.9
 local END_SCALE = 0.2
 local FADE_IN_END = 0.3
@@ -23,7 +22,7 @@ function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end
 
     self.layer = options.layer or -0.5
     self.damage = DAMAGE
-    self.inv_timer = INV_TIMER
+    self.inv_timer = Game:getConfig("defaultInvulnTime") / 30
     self.destroy_on_hit = false
     self.remove_offscreen = false
     self.fade = options.fade ~= false
