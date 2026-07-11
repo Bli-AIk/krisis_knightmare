@@ -26,6 +26,8 @@ local STAR_ANGLE_RANDOM_ATTEMPTS = 16
 local STAR_DISTANCE_JITTER = 3
 local STAR_TRAVEL_MIN_TIME = 1.25
 local STAR_TRAVEL_MAX_TIME = 1.75
+local STAR_TRAVEL_TIME_SCALE = 1.35
+local STAR_INDICATOR_ALPHA = 0.75
 local STAR_START_SCALE = 0.9
 local STAR_END_SCALE = 0.2
 local RADIAL_PARTICLE_INITIAL_COUNT = 100
@@ -105,8 +107,11 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
     self.star_burst_max_count = options.star_burst_max_count or STAR_BURST_MAX_COUNT
     self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
     self.star_bursts_enabled = true
+    self.star_travel_time_scale = options.star_travel_time_scale or STAR_TRAVEL_TIME_SCALE
     self.radial_particles_enabled = options.radial_particles == true
     self.radial_particles = {}
+    self.star_indicator_particles = {}
+    self.star_indicator_particles_enabled = options.star_indicator_particles ~= false
     self.radial_particle_initial_count = options.radial_particle_initial_count or RADIAL_PARTICLE_INITIAL_COUNT
     self.radial_particle_max_count = options.radial_particle_max_count or RADIAL_PARTICLE_MAX_COUNT
     self.radial_particle_min_interval = options.radial_particle_min_interval or RADIAL_PARTICLE_MIN_INTERVAL
@@ -300,6 +305,9 @@ function SoulDepthMask:spawnStarBurst()
         local start_x = center_x + math.cos(angle) * spawn_distance
         local start_y = center_y + math.sin(angle) * spawn_distance
         local travel_time = randomFloat(STAR_TRAVEL_MIN_TIME, STAR_TRAVEL_MAX_TIME)
+            * self.star_travel_time_scale
+
+        self:spawnStarIndicatorParticle(angle)
 
         self.wave:spawnBulletTo(
             self.parent,
@@ -313,6 +321,25 @@ function SoulDepthMask:spawnStarBurst()
             STAR_END_SCALE
         )
     end
+end
+
+function SoulDepthMask:spawnStarIndicatorParticle(angle, options)
+    if not self.star_indicator_particles_enabled then
+        return
+    end
+
+    options = options or {}
+    local particle = self:makeRadialParticle()
+    particle.angle = angle
+    particle.radius = 1
+    particle.to_center = true
+    particle.alpha = options.alpha or STAR_INDICATOR_ALPHA
+    particle.color = options.color or { 1, 1, 1 }
+    particle.blend_mode = options.blend_mode
+    particle.life = randomFloat(RADIAL_PARTICLE_MIN_LIFE * 0.72, RADIAL_PARTICLE_MAX_LIFE * 0.82)
+    particle.age = 0
+
+    table.insert(self.star_indicator_particles, particle)
 end
 
 function SoulDepthMask:updateStarBursts()
@@ -357,7 +384,7 @@ function SoulDepthMask:spawnRadialParticle(age_progress)
 end
 
 function SoulDepthMask:updateRadialParticles()
-    if not self.radial_particles_enabled then
+    if not self.radial_particles_enabled and not self.star_indicator_particles_enabled then
         return
     end
 
@@ -369,7 +396,15 @@ function SoulDepthMask:updateRadialParticles()
         end
     end
 
-    if self.white_fading then
+    for i = #self.star_indicator_particles, 1, -1 do
+        local particle = self.star_indicator_particles[i]
+        particle.age = particle.age + DT
+        if particle.age >= particle.life then
+            table.remove(self.star_indicator_particles, i)
+        end
+    end
+
+    if self.white_fading or not self.radial_particles_enabled then
         return
     end
 
@@ -562,13 +597,42 @@ function SoulDepthMask:drawRadialRings()
     end
 end
 
-function SoulDepthMask:drawRadialParticles()
-    if not self.radial_particles_enabled or #self.radial_particles == 0 then
+function SoulDepthMask:drawRadialParticle(particle, mask_radius, fade_with_white)
+    local progress = MathUtils.clamp(particle.age / particle.life, 0, 1)
+    local fade = math.sin(progress * math.pi)
+    local angle = particle.angle + particle.angle_drift * progress
+    local radius = particle.to_center
+        and mask_radius * (1 - progress)
+        or mask_radius * (particle.radius + particle.speed * progress)
+    local half_length = particle.length * (0.55 + (0.45 * fade)) / 2
+    local inner = math.max(radius - half_length, 0)
+    local outer = math.min(radius + half_length, mask_radius)
+
+    if outer <= inner then
         return
     end
 
-    local mask_radius = self:getRadialParticleMaskRadius()
-    if mask_radius <= 0 then
+    local pulse = 0.88 + 0.12 * math.sin((self.grow_timer + particle.flicker) * 34)
+    local alpha = particle.alpha * fade * fade_with_white * pulse
+    local color = particle.color or { 1, 1, 1 }
+    love.graphics.setLineWidth(particle.width)
+    love.graphics.setColor(color[1], color[2], color[3], alpha)
+    love.graphics.line(
+        math.cos(angle) * inner,
+        math.sin(angle) * inner,
+        math.cos(angle) * outer,
+        math.sin(angle) * outer
+    )
+end
+
+function SoulDepthMask:drawRadialParticles()
+    if (not self.radial_particles_enabled or #self.radial_particles == 0)
+        and #self.star_indicator_particles == 0
+    then
+        return
+    end
+
+    if self.radius <= 0 then
         return
     end
 
@@ -579,32 +643,17 @@ function SoulDepthMask:drawRadialParticles()
 
     love.graphics.setStencilTest()
     love.graphics.stencil(function()
-        love.graphics.circle("fill", 0, 0, mask_radius)
+        love.graphics.circle("fill", 0, 0, self.radius)
     end, "replace", 1)
     love.graphics.setStencilTest("greater", 0)
 
     love.graphics.setBlendMode("add")
     for _, particle in ipairs(self.radial_particles) do
-        local progress = MathUtils.clamp(particle.age / particle.life, 0, 1)
-        local fade = math.sin(progress * math.pi)
-        local radius = mask_radius * (particle.radius + particle.speed * progress)
-        local half_length = particle.length * (0.55 + (0.45 * fade)) / 2
-        local angle = particle.angle + particle.angle_drift * progress
-        local inner = math.max(radius - half_length, 0)
-        local outer = math.min(radius + half_length, mask_radius)
-
-        if outer > inner then
-            local pulse = 0.88 + 0.12 * math.sin((self.grow_timer + particle.flicker) * 34)
-            local alpha = particle.alpha * fade * fade_with_white * pulse
-            love.graphics.setLineWidth(particle.width)
-            love.graphics.setColor(1, 1, 1, alpha)
-            love.graphics.line(
-                math.cos(angle) * inner,
-                math.sin(angle) * inner,
-                math.cos(angle) * outer,
-                math.sin(angle) * outer
-            )
-        end
+        self:drawRadialParticle(particle, self:getRadialParticleMaskRadius(), fade_with_white)
+    end
+    for _, particle in ipairs(self.star_indicator_particles) do
+        love.graphics.setBlendMode(particle.blend_mode or "add")
+        self:drawRadialParticle(particle, self.radius, fade_with_white)
     end
 
     love.graphics.setBlendMode(old_blend, old_alpha_mode)

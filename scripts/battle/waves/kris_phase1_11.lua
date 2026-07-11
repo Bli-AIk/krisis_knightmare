@@ -28,12 +28,21 @@ function FixedInvertStarBursts:spawnBurst()
     local center_x, center_y = depth_mask:getCenterInSoul()
     local base_angle = self.burst_index * STAR_BURST_ANGLE_OFFSET
     local spawn_distance = depth_mask.radius
-    local travel_time = math.max(spawn_distance / STAR_TRAVEL_SPEED, 1 / 60)
+    local travel_time = math.max(
+        spawn_distance / STAR_TRAVEL_SPEED * depth_mask.star_travel_time_scale,
+        1 / 60
+    )
 
     for i = 0, STAR_BURST_COUNT - 1 do
         local angle = base_angle + i * STAR_ANGLE_STEP
         local start_x = center_x + math.cos(angle) * spawn_distance
         local start_y = center_y + math.sin(angle) * spawn_distance
+
+        depth_mask:spawnStarIndicatorParticle(angle, {
+            alpha = 0.25,
+            blend_mode = "alpha",
+            color = { 0, 0, 0 },
+        })
 
         depth_mask.wave:spawnBulletTo(
             parent,
