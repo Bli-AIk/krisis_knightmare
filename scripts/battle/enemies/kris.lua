@@ -182,7 +182,7 @@ function Kris:applyLocalization(update_acts)
         Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1"),
         Game:loc("* The darkness froze on the blade.", "enemy_kris_turn_2"),
         Game:loc("* Suddenly, the earth was torn apart by swords.", "enemy_kris_turn_3"),
-        Game:loc("* KRIS prepares to use \"Darkness Rude Buster\".", "enemy_kris_turn_4"),
+        Game:loc("* [name:chara:kris] prepares to use \"Darkness Rude Buster\".", "enemy_kris_turn_4"),
         Game:loc("* Darkness emerges from the crack, surging towards the sky.", "enemy_kris_turn_5"),
         Game:loc("* Suddenly, your body seized up.", "enemy_kris_turn_6"),
         Game:loc("* The thick fog gathered, then formed its shape.", "enemy_kris_turn_7"),
