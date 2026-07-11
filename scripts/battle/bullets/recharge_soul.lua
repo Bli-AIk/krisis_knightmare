@@ -202,10 +202,6 @@ function RechargeSoul:startMove()
 end
 
 function RechargeSoul:getMoveSpeed()
-    if Game.battle and Game.battle.soul then
-        return Game.battle.soul.speed or DEFAULT_MOVE_SPEED
-    end
-
     return DEFAULT_MOVE_SPEED
 end
 

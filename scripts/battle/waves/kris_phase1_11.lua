@@ -8,8 +8,6 @@ local STAR_BURST_ANGLE_OFFSET = math.rad(15)
 local STAR_TRAVEL_SPEED = 48
 local STAR_START_SCALE = 0.9
 local STAR_END_SCALE = 0.2
-local CHASING_SOUL_SPEED_MULTIPLIER = 0.5
-
 local FixedInvertStarBursts, fixed_super = Class(Object)
 
 function FixedInvertStarBursts:init(depth_mask)
@@ -75,14 +73,6 @@ function FixedInvertStarBursts:update()
     end
 
     fixed_super.update(self)
-end
-
-function KrisPhase1_11:spawnChaserSoul()
-    local soul = super.spawnChaserSoul(self)
-    if soul then
-        soul.speed_multiplier = CHASING_SOUL_SPEED_MULTIPLIER
-    end
-    return soul
 end
 
 function KrisPhase1_11:spawnSoulDepthMask()

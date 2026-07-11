@@ -79,8 +79,8 @@ function Kris:onBattleEnd()
     self:clearRecharge(true)
 
     for _, enemy in ipairs(Game.battle.enemies or {}) do
-        if enemy.clearHeartbeatBonuses then
-            enemy:clearHeartbeatBonuses()
+        if enemy.clearHeartbeatSpeedBoost then
+            enemy:clearHeartbeatSpeedBoost()
         end
     end
 end

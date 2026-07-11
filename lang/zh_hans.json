@@ -75,8 +75,10 @@
     "act_kris_recharge_description": "释放光芒",
     "act_kris_recharge_text": "* 你的【灵魂】散发出怪异的光芒！",
     "act_kris_heartbeat": "心跳加速",
-    "act_kris_heartbeat_description": "增加\n防御力",
-    "act_kris_heartbeat_text": "* 你的心跳加快了。\n[wait:5]* 防御力增加，[wait:2]但无敌时间减少了！",
+    "act_kris_heartbeat_description": "加速",
+    "act_kris_heartbeat_repeat_description": "似乎不起作用",
+    "act_kris_heartbeat_text": "* 你的心跳加快了。\n[wait:5]* 你的灵魂速度变快了。",
+    "act_kris_heartbeat_repeat_text": "* 你的心跳加快了。",
 
     "update_check.current_version_label": "当前版本：[var:version]",
     "update_check.checking": "正在检测新版本……",
