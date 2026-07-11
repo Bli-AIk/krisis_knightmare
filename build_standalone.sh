@@ -154,6 +154,12 @@ patch_lua_config() {
   python3 "$BUILD_HELPER" patch-lua-config "$stage_dir" "$MOD_ID" "$release_mode" "$identity" "$title"
 }
 
+patch_default_framerate() {
+  stage_dir="$1"
+
+  python3 "$BUILD_HELPER" patch-default-framerate "$stage_dir"
+}
+
 patch_mod_manifest() {
   mod_dir="$1"
   mod_dev="$2"
@@ -242,6 +248,7 @@ prepare_stage() {
     rm -rf "$staged_mod_dir/libraries/object-editor"
   fi
   patch_lua_config "$variant" "$stage_dir" "$release_mode"
+  patch_default_framerate "$stage_dir"
   patch_mod_manifest "$staged_mod_dir" "$mod_dev" "$object_editor_enabled"
   if [ "$variant" = "release" ]; then
     patch_kristal_release_debug_input "$stage_dir"

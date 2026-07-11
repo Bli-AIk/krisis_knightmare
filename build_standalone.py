@@ -75,6 +75,19 @@ def patch_lua_config(args: argparse.Namespace) -> None:
     write_text(conf_path, text)
 
 
+def patch_default_framerate(args: argparse.Namespace) -> None:
+    stage_dir = Path(args.stage_dir)
+    path = stage_dir / "src/kristal.lua"
+    text = read_text(path)
+    text = require_substitution(
+        text,
+        r"(?m)^(\s*fps\s*=\s*)30(\s*,\s*)$",
+        r"\g<1>0\g<2>",
+        path,
+    )
+    write_text(path, text)
+
+
 def patch_mod_manifest(args: argparse.Namespace) -> None:
     path = Path(args.manifest)
     text = read_text(path)
@@ -352,6 +365,10 @@ def build_parser() -> argparse.ArgumentParser:
     lua_config_parser.add_argument("identity")
     lua_config_parser.add_argument("title")
     lua_config_parser.set_defaults(func=patch_lua_config)
+
+    framerate_parser = subparsers.add_parser("patch-default-framerate")
+    framerate_parser.add_argument("stage_dir")
+    framerate_parser.set_defaults(func=patch_default_framerate)
 
     manifest_parser = subparsers.add_parser("patch-mod-manifest")
     manifest_parser.add_argument("manifest")
