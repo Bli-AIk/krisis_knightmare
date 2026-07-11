@@ -76,7 +76,7 @@
     "act_kris_recharge_text": "* 你的【灵魂】散发出怪异的光芒！",
     "act_kris_heartbeat": "心跳加速",
     "act_kris_heartbeat_description": "加速",
-    "act_kris_heartbeat_repeat_description": "似乎不起作用",
+    "act_kris_heartbeat_repeat_description": "似乎\n不起作用",
     "act_kris_heartbeat_text": "* 你的心跳加快了。\n[wait:5]* 你的灵魂速度变快了。",
     "act_kris_heartbeat_repeat_text": "* 你的心跳加快了。",
 
