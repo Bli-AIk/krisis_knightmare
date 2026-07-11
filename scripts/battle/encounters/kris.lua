@@ -43,6 +43,15 @@ function Kris:applyLocalization()
     self.text = Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1")
 end
 
+function Kris:getInitialEncounterText()
+    local enemy = Game.battle and Game.battle.enemies and Game.battle.enemies[1]
+    if enemy and enemy.getEncounterText then
+        return enemy:getEncounterText()
+    end
+
+    return self.text
+end
+
 function Kris:onBattleStart()
     local initial_tp = Game:getConfig("krisisInitialTP")
     if initial_tp ~= nil then

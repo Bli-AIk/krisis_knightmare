@@ -153,6 +153,10 @@ function Kris:init()
     self.heartbeat_bonuses = {}
     self.heartbeat_stacks = 0
     self.heartbeat_active = false
+
+    self.recharge_act_was_available = false
+    self.recharge_ready_text_pending = false
+    self.recharge_ready_text_shown = false
 end
 
 function Kris:applyLocalization(update_acts)
@@ -169,16 +173,27 @@ function Kris:applyLocalization(update_acts)
         Game:loc("Use your power to defeat them.", "enemy_kris_check_3"),
     }
 
+    local late_turn_text = Game:loc("* Darkness rushes towards you at high speed.", "enemy_kris_turn_9")
+    self.recharge_available_text = Game:loc(
+        "* Your soul is full of the POWER OF LIGHT.",
+        "enemy_kris_recharge_available"
+    )
     self.text = {
         Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1"),
         Game:loc("* The darkness froze on the blade.", "enemy_kris_turn_2"),
         Game:loc("* Suddenly, the earth was torn apart by swords.", "enemy_kris_turn_3"),
-        Game:loc("* Your soul is full of the POWER OF LIGHT.", "enemy_kris_turn_4"),
+        Game:loc("* KRIS prepares to use \"Darkness Rude Buster\".", "enemy_kris_turn_4"),
         Game:loc("* Darkness emerges from the crack, surging towards the sky.", "enemy_kris_turn_5"),
         Game:loc("* Suddenly, your body seized up.", "enemy_kris_turn_6"),
         Game:loc("* The thick fog gathered, then formed its shape.", "enemy_kris_turn_7"),
         Game:loc("* Countless swords make you dizzy.", "enemy_kris_turn_8"),
-        Game:loc("* Your soul is full of POWER.", "enemy_kris_turn_9"),
+        late_turn_text,
+        Game:loc("* It makes the earth tremble and roar.", "enemy_kris_turn_10"),
+        Game:loc("* Suddenly, your body was torn apart.", "enemy_kris_turn_11"),
+        late_turn_text,
+        late_turn_text,
+        Game:loc("* The fragments of darkness solidified into a vaguely familiar shape.", "enemy_kris_turn_14"),
+        Game:loc("* The earth released its final breath.", "enemy_kris_turn_15"),
     }
     self.low_health_text = nil
 
@@ -221,12 +236,22 @@ function Kris:getRechargeActTPCost()
 end
 
 function Kris:updateRechargeActTPCost()
+    local encounter = Game.battle and Game.battle.encounter
+    local recharge_active = encounter
+        and encounter.isRechargeActive
+        and encounter:isRechargeActive()
+    local available = Game.battle
+        and Game:getTension() >= RECHARGE_MIN_TENSION
+        and not recharge_active
+
+    if available and not self.recharge_act_was_available and not self.recharge_ready_text_shown then
+        self.recharge_ready_text_pending = true
+    end
+    self.recharge_act_was_available = available or false
+
     if self.recharge_act then
         self.recharge_act.tp = self:getRechargeActTPCost()
-        self.recharge_act.unusable = Game.battle
-            and Game.battle.encounter
-            and Game.battle.encounter.isRechargeActive
-            and Game.battle.encounter:isRechargeActive()
+        self.recharge_act.unusable = recharge_active or false
     end
 end
 
@@ -433,6 +458,9 @@ function Kris:onAct(battler, name)
             "* Your Invincible shorter.", "act_kris_heartbeat_text")
         }
     elseif name == self.act_recharge then
+        self.recharge_ready_text_pending = false
+        self.recharge_ready_text_shown = true
+
         local action = Game.battle:getCurrentAction()
         local pre_spend_tension = Game:getTension() - ((action and action.tp) or 0)
         if Game.battle.encounter and Game.battle.encounter.activateRecharge then
@@ -446,6 +474,12 @@ function Kris:onAct(battler, name)
 end
 
 function Kris:getEncounterText()
+    if self.recharge_ready_text_pending then
+        self.recharge_ready_text_pending = false
+        self.recharge_ready_text_shown = true
+        return self.recharge_available_text
+    end
+
     local turn = self:getEncounterTextWaveNumber()
     if self.text[turn] then
         return self.text[turn]
