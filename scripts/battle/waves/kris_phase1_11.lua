@@ -1,7 +1,7 @@
 local KrisPhase1_11, super = Class("kris_phase1_01")
 
 local DEPTH_MASK_DIAMETER_SCALE = 1.25
-local STAR_BURST_INTERVAL = 0.75
+local STAR_BURST_INTERVAL = 1.0
 local STAR_BURST_COUNT = 6
 local STAR_ANGLE_STEP = math.rad(60)
 local STAR_BURST_ANGLE_OFFSET = math.rad(15)
