@@ -1,6 +1,5 @@
 local KrisPhase1_06, super = Class("kris_phase1_01")
 
-local CHASING_SOUL_SPEED_MULTIPLIER = 0.5
 local ATTRACT_MAX_SPEED = 3.75
 local ATTRACT_START_STRENGTH = 0.32
 local ATTRACT_RAMP_TIME = 0.18
@@ -14,14 +13,6 @@ local PLAYER_AFTERIMAGE_FADE_SPEED = 0.055
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
-end
-
-function KrisPhase1_06:spawnChaserSoul()
-    local soul = super.spawnChaserSoul(self)
-    if soul then
-        soul.speed_multiplier = CHASING_SOUL_SPEED_MULTIPLIER
-    end
-    return soul
 end
 
 function KrisPhase1_06:spawnSoulDepthMask()

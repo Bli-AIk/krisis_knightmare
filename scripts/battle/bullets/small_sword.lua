@@ -4,6 +4,120 @@ local SmallSword, super = Class(Bullet)
 local FIRE_ALPHA_DURATION = 0.12
 local FIRE_AIM_DURATION = 0.5
 local FIRE_COLOR_DURATION = 0.6
+-- Change this one multiplier to scale both the black tail and its exit speed.
+local PATH_SEGMENT_LENGTH_MULTIPLIER = 3
+local PATH_SEGMENT_BASE_SPEED = 750 / 2
+local PATH_SEGMENT_BASE_BLACK_LENGTH = 160
+local PATH_SEGMENT_SPEED = PATH_SEGMENT_BASE_SPEED * PATH_SEGMENT_LENGTH_MULTIPLIER
+local PATH_SEGMENT_BLACK_LENGTH = PATH_SEGMENT_BASE_BLACK_LENGTH * PATH_SEGMENT_LENGTH_MULTIPLIER
+local PATH_SEGMENT_TRANSITION_LENGTH = 96
+local PATH_SEGMENT_LENGTH = PATH_SEGMENT_BLACK_LENGTH + PATH_SEGMENT_TRANSITION_LENGTH
+local PATH_SEGMENT_OFFSCREEN_MARGIN = 16
+local PATH_SEGMENT_WIDTH = 2
+local PATH_SEGMENT_TRANSITION_STEPS = 24
+
+local SmallSwordPathSegment, segment_super = Class(Object)
+
+function SmallSwordPathSegment:init(x, y, direction)
+	segment_super.init(self, x, y)
+
+	self.rotation = direction
+	self.black_length = PATH_SEGMENT_BLACK_LENGTH
+	self.transition_length = PATH_SEGMENT_TRANSITION_LENGTH
+	self.length = PATH_SEGMENT_LENGTH
+	self.physics.direction = direction
+	self.physics.speed = PATH_SEGMENT_SPEED / 30
+	self.layer = BATTLE_LAYERS["above_arena"]
+	self.debug_select = false
+end
+
+function SmallSwordPathSegment:isFullyOffscreen()
+	local head_x, head_y = self:getScreenPos()
+	local tail_x = head_x - math.cos(self.rotation) * self.length
+	local tail_y = head_y - math.sin(self.rotation) * self.length
+	local margin = PATH_SEGMENT_OFFSCREEN_MARGIN
+	local min_x, max_x = math.min(tail_x, head_x), math.max(tail_x, head_x)
+	local min_y, max_y = math.min(tail_y, head_y), math.max(tail_y, head_y)
+
+	return max_x < -margin or min_x > SCREEN_WIDTH + margin
+		or max_y < -margin or min_y > SCREEN_HEIGHT + margin
+end
+
+function SmallSwordPathSegment:update()
+	segment_super.update(self)
+
+	if self:isFullyOffscreen() then
+		self:remove()
+	end
+end
+
+function SmallSwordPathSegment:getArenaBorderInLocalSpace()
+	local arena = Game.battle and Game.battle.arena
+	if not arena or not arena.border_line then
+		return nil
+	end
+
+	local points = {}
+	for i = 1, #arena.border_line, 2 do
+		local screen_x, screen_y = arena:localToScreenPos(arena.border_line[i], arena.border_line[i + 1])
+		local local_x, local_y = self:screenToLocalPos(screen_x, screen_y)
+		table.insert(points, local_x)
+		table.insert(points, local_y)
+	end
+
+	return points
+end
+
+function SmallSwordPathSegment:draw()
+	local old_width = love.graphics.getLineWidth()
+	local old_r, old_g, old_b, old_a = love.graphics.getColor()
+
+	local transition_length = self.transition_length
+	local border_points = self:getArenaBorderInLocalSpace()
+
+	local function drawBlackTrail()
+		if self.black_length <= 0 then
+			return
+		end
+
+		love.graphics.setLineWidth(PATH_SEGMENT_WIDTH)
+		Draw.setColor(0, 0, 0, 1)
+		love.graphics.line(-self.length, 0, -transition_length, 0)
+	end
+
+	if border_points and #border_points >= 6 then
+		love.graphics.stencil(function()
+			love.graphics.setColor(1, 1, 1, 1)
+			love.graphics.polygon("fill", unpack(border_points))
+		end, "replace", 1)
+		love.graphics.setStencilTest("greater", 0)
+		drawBlackTrail()
+		love.graphics.setStencilTest()
+	else
+		drawBlackTrail()
+	end
+
+	-- The bright head and its gradient intentionally stay outside the arena stencil.
+	for i = 0, PATH_SEGMENT_TRANSITION_STEPS - 1 do
+		local start_t = i / PATH_SEGMENT_TRANSITION_STEPS
+		local end_t = (i + 1) / PATH_SEGMENT_TRANSITION_STEPS
+		local start_x = -transition_length + transition_length * start_t
+		local end_x = -transition_length + transition_length * end_t
+		local t = end_t * end_t * (3 - 2 * end_t)
+		local width = PATH_SEGMENT_WIDTH * (1 - 0.5 * end_t)
+
+		love.graphics.setLineWidth(width)
+		Draw.setColor(t, t, t, 1)
+		love.graphics.line(start_x, 0, end_x, 0)
+	end
+
+	-- Keep the tip to a single bright pixel so the head stays streamlined.
+	Draw.setColor(1, 1, 1, 1)
+	love.graphics.rectangle("fill", -1, -1, 2, 2)
+
+	love.graphics.setLineWidth(old_width)
+	love.graphics.setColor(old_r, old_g, old_b, old_a)
+end
 
 local function easeOutCubic(t)
 	local inv = 1 - t
@@ -52,6 +166,7 @@ function SmallSword:init(x, y, dir, min_speed, max_speed, accel_duration, option
 	self.fire_left_x = options.fire_left_x or -self.width
 	self.fire_speed = options.fire_speed or self.max_speed
 	self.fire_accel_duration = options.fire_accel_duration or 0.2
+	self.show_path_ray = options.show_path_ray == true
 	if self.fire_on_left_edge then
 		self.remove_offscreen = false
 	end
@@ -66,6 +181,12 @@ end
 
 function SmallSword:onWaveSpawn(wave)
 	super.onWaveSpawn(self, wave)
+
+	if self.show_path_ray and not self.path_ray_spawned then
+		self.path_ray_spawned = true
+		local x, y = self:getScreenPos()
+		self.path_ray = wave:spawnObject(SmallSwordPathSegment(x, y, self.final_dir))
+	end
 
 	local ghost_ref = self.ghost
 	wave.timer:every(1 / 15, function()

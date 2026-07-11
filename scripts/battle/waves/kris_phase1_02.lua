@@ -270,7 +270,7 @@ function KrisPhase1_02:getKrisSlashAnimationFrameDelay()
 end
 
 function KrisPhase1_02:getSlashSwordBulletOptions(slash_index, offset_index)
-    return nil
+	return { show_path_ray = true }
 end
 
 function KrisPhase1_02:spawnSlashSwordBullet(x, y, direction, slash_index, offset_index)

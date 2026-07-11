@@ -3,6 +3,9 @@ local KrisPhase1_10, super = Class(Wave)
 local FPS = 30
 local WAVE_SECONDS = 8
 local FAST_SPEED = 4 / FPS
+local FOLLOWUP_SPEED_FACTOR = 0.9
+local FOLLOWUP_MAX_DIAMOND_COUNT = 5
+local FOLLOWUP_BOUNCE_SPEED_FACTORS = { 1, 0.9 }
 local READY_TIME = 0.75
 local THRUST_HOLD_TIME = 2
 local RUDE_BUSTER_SPAWN_FRAMES_EARLY = 1
@@ -46,7 +49,9 @@ end
 
 function KrisPhase1_10:getInitialRudeBusterOptions()
     return {
-        followup_bounce_speed_factor = 1.04,
+        followup_speed_factor = FOLLOWUP_SPEED_FACTOR,
+        followup_max_diamond_count = FOLLOWUP_MAX_DIAMOND_COUNT,
+        followup_bounce_speed_factors = FOLLOWUP_BOUNCE_SPEED_FACTORS,
         followup_max_chain_speed = 14,
     }
 end

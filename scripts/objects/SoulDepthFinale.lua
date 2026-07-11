@@ -13,8 +13,8 @@ local STAR_MAX_COUNT = 12
 local STAR_SCALE = 0.85
 local STAR_MIN_DISTANCE = math.max(SCREEN_WIDTH, SCREEN_HEIGHT) + 120
 local STAR_MAX_DISTANCE = math.max(SCREEN_WIDTH, SCREEN_HEIGHT) + 240
-local STAR_MIN_TRAVEL_TIME = 1.45 * 2
-local STAR_MAX_TRAVEL_TIME = 2.05 * 2
+local STAR_MIN_TRAVEL_TIME = 1.3 * 2
+local STAR_MAX_TRAVEL_TIME = 2.3 * 2
 local STAR_LAYER = BATTLE_LAYERS["above_bullets"] + 3
 
 local function clamp(value, min, max)

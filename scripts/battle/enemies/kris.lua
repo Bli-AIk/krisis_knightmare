@@ -1,6 +1,7 @@
 local Kris, super = Class(EnemyBattler)
 
 local WAIT = "[wait:5]"
+local HEARTBEAT_SOUL_SPEED = 6
 local RECHARGE_MIN_TENSION = 50
 local RECHARGE_ACT_FLASH_SPEED = 6
 local MERCY_TEXT_LAYER_OFFSET = 1
@@ -28,8 +29,18 @@ local WAVE_PHASES = {
 }
 local RECHARGE_AVOID_WAVES = {
     [1] = true,
+    [2] = true,
+    [3] = true,
     [6] = true,
+    [8] = true,
+    [9] = true,
     [11] = true,
+    [12] = true,
+    [15] = true,
+}
+local RECHARGE_FALLBACK_WAVES = {
+    [10] = 4,
+    [14] = 4,
 }
 
 local function makeWaveList(first, last)
@@ -99,7 +110,7 @@ local function getVesselAttackResults(points)
     if t < 0 then t = 0 elseif t > 1 then t = 1 end
 
     return math.floor(40 - 20 * t + 0.5),
-        math.floor(4 + 4 * t + 0.5)
+        math.floor(4 + 2 * t + 0.5)
 end
 
 function Kris:init()
@@ -140,6 +151,8 @@ function Kris:init()
     end
 
     self.dialogue = {}
+    self.heartbeat_speed_boosted = false
+    self.heartbeat_original_soul_speed = nil
 
     self:applyLocalization()
     self.recharge_act = self:registerAct(
@@ -150,9 +163,9 @@ function Kris:init()
     )
     self:registerAct(self.act_heartbeat, self.act_heartbeat_description, { "vessel" })
 
-    self.heartbeat_bonuses = {}
-    self.heartbeat_stacks = 0
-    self.heartbeat_active = false
+    self.recharge_act_was_available = false
+    self.recharge_ready_text_pending = false
+    self.recharge_ready_text_shown = false
 end
 
 function Kris:applyLocalization(update_acts)
@@ -169,16 +182,27 @@ function Kris:applyLocalization(update_acts)
         Game:loc("Use your power to defeat them.", "enemy_kris_check_3"),
     }
 
+    local late_turn_text = Game:loc("* Darkness rushes towards you at high speed.", "enemy_kris_turn_9")
+    self.recharge_available_text = Game:loc(
+        "* Your soul is full of the POWER OF LIGHT.",
+        "enemy_kris_recharge_available"
+    )
     self.text = {
         Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1"),
         Game:loc("* The darkness froze on the blade.", "enemy_kris_turn_2"),
         Game:loc("* Suddenly, the earth was torn apart by swords.", "enemy_kris_turn_3"),
-        Game:loc("* Your soul is full of the POWER OF LIGHT.", "enemy_kris_turn_4"),
+        Game:loc("* [name:chara:kris] prepares to use \"Darkness Buster\".", "enemy_kris_turn_4"),
         Game:loc("* Darkness emerges from the crack, surging towards the sky.", "enemy_kris_turn_5"),
         Game:loc("* Suddenly, your body seized up.", "enemy_kris_turn_6"),
         Game:loc("* The thick fog gathered, then formed its shape.", "enemy_kris_turn_7"),
         Game:loc("* Countless swords make you dizzy.", "enemy_kris_turn_8"),
-        Game:loc("* Your soul is full of POWER.", "enemy_kris_turn_9"),
+        late_turn_text,
+        Game:loc("* It makes the earth tremble and roar.", "enemy_kris_turn_10"),
+        Game:loc("* Suddenly, your body was torn apart.", "enemy_kris_turn_11"),
+        late_turn_text,
+        late_turn_text,
+        Game:loc("* The fragments of darkness solidified into a vaguely familiar shape.", "enemy_kris_turn_14"),
+        Game:loc("* The earth released its final breath.", "enemy_kris_turn_15"),
     }
     self.low_health_text = nil
 
@@ -187,7 +211,14 @@ function Kris:applyLocalization(update_acts)
     self.act_recharge = Game:loc("Recharge", "act_kris_recharge")
     self.act_recharge_description = Game:loc("SHINE", "act_kris_recharge_description")
     self.act_heartbeat = Game:loc("Heartbeat", "act_kris_heartbeat")
-    self.act_heartbeat_description = Game:loc("Raise\nDefend", "act_kris_heartbeat_description")
+    if self.heartbeat_speed_boosted then
+        self.act_heartbeat_description = Game:loc(
+            "Seems ineffective",
+            "act_kris_heartbeat_repeat_description"
+        )
+    else
+        self.act_heartbeat_description = Game:loc("Speed\nUp", "act_kris_heartbeat_description")
+    end
 
     if self.acts[1] then
         self.acts[1].name = self.act_check
@@ -221,12 +252,22 @@ function Kris:getRechargeActTPCost()
 end
 
 function Kris:updateRechargeActTPCost()
+    local encounter = Game.battle and Game.battle.encounter
+    local recharge_active = encounter
+        and encounter.isRechargeActive
+        and encounter:isRechargeActive()
+    local available = Game.battle
+        and Game:getTension() >= RECHARGE_MIN_TENSION
+        and not recharge_active
+
+    if available and not self.recharge_act_was_available and not self.recharge_ready_text_shown then
+        self.recharge_ready_text_pending = true
+    end
+    self.recharge_act_was_available = available or false
+
     if self.recharge_act then
         self.recharge_act.tp = self:getRechargeActTPCost()
-        self.recharge_act.unusable = Game.battle
-            and Game.battle.encounter
-            and Game.battle.encounter.isRechargeActive
-            and Game.battle.encounter:isRechargeActive()
+        self.recharge_act.unusable = recharge_active or false
     end
 end
 
@@ -274,6 +315,14 @@ function Kris:shouldAvoidWaveNumber(wave_number)
     return self:isRechargeSustaining() and RECHARGE_AVOID_WAVES[wave_number] == true
 end
 
+function Kris:getRechargeWaveNumber(wave_number)
+    if not self:isRechargeSustaining() then
+        return wave_number
+    end
+
+    return RECHARGE_FALLBACK_WAVES[wave_number] or wave_number
+end
+
 function Kris:getRandomPhaseWaveNumber(phase)
     local candidates = {}
     for i = phase.first, phase.last do
@@ -318,7 +367,7 @@ function Kris:getEncounterTextWaveNumber()
     local played = self.wave_phase_turns_played or 0
     if played < self:getPhaseSequenceLength(phase) then
         local wave_number = self:getNextPhaseWaveNumber()
-        return wave_number
+        return self:getRechargeWaveNumber(wave_number)
     end
 
     return phase.last
@@ -384,10 +433,11 @@ function Kris:selectWave()
     end
 
     local wave_number, next_phase_turns_played = self:getNextPhaseWaveNumber()
-    local turn_wave = TURN_WAVES[wave_number]
+    local selected_wave_number = self:getRechargeWaveNumber(wave_number)
+    local turn_wave = TURN_WAVES[selected_wave_number]
     if turn_wave then
         self.selected_wave = turn_wave
-        self.selected_wave_number = wave_number
+        self.selected_wave_number = selected_wave_number
         self.wave_select_turn_count = battle_turn
         self.wave_phase_turns_played = next_phase_turns_played or ((self.wave_phase_turns_played or 0) + 1)
         print("playing wave: " .. self.selected_wave)
@@ -414,25 +464,39 @@ function Kris:onAct(battler, name)
     if name == self.act_check then
         return super.onAct(self, battler, "Check")
     elseif name == self.act_heartbeat then
-        local vessel = nil
-        for _, pb in ipairs(Game.battle.party) do
-            if pb.chara.id == "vessel" then
-                vessel = pb
-                break
+        local already_boosted = self.heartbeat_speed_boosted
+        local soul = Game.battle and Game.battle.soul
+        if soul then
+            if not already_boosted then
+                self.heartbeat_original_soul_speed = soul.speed
+            end
+            soul.speed = HEARTBEAT_SOUL_SPEED
+        end
+        self.heartbeat_speed_boosted = true
+
+        self.act_heartbeat_description = Game:loc(
+            "Seems ineffective",
+            "act_kris_heartbeat_repeat_description"
+        )
+        for _, act in ipairs(self.acts or {}) do
+            if act.name == self.act_heartbeat then
+                act.description = self.act_heartbeat_description
             end
         end
-        if vessel then
-            vessel.chara.stats.defense = vessel.chara.stats.defense + 5
-            self.heartbeat_bonuses[vessel.chara] = (self.heartbeat_bonuses[vessel.chara] or 0) + 5
-            self.heartbeat_stacks = self.heartbeat_stacks + 1
-            self.heartbeat_active = true
-        end
+
+        local text = already_boosted
+            and Game:loc("* Your heartbeat quickened.", "act_kris_heartbeat_repeat_text")
+            or Game:loc(
+                "* Your heartbeat quickened.\n" .. WAIT .. "* Your SOUL sped up.",
+                "act_kris_heartbeat_text"
+            )
         return {
-            Game:loc("* Your heartbeat quickened.\n" .. WAIT ..
-            "* Your DEF raised.\n" .. WAIT ..
-            "* Your Invincible shorter.", "act_kris_heartbeat_text")
+            text
         }
     elseif name == self.act_recharge then
+        self.recharge_ready_text_pending = false
+        self.recharge_ready_text_shown = true
+
         local action = Game.battle:getCurrentAction()
         local pre_spend_tension = Game:getTension() - ((action and action.tp) or 0)
         if Game.battle.encounter and Game.battle.encounter.activateRecharge then
@@ -446,6 +510,12 @@ function Kris:onAct(battler, name)
 end
 
 function Kris:getEncounterText()
+    if self.recharge_ready_text_pending then
+        self.recharge_ready_text_pending = false
+        self.recharge_ready_text_shown = true
+        return self.recharge_available_text
+    end
+
     local turn = self:getEncounterTextWaveNumber()
     if self.text[turn] then
         return self.text[turn]
@@ -496,17 +566,13 @@ function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
     super.hurt(self, amount, battler, on_defeat, color, show_status, attacked)
 end
 
-function Kris:clearHeartbeatBonuses()
-    for chara, defense in pairs(self.heartbeat_bonuses or {}) do
-        chara.stats.defense = chara.stats.defense - defense
+function Kris:clearHeartbeatSpeedBoost()
+    local soul = Game.battle and Game.battle.soul
+    if soul and self.heartbeat_original_soul_speed ~= nil then
+        soul.speed = self.heartbeat_original_soul_speed
     end
-    self.heartbeat_bonuses = {}
-    self.heartbeat_stacks = 0
-    self.heartbeat_active = false
-end
-
-function Kris:getHeartbeatInvTimerCap()
-    return math.max(1 / 60, (5 - self.heartbeat_stacks) / 60)
+    self.heartbeat_original_soul_speed = nil
+    self.heartbeat_speed_boosted = false
 end
 
 function Kris:onTurnEnd()
@@ -515,19 +581,17 @@ function Kris:onTurnEnd()
 end
 
 function Kris:onRemove(parent)
-    self:clearHeartbeatBonuses()
+    self:clearHeartbeatSpeedBoost()
     super.onRemove(self, parent)
 end
 
 function Kris:update()
     self:updateRechargeActTPCost()
 
-    if self.heartbeat_active then
-        local inv_timer_cap = self:getHeartbeatInvTimerCap()
-        if Game.battle.soul and Game.battle.soul.inv_timer > inv_timer_cap then
-            Game.battle.soul.inv_timer = inv_timer_cap
-        end
+    if self.heartbeat_speed_boosted and Game.battle and Game.battle.soul then
+        Game.battle.soul.speed = HEARTBEAT_SOUL_SPEED
     end
+
     super.update(self)
 end
 

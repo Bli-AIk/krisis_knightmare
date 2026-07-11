@@ -6,6 +6,8 @@ local MOVE_DURATION = 2.0
 local SPEED_RANDOM_MIN = 0.96
 local SPEED_RANDOM_MAX = 1.04
 local OFFSCREEN_MARGIN = 56
+local CHIP_INITIAL_SPEED = 1 -- Pixels per frame at 30 FPS.
+local FRAMES_PER_SECOND = 30
 local CONTROL_ONE_DISTANCE_RATIO = 0.32 / 4
 local CONTROL_TWO_DISTANCE_RATIO = 1.0
 local CONTROL_OFFSET_MIN = 28
@@ -23,6 +25,10 @@ local function cubicBezier(p0, p1, p2, p3, t)
     local d = t * t * t
 
     return p0 * a + p1 * b + p2 * c + p3 * d
+end
+
+local function easeInWithInitialSpeed(t, initial_slope)
+    return initial_slope * t + (1 - initial_slope) * t * t
 end
 
 local function randomBetween(min, max)
@@ -89,6 +95,17 @@ function FlyingSwordChip:init(x, y, angle, options)
     self.control_one_y = y + dir_y * control_one_distance + perpendicular_y * curve_offset
     self.control_two_x = x + dir_x * control_two_distance - perpendicular_x * curve_offset * 0.7
     self.control_two_y = y + dir_y * control_two_distance - perpendicular_y * curve_offset * 0.7
+    local start_tangent_length = 3 * MathUtils.dist(
+        self.start_x,
+        self.start_y,
+        self.control_one_x,
+        self.control_one_y
+    )
+    self.initial_progress_slope = clamp(
+        (CHIP_INITIAL_SPEED * FRAMES_PER_SECOND * self.duration) / math.max(start_tangent_length, 0.001),
+        0,
+        1
+    )
     self.path_rotation = self.angle + math.pi / 2
     self.rotation = self.path_rotation
 end
@@ -100,8 +117,9 @@ function FlyingSwordChip:update()
     local previous_x = self.x
     local previous_y = self.y
 
-    self.x = cubicBezier(self.start_x, self.control_one_x, self.control_two_x, self.end_x, t)
-    self.y = cubicBezier(self.start_y, self.control_one_y, self.control_two_y, self.end_y, t)
+    local movement_t = easeInWithInitialSpeed(t, self.initial_progress_slope)
+    self.x = cubicBezier(self.start_x, self.control_one_x, self.control_two_x, self.end_x, movement_t)
+    self.y = cubicBezier(self.start_y, self.control_one_y, self.control_two_y, self.end_y, movement_t)
 
     if self.x ~= previous_x or self.y ~= previous_y then
         self.path_rotation = MathUtils.angle(previous_x, previous_y, self.x, self.y) + math.pi / 2

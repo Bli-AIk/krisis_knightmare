@@ -6,37 +6,45 @@ local INITIAL_DOUBLE_SLASH_DELAY = 38 / 60
 local DISAPPEAR_SOUND = "kris_disappear"
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
+local DOUBLE_SLASH_HALF_ANGLE = math.rad(22)
 
 local DOUBLE_SLASH_GROUPS = {
     {
         x = 515, y = 156, kris_x = 550, kris_y = 205,
-        slashes = { math.rad(158), math.rad(202) },
+        angle = math.rad(180),
     },
     {
         x = 510, y = 204, kris_x = 550, kris_y = 286,
-        slashes = { math.rad(166), math.rad(194) },
+        angle = math.rad(180),
     },
     {
         x = 530, y = 166, kris_x = 550, kris_y = 215,
-        slashes = { math.rad(154), math.rad(206) },
+        angle = math.rad(180),
     },
     {
         x = 520, y = 196, kris_x = 550, kris_y = 278,
-        slashes = { math.rad(170), math.rad(190) },
+        angle = math.rad(180),
     },
     {
         x = 508, y = 174, kris_x = 550, kris_y = 224,
-        slashes = { math.rad(150), math.rad(210) },
+        angle = math.rad(180),
     },
     {
         x = 526, y = 212, kris_x = 550, kris_y = 296,
-        slashes = { math.rad(162), math.rad(198) },
+        angle = math.rad(180),
     },
     {
         x = 512, y = 160, kris_x = 550, kris_y = 210,
-        slashes = { math.rad(146), math.rad(214) },
+        angle = math.rad(180),
     },
 }
+
+local function getDoubleSlashAngles(group)
+    return {
+        group.angle - DOUBLE_SLASH_HALF_ANGLE,
+        group.angle + DOUBLE_SLASH_HALF_ANGLE,
+    }
+end
 
 local function moveAttackerTo(attacker, x, y)
     attacker.target_x = x
@@ -92,7 +100,7 @@ function KrisPhase1_15:onStart()
         local animation = self.slash_index % 2 == 0 and "slash1" or "slash2"
         self:spawnKrisSlashAnimation(group.kris_x, group.kris_y, animation)
         self.timer:after(SLASH_START_DELAY, function()
-            for _, rotation in ipairs(group.slashes) do
+            for _, rotation in ipairs(getDoubleSlashAngles(group)) do
                 self:spawnSlash(group.x, group.y, rotation, group.kris_x, group.kris_y)
             end
         end)

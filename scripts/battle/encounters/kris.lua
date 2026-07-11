@@ -10,7 +10,7 @@ local RECHARGE_PLAYER_LIGHT_SPRITE = "battle/player_light"
 local RECHARGE_DEFAULT_SOUL_SPRITE = "player/heart_dodge"
 local RECHARGE_LIGHT_SCALE = 1
 local RECHARGE_LIGHT_RADIUS_FACTOR = 0.45
-local RECHARGE_MERCY_INTERVAL = 0.3
+local RECHARGE_MERCY_INTERVAL = 0.15
 local RECHARGE_ACT_EFFECT_FRAME = 5
 local RECHARGE_ACT_FRAME_DELAY = 1 / 15
 local RECHARGE_SOUL_LAYER = BATTLE_LAYERS["above_bullets"] + 2
@@ -43,6 +43,15 @@ function Kris:applyLocalization()
     self.text = Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1")
 end
 
+function Kris:getInitialEncounterText()
+    local enemy = Game.battle and Game.battle.enemies and Game.battle.enemies[1]
+    if enemy and enemy.getEncounterText then
+        return enemy:getEncounterText()
+    end
+
+    return self.text
+end
+
 function Kris:onBattleStart()
     local initial_tp = Game:getConfig("krisisInitialTP")
     if initial_tp ~= nil then
@@ -70,8 +79,8 @@ function Kris:onBattleEnd()
     self:clearRecharge(true)
 
     for _, enemy in ipairs(Game.battle.enemies or {}) do
-        if enemy.clearHeartbeatBonuses then
-            enemy:clearHeartbeatBonuses()
+        if enemy.clearHeartbeatSpeedBoost then
+            enemy:clearHeartbeatSpeedBoost()
         end
     end
 end
