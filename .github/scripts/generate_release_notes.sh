@@ -3,6 +3,13 @@ set -euo pipefail
 
 tag="${1:?Usage: generate_release_notes.sh <tag> [output-file]}"
 output_file="${2:-release_notes.md}"
+script_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+security_fragment="$script_dir/release_security_notes.md"
+
+if [ ! -f "$security_fragment" ]; then
+  printf 'Security notes fragment does not exist: %s\n' "$security_fragment" >&2
+  exit 1
+fi
 
 repo="${GITHUB_REPOSITORY:-}"
 if [ -z "$repo" ] && command -v gh >/dev/null 2>&1; then
@@ -88,6 +95,10 @@ ${pre_1_notice_en}
 
 - Most Windows players should use \`*-win64.zip\`; extract it and run the game directly.
 - Other users may use \`*.love\` with the LÖVE runtime as needed.
+
+EOF
+cat "$security_fragment" >> "$output_file"
+cat >> "$output_file" <<EOF
 
 ---
 
