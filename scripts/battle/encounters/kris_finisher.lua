@@ -8,7 +8,9 @@ local FINISHER_KRIS_LAYER = BATTLE_LAYERS["battlers"]
 local FINISHER_KRIS_ANIMATION_SPEED = 4 / 30
 local FINISHER_KRIS_SCALE = 2
 
-local FINISHER_STAR_WAVE_INTERVAL = 15 / 30
+local FINISHER_STAR_WAVE_MAX_INTERVAL = 15 / 30
+local FINISHER_STAR_WAVE_MIN_INTERVAL = 15 / 60
+local FINISHER_STAR_INTERVAL_TRANSITION_TIME = 10
 local FINISHER_STAR_FIRST_WAVE_COUNT = 12
 local FINISHER_STAR_WAVE_COUNT = 24
 local FINISHER_STAR_RADIUS_MARGIN = 18
@@ -93,6 +95,17 @@ function KrisFinisher:getFinisherSoulPosition(battle)
     end
 end
 
+function KrisFinisher:getFinisherStarWaveInterval(elapsed)
+    elapsed = elapsed or self.finisher_star_elapsed
+
+    local progress = FINISHER_STAR_INTERVAL_TRANSITION_TIME > 0
+        and MathUtils.clamp(elapsed / FINISHER_STAR_INTERVAL_TRANSITION_TIME, 0, 1)
+        or 1
+
+    return FINISHER_STAR_WAVE_MAX_INTERVAL
+        + (FINISHER_STAR_WAVE_MIN_INTERVAL - FINISHER_STAR_WAVE_MAX_INTERVAL) * progress
+end
+
 function KrisFinisher:startFinisherStarEmitter(battle)
     self.finisher_star_battle = battle
     self.finisher_star_emitting = true
@@ -107,7 +120,7 @@ function KrisFinisher:startFinisherStarEmitter(battle)
     end
 
     self:spawnFinisherStarWave()
-    self.finisher_star_next_wave = FINISHER_STAR_WAVE_INTERVAL
+    self.finisher_star_next_wave = FINISHER_STAR_WAVE_MAX_INTERVAL
 end
 
 function KrisFinisher:spawnFinisherStarWave()
@@ -187,7 +200,8 @@ function KrisFinisher:updateFinisherStarEmitter()
     self.finisher_star_elapsed = self.finisher_star_elapsed + DT
     while self.finisher_star_elapsed >= self.finisher_star_next_wave do
         self:spawnFinisherStarWave()
-        self.finisher_star_next_wave = self.finisher_star_next_wave + FINISHER_STAR_WAVE_INTERVAL
+        self.finisher_star_next_wave = self.finisher_star_next_wave
+            + self:getFinisherStarWaveInterval(self.finisher_star_next_wave)
     end
 end
 
