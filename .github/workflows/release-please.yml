@@ -146,8 +146,8 @@ jobs:
           fi
 
           gh release view "$RELEASE_TAG" --json body --jq '.body' > existing_release_notes.md
-          .github/scripts/append_release_security_notes.sh \
-            existing_release_notes.md release_notes_with_security.md
+          .github/scripts/prepare_release_notes.sh \
+            "$RELEASE_TAG" existing_release_notes.md release_notes_with_security.md
           gh release edit "$RELEASE_TAG" \
             --title "$title" \
             --notes-file release_notes_with_security.md \

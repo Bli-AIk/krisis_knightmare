@@ -126,12 +126,12 @@ jobs:
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release view "$GITHUB_REF_NAME" --json body --jq '.body' > existing_release_notes.md
-            if [ -s existing_release_notes.md ]; then
-              .github/scripts/append_release_security_notes.sh \
-                existing_release_notes.md release_notes_with_security.md
-            else
-              cp release_notes.md release_notes_with_security.md
+            notes_source=existing_release_notes.md
+            if [ ! -s "$notes_source" ]; then
+              notes_source=release_notes.md
             fi
+            .github/scripts/prepare_release_notes.sh \
+              "$GITHUB_REF_NAME" "$notes_source" release_notes_with_security.md
 
             gh release edit "$GITHUB_REF_NAME" \
               --title "$title" \
