@@ -37,8 +37,8 @@ function actor:init()
         ["flying_sword_disappear"] = { "flying_sword_disappear", FAST_SPEED, false, next = "idle" },
         ["twist"] = { "twist", NORMAL_SPEED, false, next = "idle" },
 
-        ["phase2_slide"] = { "phase2_slide", NORMAL_SPEED, false, next = "idle" },
-        ["phase2_run"] = { "phase2_run", NORMAL_SPEED, true },
+        ["finisher_slide"] = { "finisher_slide", NORMAL_SPEED, false, next = "idle" },
+        ["finisher_run"] = { "finisher_run", FAST_SPEED, true },
 
         ["angry_shake"] = { "angry_shake", NORMAL_SPEED, true },
         ["hurt"] = { "hurt", NORMAL_SPEED, true, temp = true, duration = 0.5 },
