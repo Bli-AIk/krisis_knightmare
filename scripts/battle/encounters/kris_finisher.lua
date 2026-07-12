@@ -20,9 +20,61 @@ local FINISHER_STAR_TRAVEL_TIME = 3
 local FINISHER_STAR_ORBIT_SPEED = math.rad(12)
 local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
 local FINISHER_STOP_TP = 50
+local FINISHER_PLAYER_DRIFT_SPEED = 4 / 2 * 0.75
+local FINISHER_HURT_FLASH_MAX_ALPHA = 0.5
+local FINISHER_HURT_FLASH_RISE_TIME = 0.08
+local FINISHER_HURT_FLASH_FALL_TIME = 0.12 * 1.5
 
 local FINISHER_MUSIC = "creepychase"
 local FINISHER_MUSIC_PITCH = 1.2
+
+local FinisherHurtFlash, hurt_flash_super = Class(Object)
+
+local function clamp(value, min, max)
+    return math.max(min, math.min(max, value))
+end
+
+function FinisherHurtFlash:init()
+    hurt_flash_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.layer = BATTLE_LAYERS["top"] + 1
+    self.time = 0
+    self.alpha = 0
+end
+
+function FinisherHurtFlash:restart()
+    self.time = 0
+    self.alpha = 0
+    self.active = true
+    self.visible = true
+end
+
+function FinisherHurtFlash:update()
+    hurt_flash_super.update(self)
+
+    self.time = self.time + DT
+    if self.time <= FINISHER_HURT_FLASH_RISE_TIME then
+        self.alpha = FINISHER_HURT_FLASH_MAX_ALPHA * clamp(
+            self.time / FINISHER_HURT_FLASH_RISE_TIME,
+            0,
+            1
+        )
+        return
+    end
+
+    local fall_progress = (self.time - FINISHER_HURT_FLASH_RISE_TIME)
+        / FINISHER_HURT_FLASH_FALL_TIME
+    self.alpha = FINISHER_HURT_FLASH_MAX_ALPHA * (1 - clamp(fall_progress, 0, 1))
+
+    if fall_progress >= 1 then
+        self:remove()
+    end
+end
+
+function FinisherHurtFlash:draw()
+    Draw.setColor(1, 0, 0, self.alpha)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+end
 
 function KrisFinisher:init()
     super.init(self)
@@ -38,6 +90,8 @@ function KrisFinisher:init()
     self.finisher_star_next_wave = 0
     self.finisher_star_wave_index = 0
     self.finisher_star_initial_radius = nil
+    self.finisher_hurt_flash = nil
+    self.finisher_status_message_restore = {}
 end
 
 function KrisFinisher:onBattleInit()
@@ -52,9 +106,56 @@ function KrisFinisher:onBattleInit()
     battle.music:play(self.music, nil, FINISHER_MUSIC_PITCH)
     self:createFinisherKris(battle)
     self:createWindowArena(battle)
+    self:hideVesselDamageNumbers(battle)
     self:startFinisherStarEmitter(battle)
 
     return true
+end
+
+function KrisFinisher:triggerHurtFlash()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    if self.finisher_hurt_flash and self.finisher_hurt_flash.parent then
+        self.finisher_hurt_flash:restart()
+    else
+        self.finisher_hurt_flash = FinisherHurtFlash()
+        battle:addChild(self.finisher_hurt_flash)
+    end
+end
+
+function KrisFinisher:hideVesselDamageNumbers(battle)
+    for _, battler in ipairs(battle.party or {}) do
+        if battler.chara and battler.chara.id == "vessel" then
+            local original_status_message = battler.statusMessage
+            self.finisher_status_message_restore[battler] = original_status_message
+            battler.statusMessage = function(party_battler, message_type, arg, color, kill, delay)
+                if message_type == "damage" then
+                    if tonumber(arg) and tonumber(arg) > 0 then
+                        self:triggerHurtFlash()
+                    end
+                    return
+                elseif message_type == "msg" then
+                    if arg == "down" or arg == "swoon" then
+                        self:triggerHurtFlash()
+                    end
+                end
+
+                return original_status_message(party_battler, message_type, arg, color, kill, delay)
+            end
+        end
+    end
+end
+
+function KrisFinisher:restoreVesselDamageNumbers()
+    for battler, original_status_message in pairs(self.finisher_status_message_restore) do
+        if battler then
+            battler.statusMessage = original_status_message
+        end
+    end
+    self.finisher_status_message_restore = {}
 end
 
 function KrisFinisher:createFinisherKris(battle)
@@ -205,6 +306,17 @@ function KrisFinisher:updateFinisherStarEmitter()
     end
 end
 
+function KrisFinisher:updatePlayerDrift()
+    if Game:getTension() >= FINISHER_STOP_TP then
+        return
+    end
+
+    local soul = Game.battle and Game.battle.soul
+    if soul and soul.parent and soul.move then
+        soul:move(-FINISHER_PLAYER_DRIFT_SPEED * DTMULT, 0)
+    end
+end
+
 function KrisFinisher:hidePlayerUI(battle)
     battle.battle_ui.visible = false
     battle.battle_ui.active = false
@@ -247,10 +359,16 @@ end
 function KrisFinisher:update()
     super.update(self)
     self:updateFinisherStarEmitter()
+    self:updatePlayerDrift()
 end
 
 function KrisFinisher:onBattleEnd()
     self:stopFinisherStarEmitter()
+    self:restoreVesselDamageNumbers()
+    if self.finisher_hurt_flash and self.finisher_hurt_flash.parent then
+        self.finisher_hurt_flash:remove()
+    end
+    self.finisher_hurt_flash = nil
 end
 
 return KrisFinisher
