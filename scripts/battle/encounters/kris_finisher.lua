@@ -15,7 +15,7 @@ local FINISHER_STAR_FIRST_WAVE_COUNT = 12
 local FINISHER_STAR_WAVE_COUNT = 24
 local FINISHER_STAR_RADIUS_MARGIN = 18
 local FINISHER_STAR_INITIAL_RADIUS_SCALE = 1.25
-local FINISHER_STAR_MIN_RADIUS = 28
+local FINISHER_STAR_MIN_RADIUS = 0
 local FINISHER_STAR_TRAVEL_TIME = 3
 local FINISHER_STAR_ORBIT_SPEED = math.rad(12)
 local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
@@ -188,7 +188,11 @@ end
 
 function KrisFinisher:getFinisherSoulPosition(battle)
     if self.finisher_soul and self.finisher_soul.parent then
-        return self.finisher_soul:getRelativePos(0, 0, battle)
+        return self.finisher_soul:getRelativePos(
+            self.finisher_soul.width / 2,
+            self.finisher_soul.height / 2,
+            battle
+        )
     end
 
     if battle.soul and battle.soul.parent then

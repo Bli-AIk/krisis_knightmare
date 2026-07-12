@@ -1,8 +1,8 @@
 ---@class FinisherStar : Bullet
 local FinisherStar, super = Class(Bullet)
 
-local FADE_DISTANCE = 48
-local DEFAULT_MIN_RADIUS = 28
+local FADE_DISTANCE = 32
+local DEFAULT_MIN_RADIUS = 0
 local DEFAULT_TRAVEL_TIME = 1.5
 local DEFAULT_ORBIT_SPEED = math.rad(12)
 
@@ -33,10 +33,19 @@ function FinisherStar:getCenterPosition()
         return
     end
 
-    return self.center:getRelativePos(0, 0, self.parent)
+    return self.center:getRelativePos(
+        self.center.width / 2,
+        self.center.height / 2,
+        self.parent
+    )
 end
 
 function FinisherStar:update()
+    if self.reached_center then
+        self:remove()
+        return
+    end
+
     self.elapsed = (self.elapsed or 0) + DT
 
     local center_x, center_y = self:getCenterPosition()
@@ -53,16 +62,12 @@ function FinisherStar:update()
     self.x = center_x + math.cos(self.angle) * self.radius
     self.y = center_y + math.sin(self.angle) * self.radius
 
-    self.alpha = clamp(
-        (self.radius - self.min_radius) / FADE_DISTANCE,
-        0,
-        1
-    )
+    -- Fade during the final approach, but only become fully transparent at the soul's center.
+    self.alpha = clamp(self.radius / FADE_DISTANCE, 0, 1)
     self.collidable = self.alpha > 0.05
 
-    if progress >= 1 and self.alpha <= 0 then
-        self:remove()
-        return
+    if progress >= 1 then
+        self.reached_center = true
     end
 
     super.update(self)
