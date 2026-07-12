@@ -12,6 +12,14 @@ local MAX_CHAIN_SPEED = MAX_RANDOM_SPEED
 local FLIGHT_END_SPEED_FACTOR = 0.84
 local DECEL_DURATION = 1.15
 local RED_SHIFT_DURATION = 0.22
+local DEFAULT_HITBOX_X = 5
+local DEFAULT_HITBOX_Y = 5
+local DEFAULT_HITBOX_WIDTH = 24
+local DEFAULT_HITBOX_HEIGHT = 28
+local PRECISE_HITBOX_X = 8
+local PRECISE_HITBOX_Y = 5
+local PRECISE_HITBOX_WIDTH = 18
+local PRECISE_HITBOX_HEIGHT = 28
 local SPAWN_INSET = 8
 local DIAMOND_START_MIN_COUNT = 4
 local DIAMOND_START_MAX_COUNT = 6
@@ -237,7 +245,15 @@ function KrisBusterBullet:init(x, y, direction, options)
     self.impacting = false
     self.rotation = (direction or 0) + math.pi / 2
     self:setScale(1.0, 1.0)
-    self:setHitbox(5, 5, self.width - 10, self.height - 10)
+    self:setHitbox(DEFAULT_HITBOX_X, DEFAULT_HITBOX_Y, DEFAULT_HITBOX_WIDTH, DEFAULT_HITBOX_HEIGHT)
+end
+
+function KrisBusterBullet:onWaveSpawn(wave)
+    super.onWaveSpawn(self, wave)
+
+    if wave.precise_buster_hitboxes then
+        self:setHitbox(PRECISE_HITBOX_X, PRECISE_HITBOX_Y, PRECISE_HITBOX_WIDTH, PRECISE_HITBOX_HEIGHT)
+    end
 end
 
 function KrisBusterBullet:getArenaImpact()

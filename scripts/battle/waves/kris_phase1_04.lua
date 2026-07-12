@@ -32,6 +32,7 @@ end
 function KrisPhase1_04:init()
     super.init(self)
     self.time = WAVE_SECONDS
+    self.precise_buster_hitboxes = true
     self.initial_buster_spawned = false
     self.initial_buster_sound_played = false
     self.kris_home_positions = {}
