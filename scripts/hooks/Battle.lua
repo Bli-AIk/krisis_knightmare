@@ -20,4 +20,16 @@ function Battle:setWaves(waves, allow_duplicates)
     return created_waves
 end
 
+function Battle:returnToWorld()
+    local start_finisher = self.encounter
+        and self.encounter.startFinisherBattle
+        and self.encounter:startFinisherBattle()
+
+    super.returnToWorld(self)
+
+    if start_finisher then
+        Game:encounter("kris_finisher", false)
+    end
+end
+
 return Battle

@@ -76,6 +76,7 @@ function Kris:onBattleStart()
 end
 
 function Kris:onBattleEnd()
+    self.finisher_battle_pending = true
     self:clearRecharge(true)
 
     for _, enemy in ipairs(Game.battle.enemies or {}) do
@@ -83,6 +84,10 @@ function Kris:onBattleEnd()
             enemy:clearHeartbeatSpeedBoost()
         end
     end
+end
+
+function Kris:startFinisherBattle()
+    return self.finisher_battle_pending == true
 end
 
 function Kris:onTurnEnd()
