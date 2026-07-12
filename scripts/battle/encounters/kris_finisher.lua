@@ -8,6 +8,17 @@ local FINISHER_KRIS_LAYER = BATTLE_LAYERS["battlers"]
 local FINISHER_KRIS_ANIMATION_SPEED = 4 / 30
 local FINISHER_KRIS_SCALE = 2
 
+local FINISHER_STAR_WAVE_INTERVAL = 15 / 30
+local FINISHER_STAR_FIRST_WAVE_COUNT = 12
+local FINISHER_STAR_WAVE_COUNT = 24
+local FINISHER_STAR_RADIUS_MARGIN = 18
+local FINISHER_STAR_INITIAL_RADIUS_SCALE = 1.25
+local FINISHER_STAR_MIN_RADIUS = 28
+local FINISHER_STAR_TRAVEL_TIME = 3
+local FINISHER_STAR_ORBIT_SPEED = math.rad(12)
+local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
+local FINISHER_STOP_TP = 50
+
 local FINISHER_MUSIC = "creepychase"
 local FINISHER_MUSIC_PITCH = 1.2
 
@@ -18,6 +29,13 @@ function KrisFinisher:init()
     self.background = false
     self.hide_world = true
     self.no_end_message = true
+
+    self.finisher_stars = {}
+    self.finisher_star_emitting = false
+    self.finisher_star_elapsed = 0
+    self.finisher_star_next_wave = 0
+    self.finisher_star_wave_index = 0
+    self.finisher_star_initial_radius = nil
 end
 
 function KrisFinisher:onBattleInit()
@@ -32,6 +50,7 @@ function KrisFinisher:onBattleInit()
     battle.music:play(self.music, nil, FINISHER_MUSIC_PITCH)
     self:createFinisherKris(battle)
     self:createWindowArena(battle)
+    self:startFinisherStarEmitter(battle)
 
     return true
 end
@@ -61,6 +80,115 @@ function KrisFinisher:createFinisherKris(battle)
 
     battle:addChild(kris)
     self.finisher_kris = kris
+    self.finisher_soul = kris_soul
+end
+
+function KrisFinisher:getFinisherSoulPosition(battle)
+    if self.finisher_soul and self.finisher_soul.parent then
+        return self.finisher_soul:getRelativePos(0, 0, battle)
+    end
+
+    if battle.soul and battle.soul.parent then
+        return battle.soul:getRelativePos(0, 0, battle)
+    end
+end
+
+function KrisFinisher:startFinisherStarEmitter(battle)
+    self.finisher_star_battle = battle
+    self.finisher_star_emitting = true
+    self.finisher_star_elapsed = 0
+    self.finisher_star_next_wave = 0
+    self.finisher_star_wave_index = 0
+    self.finisher_star_initial_radius = nil
+
+    if Game:getTension() >= FINISHER_STOP_TP then
+        self:stopFinisherStarEmitter()
+        return
+    end
+
+    self:spawnFinisherStarWave()
+    self.finisher_star_next_wave = FINISHER_STAR_WAVE_INTERVAL
+end
+
+function KrisFinisher:spawnFinisherStarWave()
+    if not self.finisher_star_emitting then
+        return
+    end
+
+    local battle = self.finisher_star_battle
+    local center_x, center_y = self:getFinisherSoulPosition(battle)
+    if not battle or not center_x then
+        return
+    end
+
+    if not self.finisher_star_initial_radius then
+        self.finisher_star_initial_radius = math.max(
+            (SCREEN_WIDTH - center_x + FINISHER_STAR_RADIUS_MARGIN) * FINISHER_STAR_INITIAL_RADIUS_SCALE,
+            FINISHER_STAR_MIN_RADIUS
+        )
+    end
+
+    -- Each wave begins from the same outer ring and shrinks independently.
+    local radius = self.finisher_star_initial_radius
+    local count = self.finisher_star_wave_index == 0
+        and FINISHER_STAR_FIRST_WAVE_COUNT
+        or FINISHER_STAR_WAVE_COUNT
+    local base_angle = self.finisher_star_wave_index * FINISHER_STAR_WAVE_ROTATION_STEP
+    local angle_step = (math.pi * 2) / count
+
+    for index = 0, count - 1 do
+        local angle = base_angle + index * angle_step
+        local star = Registry.createBullet(
+            "finisher_star",
+            center_x + math.cos(angle) * radius,
+            center_y + math.sin(angle) * radius,
+            self.finisher_soul,
+            angle,
+            radius,
+            FINISHER_STAR_MIN_RADIUS,
+            FINISHER_STAR_TRAVEL_TIME,
+            FINISHER_STAR_ORBIT_SPEED
+        )
+        battle:addChild(star)
+        table.insert(self.finisher_stars, star)
+    end
+
+    self.finisher_star_wave_index = self.finisher_star_wave_index + 1
+end
+
+function KrisFinisher:clearFinisherStars()
+    for _, star in ipairs(self.finisher_stars) do
+        if star and star.parent then
+            star:remove()
+        end
+    end
+    self.finisher_stars = {}
+end
+
+function KrisFinisher:stopFinisherStarEmitter()
+    if not self.finisher_star_emitting then
+        return
+    end
+
+    self.finisher_star_emitting = false
+    self:clearFinisherStars()
+end
+
+function KrisFinisher:updateFinisherStarEmitter()
+    if not self.finisher_star_emitting then
+        return
+    end
+
+    if Game:getTension() >= FINISHER_STOP_TP then
+        self:stopFinisherStarEmitter()
+        return
+    end
+
+    self.finisher_star_elapsed = self.finisher_star_elapsed + DT
+    while self.finisher_star_elapsed >= self.finisher_star_next_wave do
+        self:spawnFinisherStarWave()
+        self.finisher_star_next_wave = self.finisher_star_next_wave + FINISHER_STAR_WAVE_INTERVAL
+    end
 end
 
 function KrisFinisher:hidePlayerUI(battle)
@@ -100,6 +228,15 @@ function KrisFinisher:createWindowArena(battle)
     battle.soul.transitioning = false
     battle.soul.alpha = battle.soul.target_alpha or 1
     battle.soul:setPosition(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+end
+
+function KrisFinisher:update()
+    super.update(self)
+    self:updateFinisherStarEmitter()
+end
+
+function KrisFinisher:onBattleEnd()
+    self:stopFinisherStarEmitter()
 end
 
 return KrisFinisher
