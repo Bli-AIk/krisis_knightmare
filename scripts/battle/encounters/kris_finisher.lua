@@ -42,7 +42,7 @@ local OPENING_FLICKER_CURVE_POWER = 2
 -- Adjust the opening heart position here.
 local OPENING_PLAYER_POSITION = {
     x = SCREEN_WIDTH / 2,
-    y = SCREEN_HEIGHT / 2,
+    y = 170,
 }
 
 local FinisherHurtFlash, hurt_flash_super = Class(Object)
