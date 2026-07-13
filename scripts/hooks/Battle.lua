@@ -7,6 +7,9 @@ function Battle:onAdd(stage)
     if enc and enc.setupBackground then
         enc:setupBackground(self)
     end
+    if enc and enc.onBattleAdd then
+        enc:onBattleAdd(self)
+    end
 end
 
 function Battle:setWaves(waves, allow_duplicates)

@@ -30,6 +30,21 @@ local FINISHER_HURT_FLASH_FALL_TIME = 0.12 * 1.5
 local FINISHER_MUSIC = "creepychase"
 local FINISHER_MUSIC_PITCH = 1.2
 
+local OPENING_STATE = "KRISIS_OPENING"
+local OPENING_REVEAL_DELAY = 50 / 60
+local OPENING_INITIAL_FLICKER_INTERVAL = 15 / 60
+local OPENING_INITIAL_FLICKER_COUNT = 3
+local OPENING_FOURTH_FLICKER_INTERVAL = 13 / 60
+local OPENING_ACCELERATION_TIME = 60 / 60
+local OPENING_MIN_FLICKER_INTERVAL = 1 / 60
+local OPENING_FLICKER_CURVE_POWER = 2
+
+-- Adjust the opening heart position here.
+local OPENING_PLAYER_POSITION = {
+    x = SCREEN_WIDTH / 2,
+    y = SCREEN_HEIGHT / 2,
+}
+
 local FinisherHurtFlash, hurt_flash_super = Class(Object)
 
 local function clamp(value, min, max)
@@ -38,6 +53,27 @@ end
 
 local function easeInOutSine(progress)
     return -(math.cos(math.pi * progress) - 1) / 2
+end
+
+local function copySpriteState(sprite)
+    return {
+        color = { sprite.color[1], sprite.color[2], sprite.color[3] },
+        alpha = sprite.alpha,
+        visible = sprite.visible,
+        active = sprite.active,
+        inherit_color = sprite.inherit_color,
+    }
+end
+
+local function restoreSpriteState(sprite, state)
+    if not sprite or not state then
+        return
+    end
+
+    sprite:setColor(state.color[1], state.color[2], state.color[3], state.alpha)
+    sprite.visible = state.visible
+    sprite.active = state.active
+    sprite.inherit_color = state.inherit_color
 end
 
 function FinisherHurtFlash:init()
@@ -101,24 +137,300 @@ function KrisFinisher:init()
     self.finisher_kris_move_elapsed = 0
     self.finisher_hurt_flash = nil
     self.finisher_status_message_restore = {}
+    self.finisher_opening = nil
 end
 
 function KrisFinisher:onBattleInit()
     local battle = Game.battle
 
-    -- Keep the battle alive in a custom state so Kristal never opens the action menu.
-    battle.state = "KRIS_FINISHER"
+    if not battle then
+        return
+    end
+
+    -- Keep the battle in the opening until the finisher scene is ready to show.
+    battle.state = OPENING_STATE
     battle.state_reason = nil
 
+    self.finisher_opening = {
+        battle = battle,
+        phase = "WAIT",
+        timer = 0,
+        flicker_timer = 0,
+        acceleration_timer = 0,
+        flicker_count = 0,
+        fourth_flicker_done = false,
+        heart_visible = false,
+        kris_alpha = 0,
+        prepared = false,
+        child_states = {},
+        kris_position = nil,
+    }
+
     self:hidePlayerUI(battle)
-    battle.tension_bar:show()
-    battle.music:play(self.music, nil, FINISHER_MUSIC_PITCH)
     self:createFinisherKris(battle)
     self:createWindowArena(battle)
     self:hideVesselDamageNumbers(battle)
-    self:startFinisherStarEmitter(battle)
 
     return true
+end
+
+function KrisFinisher:onBattleAdd(battle)
+    local opening = self.finisher_opening
+    if not opening or opening.prepared then
+        return
+    end
+
+    opening.prepared = true
+
+    local soul = battle.soul
+    if soul then
+        opening.soul = soul
+        opening.soul_state = {
+            color = { soul.color[1], soul.color[2], soul.color[3] },
+            alpha = soul.alpha,
+            active = soul.active,
+            visible = soul.visible,
+        }
+
+        if soul.sprite then
+            opening.soul_sprite = soul.sprite
+            opening.soul_sprite_state = copySpriteState(soul.sprite)
+        end
+        if soul.graze_sprite then
+            opening.soul_graze_sprite = soul.graze_sprite
+            opening.soul_graze_sprite_state = copySpriteState(soul.graze_sprite)
+        end
+
+        soul:setColor(0, 0, 0, soul.alpha)
+        soul.active = false
+        soul.visible = false
+        if soul.graze_sprite then
+            soul.graze_sprite.active = false
+            soul.graze_sprite.visible = false
+        end
+    end
+
+    for _, child in ipairs(battle.children) do
+        opening.child_states[child] = {
+            active = child.active,
+            visible = child.visible,
+        }
+        child.active = false
+        child.visible = false
+    end
+
+    local kris = self.finisher_kris
+    if kris then
+        opening.kris = kris
+        opening.kris_position = { kris.x, kris.y }
+        kris.active = true
+        kris.visible = false
+
+        if self.finisher_kris_sprite then
+            opening.kris_sprite = self.finisher_kris_sprite
+            opening.kris_sprite_state = copySpriteState(self.finisher_kris_sprite)
+            self.finisher_kris_sprite:setColor(0, 0, 0, 0)
+            self.finisher_kris_sprite.active = true
+            self.finisher_kris_sprite.visible = true
+        end
+
+        if self.finisher_soul then
+            opening.finisher_soul_state = {
+                active = self.finisher_soul.active,
+                visible = self.finisher_soul.visible,
+            }
+            self.finisher_soul.active = false
+            self.finisher_soul.visible = false
+        end
+    end
+
+    battle.transition_timer = 10
+end
+
+function KrisFinisher:beforeStateChange(old, new, reason)
+    if self.finisher_opening then
+        return true
+    end
+end
+
+function KrisFinisher:getOpeningFlickerInterval(progress)
+    progress = clamp(progress, 0, 1)
+    local eased_progress = progress ^ OPENING_FLICKER_CURVE_POWER
+    return OPENING_INITIAL_FLICKER_INTERVAL * (1 - eased_progress)
+end
+
+function KrisFinisher:lockOpeningPositions(opening)
+    if opening.kris and opening.kris_position then
+        opening.kris:setPosition(opening.kris_position[1], opening.kris_position[2])
+    end
+end
+
+function KrisFinisher:applyOpeningVisuals(opening)
+    if opening.kris_sprite and opening.kris_sprite_state then
+        local alpha = opening.kris_sprite_state.alpha * clamp(opening.kris_alpha, 0, 1)
+        opening.kris_sprite:setColor(0, 0, 0, alpha)
+    end
+end
+
+function KrisFinisher:finishOpening()
+    local opening = self.finisher_opening
+    if not opening then
+        return
+    end
+
+    local battle = opening.battle
+    opening.kris_alpha = 1
+    self:applyOpeningVisuals(opening)
+
+    restoreSpriteState(opening.kris_sprite, opening.kris_sprite_state)
+
+    if self.finisher_soul and opening.finisher_soul_state then
+        self.finisher_soul.active = opening.finisher_soul_state.active
+        self.finisher_soul.visible = opening.finisher_soul_state.visible
+    end
+
+    for child, state in pairs(opening.child_states) do
+        if child.parent == battle then
+            child.active = state.active
+            child.visible = state.visible
+        end
+    end
+
+    if opening.soul and opening.soul_state then
+        opening.soul:setColor(
+            opening.soul_state.color[1],
+            opening.soul_state.color[2],
+            opening.soul_state.color[3],
+            opening.soul_state.alpha
+        )
+        opening.soul.active = opening.soul_state.active
+        opening.soul.visible = opening.soul_state.visible
+        restoreSpriteState(opening.soul_sprite, opening.soul_sprite_state)
+        restoreSpriteState(opening.soul_graze_sprite, opening.soul_graze_sprite_state)
+    end
+
+    if battle then
+        battle.transition_timer = 10
+        battle.tension_bar:show()
+        battle.music:play(self.music, nil, FINISHER_MUSIC_PITCH)
+    end
+
+    self.finisher_kris_move_elapsed = 0
+    self.finisher_opening = nil
+
+    if battle and battle.parent then
+        battle:setState("KRIS_FINISHER", "OPENING")
+        self:startFinisherStarEmitter(battle)
+    end
+end
+
+function KrisFinisher:updateOpening()
+    local opening = self.finisher_opening
+    if not opening then
+        return
+    end
+
+    if not opening.prepared and Game.battle then
+        self:onBattleAdd(Game.battle)
+    end
+
+    self:lockOpeningPositions(opening)
+
+    if opening.phase == "WAIT" then
+        opening.timer = opening.timer + DT
+        if opening.timer >= OPENING_REVEAL_DELAY then
+            opening.phase = "INITIAL_FLICKER"
+            opening.timer = 0
+            opening.heart_visible = true
+        end
+    elseif opening.phase == "INITIAL_FLICKER" then
+        opening.flicker_timer = opening.flicker_timer + DT
+
+        local steps = 0
+        while opening.flicker_timer >= OPENING_INITIAL_FLICKER_INTERVAL
+            and opening.phase == "INITIAL_FLICKER"
+            and steps < 64
+        do
+            opening.flicker_timer = opening.flicker_timer - OPENING_INITIAL_FLICKER_INTERVAL
+            opening.heart_visible = not opening.heart_visible
+            steps = steps + 1
+
+            if opening.heart_visible then
+                opening.flicker_count = opening.flicker_count + 1
+                if opening.flicker_count >= OPENING_INITIAL_FLICKER_COUNT then
+                    opening.phase = "ACCELERATING"
+                    opening.flicker_timer = 0
+                    opening.acceleration_timer = 0
+                    opening.fourth_flicker_done = false
+                    opening.heart_visible = true
+                end
+            end
+        end
+    elseif opening.phase == "ACCELERATING" then
+        opening.acceleration_timer = opening.acceleration_timer + DT
+        local progress = clamp(opening.acceleration_timer / OPENING_ACCELERATION_TIME, 0, 1)
+
+        opening.kris_alpha = progress
+
+        local interval = opening.fourth_flicker_done
+            and self:getOpeningFlickerInterval(progress)
+            or OPENING_FOURTH_FLICKER_INTERVAL
+        if interval > OPENING_MIN_FLICKER_INTERVAL then
+            opening.flicker_timer = opening.flicker_timer + DT
+
+            local steps = 0
+            while opening.flicker_timer >= interval and steps < 64 do
+                opening.flicker_timer = opening.flicker_timer - interval
+                opening.heart_visible = not opening.heart_visible
+                opening.fourth_flicker_done = true
+                steps = steps + 1
+            end
+        else
+            opening.flicker_timer = 0
+        end
+
+        if progress >= 1 then
+            opening.phase = "DONE"
+            opening.heart_visible = true
+        end
+    end
+
+    self:applyOpeningVisuals(opening)
+    self:lockOpeningPositions(opening)
+
+    if opening.phase == "DONE" then
+        self:finishOpening()
+    end
+end
+
+function KrisFinisher:drawOpeningObject(object)
+    if object and object.parent then
+        object:fullDraw()
+    end
+end
+
+function KrisFinisher:draw(fade)
+    super.draw(self, fade)
+
+    local opening = self.finisher_opening
+    if not opening then
+        return
+    end
+
+    love.graphics.push()
+    love.graphics.origin()
+    Draw.setColor(1, 0, 0, 1)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    love.graphics.pop()
+
+    if opening.heart_visible then
+        self:drawOpeningObject(opening.soul)
+    end
+    if opening.kris_alpha > 0 then
+        self:drawOpeningObject(opening.kris)
+    end
+
+    Draw.setColor(1, 1, 1, 1)
 end
 
 function KrisFinisher:triggerHurtFlash()
@@ -192,6 +504,7 @@ function KrisFinisher:createFinisherKris(battle)
 
     battle:addChild(kris)
     self.finisher_kris = kris
+    self.finisher_kris_sprite = sprite
     self.finisher_soul = kris_soul
 end
 
@@ -419,14 +732,20 @@ function KrisFinisher:createWindowArena(battle)
     battle.arena = arena
     battle:addChild(arena)
 
-    battle:spawnSoul(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+    battle:spawnSoul(OPENING_PLAYER_POSITION.x, OPENING_PLAYER_POSITION.y)
     battle.soul.transitioning = false
     battle.soul.alpha = battle.soul.target_alpha or 1
-    battle.soul:setPosition(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+    battle.soul:setPosition(OPENING_PLAYER_POSITION.x, OPENING_PLAYER_POSITION.y)
 end
 
 function KrisFinisher:update()
     super.update(self)
+
+    if self.finisher_opening then
+        self:updateOpening()
+        return
+    end
+
     self:updateFinisherKris()
     self:updateFinisherStarEmitter()
     self:updatePlayerDrift()
