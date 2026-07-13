@@ -48,19 +48,15 @@ function FinisherStar:draw()
 end
 
 function FinisherStar:getCenterPosition()
-    if self.center_x then
-        return self.center_x, self.center_y
+    if self.center and self.center.parent and self.parent then
+        return self.center:getRelativePos(
+            self.center.width / 2,
+            self.center.height / 2,
+            self.parent
+        )
     end
 
-    if not self.center or not self.center.parent or not self.parent then
-        return
-    end
-
-    return self.center:getRelativePos(
-        self.center.width / 2,
-        self.center.height / 2,
-        self.parent
-    )
+    return self.center_x, self.center_y
 end
 
 function FinisherStar:update()

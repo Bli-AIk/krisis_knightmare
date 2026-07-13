@@ -7,6 +7,8 @@ local FINISHER_KRIS_SOUL_Y = 170 - FINISHER_KRIS_Y
 local FINISHER_KRIS_LAYER = BATTLE_LAYERS["battlers"]
 local FINISHER_KRIS_ANIMATION_SPEED = 4 / 30
 local FINISHER_KRIS_SCALE = 2
+local FINISHER_KRIS_MOVE_DISTANCE = 17
+local FINISHER_KRIS_MOVE_SEGMENT_TIME = 2
 
 local FINISHER_STAR_WAVE_MAX_INTERVAL = 15 / 30
 local FINISHER_STAR_WAVE_MIN_INTERVAL = 15 / 60
@@ -32,6 +34,10 @@ local FinisherHurtFlash, hurt_flash_super = Class(Object)
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
+end
+
+local function easeInOutSine(progress)
+    return -(math.cos(math.pi * progress) - 1) / 2
 end
 
 function FinisherHurtFlash:init()
@@ -92,6 +98,7 @@ function KrisFinisher:init()
     self.finisher_star_initial_radius = nil
     self.finisher_star_center_x = nil
     self.finisher_star_center_y = nil
+    self.finisher_kris_move_elapsed = 0
     self.finisher_hurt_flash = nil
     self.finisher_status_message_restore = {}
 end
@@ -188,6 +195,33 @@ function KrisFinisher:createFinisherKris(battle)
     self.finisher_soul = kris_soul
 end
 
+function KrisFinisher:updateFinisherKris()
+    local kris = self.finisher_kris
+    if not kris or not kris.parent then
+        return
+    end
+
+    self.finisher_kris_move_elapsed = self.finisher_kris_move_elapsed + DT
+
+    local segment_time = FINISHER_KRIS_MOVE_SEGMENT_TIME
+    local cycle_progress = (self.finisher_kris_move_elapsed % (segment_time * 4)) / segment_time
+    local segment = math.floor(cycle_progress)
+    local progress = easeInOutSine(cycle_progress - segment)
+    local offset_x
+
+    if segment == 0 then
+        offset_x = -FINISHER_KRIS_MOVE_DISTANCE * progress
+    elseif segment == 1 then
+        offset_x = -FINISHER_KRIS_MOVE_DISTANCE * (1 - progress)
+    elseif segment == 2 then
+        offset_x = FINISHER_KRIS_MOVE_DISTANCE * progress
+    else
+        offset_x = FINISHER_KRIS_MOVE_DISTANCE * (1 - progress)
+    end
+
+    kris:setPosition(FINISHER_KRIS_X + offset_x, FINISHER_KRIS_Y)
+end
+
 function KrisFinisher:getFinisherSoulPosition(battle)
     if self.finisher_soul and self.finisher_soul.parent then
         return self.finisher_soul:getRelativePos(
@@ -238,12 +272,13 @@ function KrisFinisher:spawnFinisherStarWave()
     end
 
     local battle = self.finisher_star_battle
-    local center_x = self.finisher_star_center_x
-    local center_y = self.finisher_star_center_y
-    if not center_x then
-        center_x, center_y = self:getFinisherSoulPosition(battle)
+    local center_x, center_y = self:getFinisherSoulPosition(battle)
+    if center_x then
         self.finisher_star_center_x = center_x
         self.finisher_star_center_y = center_y
+    else
+        center_x = self.finisher_star_center_x
+        center_y = self.finisher_star_center_y
     end
     if not battle or not center_x then
         return
@@ -392,6 +427,7 @@ end
 
 function KrisFinisher:update()
     super.update(self)
+    self:updateFinisherKris()
     self:updateFinisherStarEmitter()
     self:updatePlayerDrift()
 end
