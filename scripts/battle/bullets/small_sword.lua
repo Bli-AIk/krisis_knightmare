@@ -173,7 +173,6 @@ function SmallSword:init(x, y, dir, min_speed, max_speed, accel_duration, option
 
 	-- 纯白半透明虚影 sprite（ColorMaskFX: 非透明像素全部渲染为纯白）
 	self.ghost = Sprite("bullets/small_sword", 0, 0)
-	self.ghost:addFX(ColorMaskFX())
 	self.ghost:setColor(1, 1, 1, 0.19)
 	self.ghost.layer = -0.001
 	self:addChild(self.ghost)
@@ -189,12 +188,13 @@ function SmallSword:onWaveSpawn(wave)
 	end
 
 	local ghost_ref = self.ghost
-	wave.timer:every(1 / 15, function()
+	-- The source texture is already white. Avoid a full-screen ColorMaskFX canvas
+	-- for every trail image and keep fewer, shorter-lived images under dense waves.
+	wave.timer:every(1 / 10, function()
 		if not ghost_ref or ghost_ref:isRemoved() then
 			return false
 		end
-		local img = AfterImage(ghost_ref, 0.4, 0.1)
-		img:addFX(ColorMaskFX())
+		local img = LightAfterImage(ghost_ref, 0.4, 0.16)
 		ghost_ref:addChild(img)
 	end)
 end

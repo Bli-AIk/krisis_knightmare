@@ -537,7 +537,7 @@ function Mod:init()
     self:hookVesselAttackSound()
     self:loadKrisisRunOptions()
 
-    if envFlag("KRISIS_FINISHER_PROFILE") and FinisherProfiler then
+    if (envFlag("KRISIS_FINISHER_PROFILE") or envFlag("KRISIS_PROFILE")) and FinisherProfiler then
         self.finisher_profiler = FinisherProfiler()
     end
 

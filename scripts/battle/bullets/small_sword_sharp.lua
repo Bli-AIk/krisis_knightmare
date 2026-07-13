@@ -166,14 +166,14 @@ function SmallSwordSharp:startFireAfterImages()
     self.fire_ghost = ghost
 
     local ghost_ref = ghost
-    local handle = self.wave.timer:every(0.01, function()
-        if not ghost_ref or ghost_ref:isRemoved() then
-            return false
-        end
-        local img = AfterImage(ghost_ref, 0.4, 0.03)
-        ghost_ref:addChild(img)
-    end)
-    self.wave.timer:tween(1.0, handle, { limit = 0.189 })
+	local handle = self.wave.timer:every(0.04, function()
+		if not ghost_ref or ghost_ref:isRemoved() then
+			return false
+		end
+		local img = LightAfterImage(ghost_ref, 0.4, 0.08)
+		ghost_ref:addChild(img)
+	end)
+	self.wave.timer:tween(1.0, handle, { limit = 0.2 })
 end
 
 function SmallSwordSharp:onWaveSpawn(wave)

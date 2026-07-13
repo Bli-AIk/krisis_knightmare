@@ -209,6 +209,7 @@ function SlashParticles:update()
         self.hide_time = self.hide_time + DT
         if self.hide_time > 0.24 and #self.particles == 0 then
             self.visible = false
+            self:remove()
         end
     end
 
@@ -459,6 +460,24 @@ function KrisPhase1_02:spawnSlash(x, y, rotation, kris_x, kris_y)
             x     = line.x + slide_x,
             y     = line.y + slide_y,
         }, "out-quad")
+    end)
+
+    -- The circle shaders render to full-screen canvases. Remove the circles as
+    -- soon as their scale animation is finished instead of processing invisible
+    -- FX objects for the rest of the wave.
+    self.timer:after(0.35, function()
+        if circle_solid.parent then
+            circle_solid:remove()
+        end
+        if circle_donut.parent then
+            circle_donut:remove()
+        end
+    end)
+
+    self.timer:after(0.8, function()
+        if line.parent then
+            line:remove()
+        end
     end)
 
     local basic = 40

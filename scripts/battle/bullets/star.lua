@@ -36,14 +36,16 @@ function Star:onWaveSpawn(wave)
 	super.onWaveSpawn(self, wave)
 
 	local ghost_ref = self.ghost
-	local handle = wave.timer:every(0.01, function()
+	-- A longer interval and faster fade preserve the motion cue without creating
+	-- dozens of full-screen canvases per star during dense waves.
+	local handle = wave.timer:every(0.04, function()
 		if not ghost_ref or ghost_ref:isRemoved() then
 			return false
 		end
-		local img = AfterImage(ghost_ref, 0.4, 0.03)
+		local img = LightAfterImage(ghost_ref, 0.4, 0.08)
 		ghost_ref:addChild(img)
 	end)
-	wave.timer:tween(1.0, handle, {limit = 0.189})
+	wave.timer:tween(1.0, handle, {limit = 0.2})
 end
 
 function Star:update()
