@@ -90,6 +90,8 @@ function KrisFinisher:init()
     self.finisher_star_next_wave = 0
     self.finisher_star_wave_index = 0
     self.finisher_star_initial_radius = nil
+    self.finisher_star_center_x = nil
+    self.finisher_star_center_y = nil
     self.finisher_hurt_flash = nil
     self.finisher_status_message_restore = {}
 end
@@ -219,6 +221,8 @@ function KrisFinisher:startFinisherStarEmitter(battle)
     self.finisher_star_wave_index = 0
     self.finisher_star_initial_radius = nil
 
+    self.finisher_star_center_x, self.finisher_star_center_y = self:getFinisherSoulPosition(battle)
+
     if Game:getTension() >= FINISHER_STOP_TP then
         self:stopFinisherStarEmitter()
         return
@@ -234,7 +238,13 @@ function KrisFinisher:spawnFinisherStarWave()
     end
 
     local battle = self.finisher_star_battle
-    local center_x, center_y = self:getFinisherSoulPosition(battle)
+    local center_x = self.finisher_star_center_x
+    local center_y = self.finisher_star_center_y
+    if not center_x then
+        center_x, center_y = self:getFinisherSoulPosition(battle)
+        self.finisher_star_center_x = center_x
+        self.finisher_star_center_y = center_y
+    end
     if not battle or not center_x then
         return
     end
@@ -265,7 +275,9 @@ function KrisFinisher:spawnFinisherStarWave()
             radius,
             FINISHER_STAR_MIN_RADIUS,
             FINISHER_STAR_TRAVEL_TIME,
-            FINISHER_STAR_ORBIT_SPEED
+            FINISHER_STAR_ORBIT_SPEED,
+            center_x,
+            center_y
         )
         battle:addChild(star)
         table.insert(self.finisher_stars, star)
@@ -275,12 +287,28 @@ function KrisFinisher:spawnFinisherStarWave()
 end
 
 function KrisFinisher:clearFinisherStars()
-    for _, star in ipairs(self.finisher_stars) do
+    for index = #self.finisher_stars, 1, -1 do
+        local star = self.finisher_stars[index]
         if star and star.parent then
             star:remove()
         end
+        self.finisher_stars[index] = nil
     end
-    self.finisher_stars = {}
+end
+
+function KrisFinisher:pruneFinisherStars()
+    local write_index = 1
+    for read_index = 1, #self.finisher_stars do
+        local star = self.finisher_stars[read_index]
+        if star and star.parent then
+            self.finisher_stars[write_index] = star
+            write_index = write_index + 1
+        end
+    end
+
+    for index = write_index, #self.finisher_stars do
+        self.finisher_stars[index] = nil
+    end
 end
 
 function KrisFinisher:stopFinisherStarEmitter()
@@ -296,6 +324,8 @@ function KrisFinisher:updateFinisherStarEmitter()
     if not self.finisher_star_emitting then
         return
     end
+
+    self:pruneFinisherStars()
 
     if Game:getTension() >= FINISHER_STOP_TP then
         self:stopFinisherStarEmitter()

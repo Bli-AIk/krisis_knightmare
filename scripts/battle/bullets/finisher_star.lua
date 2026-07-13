@@ -10,10 +10,19 @@ local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
 end
 
-function FinisherStar:init(x, y, center, angle, radius, min_radius, travel_time, orbit_speed)
-    super.init(self, x, y, "bullets/star")
+function FinisherStar:init(x, y, center, angle, radius, min_radius, travel_time, orbit_speed, center_x, center_y)
+    super.init(self, x, y)
+
+    -- The star never animates or uses sprite effects, so avoid constructing a
+    -- Sprite child just to retrieve a static texture.
+    self.texture = Assets.getTexture("bullets/star")
+    self.width = self.texture:getWidth()
+    self.height = self.texture:getHeight()
+    self.collider = Hitbox(self, self.width / 4, self.height / 4, self.width / 2, self.height / 2)
 
     self.center = center
+    self.center_x = center_x
+    self.center_y = center_y
     self.angle = angle or 0
     self.radius = radius or DEFAULT_MIN_RADIUS
     self.start_radius = self.radius
@@ -28,7 +37,21 @@ function FinisherStar:init(x, y, center, angle, radius, min_radius, travel_time,
     self:setScale(1, 1)
 end
 
+function FinisherStar:draw()
+    local r, g, b, a = self:getDrawColor()
+    Draw.setColor(r, g, b, a)
+    Draw.draw(self.texture, 0, 0)
+
+    if DEBUG_RENDER and self.collider then
+        self.collider:drawFor(self, 1, 0, 0)
+    end
+end
+
 function FinisherStar:getCenterPosition()
+    if self.center_x then
+        return self.center_x, self.center_y
+    end
+
     if not self.center or not self.center.parent or not self.parent then
         return
     end
@@ -70,7 +93,8 @@ function FinisherStar:update()
         self.reached_center = true
     end
 
-    super.update(self)
+    -- This bullet has no physics, graphics effects, or animated children.
+    -- Avoid traversing the generic Bullet/Object/Sprite update chain every frame.
 end
 
 return FinisherStar

@@ -537,10 +537,20 @@ function Mod:init()
     self:hookVesselAttackSound()
     self:loadKrisisRunOptions()
 
+    if envFlag("KRISIS_FINISHER_PROFILE") and FinisherProfiler then
+        self.finisher_profiler = FinisherProfiler()
+    end
+
     Game:registerEvent("squeak", function(data)
         return Squeak(data.x, data.y, {data.width, data.height, data.polygon})
     end)
     print(loc("Loaded [var:name]!", "mod.loaded", {name = self.info.name}))
+end
+
+function Mod:preUpdate()
+    if self.finisher_profiler then
+        self.finisher_profiler:preUpdate()
+    end
 end
 
 function Mod:updateBattleLocalization()
@@ -570,6 +580,22 @@ function Mod:postUpdate()
             self.current_name_style = name_style
             self:updateBattleLocalization()
         end
+    end
+
+    if self.finisher_profiler then
+        self.finisher_profiler:postUpdate()
+    end
+end
+
+function Mod:preDraw()
+    if self.finisher_profiler then
+        self.finisher_profiler:preDraw()
+    end
+end
+
+function Mod:postDraw()
+    if self.finisher_profiler then
+        self.finisher_profiler:postDraw()
     end
 end
 
