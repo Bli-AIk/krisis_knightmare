@@ -12,27 +12,27 @@ local NOISE_ALPHA = 0.055
 local NOISE_SCALE = 1.5
 local NOISE_SPEED = 0.32
 
+-- Red particle controls. All of these values are easy to tune here.
 local PARTICLE_COLOR = { 1, 0.08, 0.06 }
-local PARTICLE_MIN_INTERVAL = 0.42
-local PARTICLE_MAX_INTERVAL = 1.25
-local PARTICLE_MIN_WIDTH = 2
+local PARTICLE_MIN_INTERVAL = 0.25 -- minimum seconds between spawns
+local PARTICLE_MAX_INTERVAL = 0.5 -- maximum seconds between spawns
+local PARTICLE_MIN_WIDTH = 2 -- vertical thickness, in pixels
 local PARTICLE_MAX_WIDTH = 5
-local PARTICLE_MIN_LENGTH = 150
+local PARTICLE_MIN_LENGTH = 150 -- horizontal length, in pixels
 local PARTICLE_MAX_LENGTH = 420
-local PARTICLE_MIN_SPEED = 640
+local PARTICLE_MIN_SPEED = 640 -- leftward speed, in pixels per second
 local PARTICLE_MAX_SPEED = 980
-local PARTICLE_MIN_LIFETIME = 0.72
-local PARTICLE_MAX_LIFETIME = 1.35
+local PARTICLE_MIN_ALPHA = 0.34 / 4
+local PARTICLE_MAX_ALPHA = 0.72 / 4
 local PARTICLE_MAX_COUNT = 5
+local PARTICLE_SPAWN_MARGIN = 16 -- empty space kept above and below the screen
+local PARTICLE_VERTICAL_GAP = 1 -- minimum visible gap between particle rows
+local PARTICLE_POSITION_ATTEMPTS = 96
 
 local KrisFinisherWindBackground, super = Class(Object)
 
 local function randomBetween(min, max)
     return min + (max - min) * love.math.random()
-end
-
-local function clamp(value, min, max)
-    return math.max(min, math.min(max, value))
 end
 
 function KrisFinisherWindBackground:init()
@@ -73,37 +73,84 @@ function KrisFinisherWindBackground:init()
     ]])
 end
 
+function KrisFinisherWindBackground:findParticleY(height)
+    local min_y = PARTICLE_SPAWN_MARGIN
+    local max_y = SCREEN_HEIGHT - PARTICLE_SPAWN_MARGIN - height
+    if max_y < min_y then
+        return nil
+    end
+
+    local function isAvailable(y)
+        for _, other in ipairs(self.particles) do
+            local other_y = other.y
+            local other_height = other.width
+            local separated_above = y + height + PARTICLE_VERTICAL_GAP <= other_y
+            local separated_below = other_y + other_height + PARTICLE_VERTICAL_GAP <= y
+            if not separated_above and not separated_below then
+                return false
+            end
+        end
+        return true
+    end
+
+    -- Try random positions first so the rows do not look evenly distributed.
+    for _ = 1, PARTICLE_POSITION_ATTEMPTS do
+        local y = love.math.random(min_y, max_y)
+        if isAvailable(y) then
+            return y
+        end
+    end
+
+    -- If random sampling misses a gap, scan every pixel before giving up.
+    for y = min_y, max_y do
+        if isAvailable(y) then
+            return y
+        end
+    end
+end
+
 function KrisFinisherWindBackground:spawnParticle()
     if #self.particles >= PARTICLE_MAX_COUNT then
         return
     end
 
-    local width = randomBetween(PARTICLE_MIN_WIDTH, PARTICLE_MAX_WIDTH)
+    -- Integer dimensions keep the one-pixel gap reliable after rasterization.
+    local width = love.math.random(PARTICLE_MIN_WIDTH, PARTICLE_MAX_WIDTH)
     local length = randomBetween(PARTICLE_MIN_LENGTH, PARTICLE_MAX_LENGTH)
     local speed = randomBetween(PARTICLE_MIN_SPEED, PARTICLE_MAX_SPEED)
-    local lifetime = randomBetween(PARTICLE_MIN_LIFETIME, PARTICLE_MAX_LIFETIME)
+    local y = self:findParticleY(width)
+    if not y then
+        return
+    end
 
     table.insert(self.particles, {
         x = SCREEN_WIDTH + length,
-        y = randomBetween(16, SCREEN_HEIGHT - 16),
+        y = y,
         width = width,
         length = length,
         speed = speed,
-        lifetime = lifetime,
-        age = 0,
-        alpha = randomBetween(0.34, 0.72),
+        alpha = randomBetween(PARTICLE_MIN_ALPHA, PARTICLE_MAX_ALPHA),
     })
 end
 
 function KrisFinisherWindBackground:updateParticles()
     for index = #self.particles, 1, -1 do
         local particle = self.particles[index]
-        particle.age = particle.age + DT
         particle.x = particle.x - particle.speed * DT
 
-        if particle.age >= particle.lifetime or particle.x + particle.length < -8 then
+        -- Keep the strip fully opaque until its right edge leaves the screen.
+        if particle.x + particle.length < 0 then
             table.remove(self.particles, index)
         end
+    end
+end
+
+function KrisFinisherWindBackground:clear()
+    self.particles = {}
+    self.active = false
+    self.visible = false
+    if self.parent then
+        self:remove()
     end
 end
 
@@ -185,12 +232,7 @@ function KrisFinisherWindBackground:drawParticles()
     local old_r, old_g, old_b, old_a = love.graphics.getColor()
 
     for _, particle in ipairs(self.particles) do
-        local progress = clamp(particle.age / particle.lifetime, 0, 1)
-        local fade_in = clamp(progress / 0.08, 0, 1)
-        local fade_out = 1 - clamp((progress - 0.72) / 0.28, 0, 1)
-        local alpha = particle.alpha * fade_in * fade_out
-
-        Draw.setColor(PARTICLE_COLOR[1], PARTICLE_COLOR[2], PARTICLE_COLOR[3], alpha)
+        Draw.setColor(PARTICLE_COLOR[1], PARTICLE_COLOR[2], PARTICLE_COLOR[3], particle.alpha)
         love.graphics.rectangle(
             "fill",
             math.floor(particle.x),

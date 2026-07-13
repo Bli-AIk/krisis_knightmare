@@ -198,6 +198,7 @@ function KrisFinisher:init()
     self.finisher_transition_battle = nil
     self.finisher_transition_fx = nil
     self.finisher_transition_shader = nil
+    self.finisher_wind_background = nil
 end
 
 function KrisFinisher:createBackground()
@@ -206,7 +207,9 @@ function KrisFinisher:createBackground()
         return
     end
 
-    return battle:addChild(KrisFinisherWindBackground())
+    local background = KrisFinisherWindBackground()
+    self.finisher_wind_background = background
+    return battle:addChild(background)
 end
 
 function KrisFinisher:onBattleInit()
@@ -461,6 +464,20 @@ function KrisFinisher:updateFinisherTransition()
     transition.time = transition.time + DT
     if transition.time >= FINISHER_TRANSITION_DURATION then
         self:stopFinisherTransition()
+    end
+end
+
+function KrisFinisher:clearFinisherWindBackground()
+    local background = self.finisher_wind_background
+    if background then
+        background:clear()
+    end
+    self.finisher_wind_background = nil
+end
+
+function KrisFinisher:updateFinisherWindBackground()
+    if Game:getTension() >= FINISHER_STOP_TP then
+        self:clearFinisherWindBackground()
     end
 end
 
@@ -881,6 +898,8 @@ end
 function KrisFinisher:update()
     super.update(self)
 
+    self:updateFinisherWindBackground()
+
     if self.finisher_opening then
         self:updateOpening()
         return
@@ -893,6 +912,7 @@ function KrisFinisher:update()
 end
 
 function KrisFinisher:onBattleEnd()
+    self:clearFinisherWindBackground()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
     self:restoreVesselDamageNumbers()
