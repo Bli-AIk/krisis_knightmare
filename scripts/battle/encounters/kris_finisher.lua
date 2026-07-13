@@ -400,6 +400,10 @@ end
 function KrisFinisher:startFinisherTransition(battle)
     self:stopFinisherTransition()
 
+    if self.finisher_wind_background then
+        self.finisher_wind_background:setFullscreenFilterProgress(0)
+    end
+
     local transition = {
         time = 0,
     }
@@ -462,6 +466,11 @@ function KrisFinisher:updateFinisherTransition()
     end
 
     transition.time = transition.time + DT
+    local progress = clamp(transition.time / FINISHER_TRANSITION_DURATION, 0, 1)
+    if self.finisher_wind_background then
+        self.finisher_wind_background:setFullscreenFilterProgress(progress)
+    end
+
     if transition.time >= FINISHER_TRANSITION_DURATION then
         self:stopFinisherTransition()
     end
@@ -570,24 +579,28 @@ function KrisFinisher:draw(fade)
     super.draw(self, fade)
 
     local opening = self.finisher_opening
-    if not opening then
-        return
+    if opening then
+        love.graphics.push()
+        love.graphics.origin()
+        Draw.setColor(1, 0, 0, 1)
+        love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        love.graphics.pop()
+
+        if opening.heart_visible then
+            self:drawOpeningObject(opening.soul)
+        end
+        if opening.kris_alpha > 0 then
+            self:drawOpeningObject(opening.kris)
+        end
+
+        Draw.setColor(1, 1, 1, 1)
     end
 
-    love.graphics.push()
-    love.graphics.origin()
-    Draw.setColor(1, 0, 0, 1)
-    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
-    love.graphics.pop()
-
-    if opening.heart_visible then
-        self:drawOpeningObject(opening.soul)
+    -- Encounter drawing happens after Battle's children, so this covers
+    -- bullets, battlers, and Battle UI as one final full-screen layer.
+    if self.finisher_wind_background then
+        self.finisher_wind_background:drawFullscreenFilter()
     end
-    if opening.kris_alpha > 0 then
-        self:drawOpeningObject(opening.kris)
-    end
-
-    Draw.setColor(1, 1, 1, 1)
 end
 
 function KrisFinisher:triggerHurtFlash()

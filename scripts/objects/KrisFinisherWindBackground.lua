@@ -12,6 +12,12 @@ local NOISE_ALPHA = 0.055
 local NOISE_SCALE = 1.5
 local NOISE_SPEED = 0.32
 
+local FULLSCREEN_FILTER_COLOR_RGB = { 0.698 / 4, 0, 0 }
+local FULLSCREEN_FILTER_ALPHA = 0.5
+local FULLSCREEN_FILTER_NOISE_ALPHA = 0.02
+local FULLSCREEN_FILTER_NOISE_SCALE = 10.5
+local FULLSCREEN_FILTER_NOISE_SPEED = 0.32
+
 -- Red particle controls. All of these values are easy to tune here.
 local PARTICLE_COLOR = { 1, 0.08, 0.06 }
 local PARTICLE_MIN_INTERVAL = 0.25 -- minimum seconds between spawns
@@ -43,6 +49,7 @@ function KrisFinisherWindBackground:init()
     self.scroll = 0
     self.next_particle = randomBetween(PARTICLE_MIN_INTERVAL, PARTICLE_MAX_INTERVAL)
     self.particles = {}
+    self.fullscreen_filter_progress = 0
 
     self.texture = Assets.getTexture(WIND_TEXTURE)
     self.texture:setFilter("nearest", "nearest")
@@ -69,6 +76,28 @@ function KrisFinisherWindBackground:init()
             float noise = hash(cell + floor(time * 6.0));
             float grain = (noise - 0.5) * amount;
             return vec4(source.rgb + grain, source.a) * color;
+        }
+    ]])
+
+    self.fullscreen_filter_shader = love.graphics.newShader([[
+        extern vec3 filterColor;
+        extern float filterAlpha;
+        extern float time;
+        extern float amount;
+        extern float scale;
+
+        float hash(vec2 p) {
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
+            return fract(p.x * p.y);
+        }
+
+        vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+            vec2 cell = floor(screen_coords / scale);
+            float noise = hash(cell + floor(time * 6.0));
+            float grain = (noise - 0.5) * amount;
+            vec3 result = clamp(filterColor + grain, 0.0, 1.0);
+            return vec4(result, filterAlpha) * color;
         }
     ]])
 end
@@ -145,8 +174,13 @@ function KrisFinisherWindBackground:updateParticles()
     end
 end
 
+function KrisFinisherWindBackground:setFullscreenFilterProgress(progress)
+    self.fullscreen_filter_progress = math.max(0, math.min(1, progress))
+end
+
 function KrisFinisherWindBackground:clear()
     self.particles = {}
+    self.fullscreen_filter_progress = 0
     self.active = false
     self.visible = false
     if self.parent then
@@ -243,6 +277,44 @@ function KrisFinisherWindBackground:drawParticles()
     end
 
     Draw.setColor(old_r, old_g, old_b, old_a)
+end
+
+function KrisFinisherWindBackground:drawFullscreenFilter()
+    local filter_alpha = FULLSCREEN_FILTER_ALPHA * self.fullscreen_filter_progress
+    if filter_alpha <= 0 then
+        return
+    end
+
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+    local old_shader = love.graphics.getShader()
+
+    self.fullscreen_filter_shader:send(
+        "filterColor",
+        FULLSCREEN_FILTER_COLOR_RGB
+    )
+    self.fullscreen_filter_shader:send("filterAlpha", filter_alpha)
+    self.fullscreen_filter_shader:send(
+        "time",
+        self.time * FULLSCREEN_FILTER_NOISE_SPEED
+    )
+    self.fullscreen_filter_shader:send(
+        "amount",
+        FULLSCREEN_FILTER_NOISE_ALPHA
+    )
+    self.fullscreen_filter_shader:send(
+        "scale",
+        FULLSCREEN_FILTER_NOISE_SCALE
+    )
+
+    love.graphics.push()
+    love.graphics.origin()
+    love.graphics.setShader(self.fullscreen_filter_shader)
+    Draw.setColor(1, 1, 1, 1)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    love.graphics.pop()
+
+    love.graphics.setShader(old_shader)
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
 end
 
 function KrisFinisherWindBackground:draw()
