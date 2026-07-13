@@ -29,6 +29,59 @@ local FINISHER_HURT_FLASH_FALL_TIME = 0.12 * 1.5
 
 local FINISHER_MUSIC = "creepychase"
 local FINISHER_MUSIC_PITCH = 1.2
+local FINISHER_TRANSITION_DURATION = 1
+local FINISHER_TRANSITION_SHADER_PRIORITY = 1000
+
+local FINISHER_TRANSITION_SHADER_SOURCE = [[
+    extern vec2 texSize;
+    extern float exposure;
+    extern float glowStrength;
+    extern float rgbOffset;
+    extern float overlayEdge;
+    extern float overlayWidth;
+    extern float overlayAlpha;
+
+    vec4 sampleClamped(Image tex, vec2 uv) {
+        return Texel(tex, clamp(uv, vec2(0.0), vec2(1.0)));
+    }
+
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec2 xOffset = vec2(rgbOffset / texSize.x, 0.0);
+        vec4 center = sampleClamped(tex, uv);
+
+        // Separate the channels along X only, by roughly one game pixel.
+        float red = sampleClamped(tex, uv - xOffset).r;
+        float green = center.g;
+        float blue = sampleClamped(tex, uv + xOffset).b;
+        vec3 separated = vec3(red, green, blue);
+
+        // A short cross-shaped blur gives the exposure flash a soft glow.
+        vec2 xBlur = vec2(4.0 / texSize.x, 0.0);
+        vec2 yBlur = vec2(0.0, 4.0 / texSize.y);
+        vec3 glow = (
+            sampleClamped(tex, uv - xBlur).rgb
+            + sampleClamped(tex, uv + xBlur).rgb
+            + sampleClamped(tex, uv - yBlur).rgb
+            + sampleClamped(tex, uv + yBlur).rgb
+        ) * 0.25;
+
+        vec3 result = separated * (1.0 + exposure) + glow * glowStrength;
+
+        // A red sheet starts on the left and moves left past the screen.
+        float sheet = 1.0 - smoothstep(
+            overlayEdge - overlayWidth,
+            overlayEdge,
+            uv.x
+        );
+        result = mix(
+            result,
+            vec3(178.0 / 255.0, 0.0, 0.0),
+            clamp(sheet * overlayAlpha, 0.0, 1.0)
+        );
+
+        return vec4(result, center.a) * color;
+    }
+]]
 
 local OPENING_STATE = "KRISIS_OPENING"
 local OPENING_REVEAL_DELAY = 50 / 60
@@ -138,6 +191,19 @@ function KrisFinisher:init()
     self.finisher_hurt_flash = nil
     self.finisher_status_message_restore = {}
     self.finisher_opening = nil
+    self.finisher_transition = nil
+    self.finisher_transition_battle = nil
+    self.finisher_transition_fx = nil
+    self.finisher_transition_shader = nil
+end
+
+function KrisFinisher:createBackground()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    return battle:addChild(KrisFinisherWindBackground())
 end
 
 function KrisFinisher:onBattleInit()
@@ -320,7 +386,79 @@ function KrisFinisher:finishOpening()
 
     if battle and battle.parent then
         battle:setState("KRIS_FINISHER", "OPENING")
+        self:startFinisherTransition(battle)
         self:startFinisherStarEmitter(battle)
+    end
+end
+
+function KrisFinisher:startFinisherTransition(battle)
+    self:stopFinisherTransition()
+
+    local transition = {
+        time = 0,
+    }
+    local shader = self.finisher_transition_shader
+    if not shader then
+        shader = love.graphics.newShader(FINISHER_TRANSITION_SHADER_SOURCE)
+        self.finisher_transition_shader = shader
+    end
+
+    local function progress()
+        return clamp(transition.time / FINISHER_TRANSITION_DURATION, 0, 1)
+    end
+
+    local function remainingPower(power)
+        local remaining = 1 - progress()
+        return remaining ^ power
+    end
+
+    local fx = ShaderFX(shader, {
+        texSize = { SCREEN_WIDTH, SCREEN_HEIGHT },
+        exposure = function()
+            return 5.0 * remainingPower(2)
+        end,
+        glowStrength = function()
+            return 3.0 * remainingPower(2)
+        end,
+        rgbOffset = function()
+            return 6.0 * remainingPower(2)
+        end,
+        overlayEdge = function()
+            return 1.0 - progress() * 1.3
+        end,
+        overlayWidth = 1.0,
+        overlayAlpha = function()
+            return 0.86 * (1 - progress() * 0.25)
+        end,
+    }, false, FINISHER_TRANSITION_SHADER_PRIORITY)
+
+    battle:addFX(fx, "kris_finisher_transition")
+    self.finisher_transition = transition
+    self.finisher_transition_battle = battle
+    self.finisher_transition_fx = fx
+end
+
+function KrisFinisher:stopFinisherTransition()
+    local battle = self.finisher_transition_battle
+    local fx = self.finisher_transition_fx
+    if battle and fx then
+        battle:removeFX("kris_finisher_transition")
+    end
+
+    self.finisher_transition = nil
+    self.finisher_transition_battle = nil
+    self.finisher_transition_fx = nil
+end
+
+function KrisFinisher:updateFinisherTransition()
+    local transition = self.finisher_transition
+    if not transition then
+        return
+    end
+
+    transition.time = transition.time + DT
+    if transition.time >= FINISHER_TRANSITION_DURATION then
+        self:stopFinisherTransition()
     end
 end
 
@@ -746,12 +884,14 @@ function KrisFinisher:update()
         return
     end
 
+    self:updateFinisherTransition()
     self:updateFinisherKris()
     self:updateFinisherStarEmitter()
     self:updatePlayerDrift()
 end
 
 function KrisFinisher:onBattleEnd()
+    self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
     self:restoreVesselDamageNumbers()
     if self.finisher_hurt_flash and self.finisher_hurt_flash.parent then
