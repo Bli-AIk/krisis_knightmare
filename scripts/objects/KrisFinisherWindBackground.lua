@@ -1,11 +1,12 @@
 -- Background RGB color, with each channel in the 0.0-1.0 range.
 local BACKGROUND_COLOR_RGB = { 0.698, 0, 0 }
+local BACKGROUND_FILL_RGB = { 0, 0, 0 }
 
 local WIND_TEXTURE = "battle/backgrounds/kris_finisher_wind"
 local WIND_ROTATION = -math.pi / 2
 local WIND_SCALE = 4
 local WIND_SCROLL_SPEED = 42 * 4
-local WIND_ALPHA = 0.24
+local WIND_ALPHA = 0.24 / 1.25
 
 local NOISE_ALPHA = 0.055
 local NOISE_SCALE = 1.5
@@ -160,6 +161,26 @@ function KrisFinisherWindBackground:drawWind()
     love.graphics.setColor(old_r, old_g, old_b, old_a)
 end
 
+function KrisFinisherWindBackground:drawBase()
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+    local old_shader = love.graphics.getShader()
+
+    love.graphics.push()
+    love.graphics.origin()
+    love.graphics.setShader()
+    Draw.setColor(
+        BACKGROUND_FILL_RGB[1],
+        BACKGROUND_FILL_RGB[2],
+        BACKGROUND_FILL_RGB[3],
+        1
+    )
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    love.graphics.pop()
+
+    love.graphics.setShader(old_shader)
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
+end
+
 function KrisFinisherWindBackground:drawParticles()
     local old_r, old_g, old_b, old_a = love.graphics.getColor()
 
@@ -183,6 +204,7 @@ function KrisFinisherWindBackground:drawParticles()
 end
 
 function KrisFinisherWindBackground:draw()
+    self:drawBase()
     self:drawWind()
     self:drawParticles()
 end

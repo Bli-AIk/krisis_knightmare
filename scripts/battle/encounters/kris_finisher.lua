@@ -30,6 +30,9 @@ local FINISHER_HURT_FLASH_FALL_TIME = 0.12 * 1.5
 local FINISHER_MUSIC = "creepychase"
 local FINISHER_MUSIC_PITCH = 1.2
 local FINISHER_TRANSITION_DURATION = 1
+local FINISHER_EXPOSURE_DURATION = 0.2
+local FINISHER_GLOW_DURATION = 0.3
+local FINISHER_RGB_OFFSET = 6.0
 local FINISHER_TRANSITION_SHADER_PRIORITY = 1000
 
 local FINISHER_TRANSITION_SHADER_SOURCE = [[
@@ -49,7 +52,7 @@ local FINISHER_TRANSITION_SHADER_SOURCE = [[
         vec2 xOffset = vec2(rgbOffset / texSize.x, 0.0);
         vec4 center = sampleClamped(tex, uv);
 
-        // Separate the channels along X only, by roughly one game pixel.
+        // Separate the channels along X only, using the configured offset.
         float red = sampleClamped(tex, uv - xOffset).r;
         float green = center.g;
         float blue = sampleClamped(tex, uv + xOffset).b;
@@ -407,21 +410,20 @@ function KrisFinisher:startFinisherTransition(battle)
         return clamp(transition.time / FINISHER_TRANSITION_DURATION, 0, 1)
     end
 
-    local function remainingPower(power)
-        local remaining = 1 - progress()
-        return remaining ^ power
+    local function fastDecay(duration, power)
+        return clamp(1 - transition.time / duration, 0, 1) ^ power
     end
 
     local fx = ShaderFX(shader, {
         texSize = { SCREEN_WIDTH, SCREEN_HEIGHT },
         exposure = function()
-            return 5.0 * remainingPower(2)
+            return 5.0 * fastDecay(FINISHER_EXPOSURE_DURATION, 2)
         end,
         glowStrength = function()
-            return 3.0 * remainingPower(2)
+            return 3.0 * fastDecay(FINISHER_GLOW_DURATION, 2)
         end,
         rgbOffset = function()
-            return 6.0 * remainingPower(2)
+            return FINISHER_RGB_OFFSET * (1 - progress())
         end,
         overlayEdge = function()
             return 1.0 - progress() * 1.3
