@@ -26,7 +26,10 @@ local SCREEN_SHAKE_X = -10
 local SCREEN_SHAKE_Y = -8
 local SCREEN_SHAKE_FRICTION = 3
 local KRIS_SWORD_HALL_FRAME_TIME = 4 / 30
-local KRIS_SWORD_HALL_EFFECT_START_DELAY = (5.5 * KRIS_SWORD_HALL_FRAME_TIME)
+local KRIS_SWORD_HALL_HOLD_FRAME = 3
+local KRIS_SWORD_HALL_HOLD_SECONDS = 0.5
+local KRIS_SWORD_HALL_EFFECT_START_DELAY =
+    KRIS_SWORD_HALL_HOLD_SECONDS + (5.5 * KRIS_SWORD_HALL_FRAME_TIME)
 local KRIS_FAR_X = 10000
 local KRIS_FAR_Y = 10000
 local BURST_CIRCLE_COUNT = 6
@@ -196,7 +199,7 @@ end
 
 function KrisPhase1_07:init()
     super.init(self)
-    self.time = 10
+    self.time = 10 + KRIS_SWORD_HALL_HOLD_SECONDS
     self.red_rect = nil
     self.black_ellipse_fill = nil
     self.black_ellipse_border = nil
@@ -215,7 +218,22 @@ function KrisPhase1_07:onStart()
             x = attacker.target_x or attacker.x,
             y = attacker.target_y or attacker.y,
         }
-        attacker:setAnimation("sword_hall_disappear", function()
+        attacker:setAnimation({
+            "sword_hall_disappear",
+            function(sprite, wait)
+                local frame_count = sprite.frames and #sprite.frames or 0
+                for frame = 1, frame_count do
+                    sprite:setFrame(frame)
+
+                    if frame == KRIS_SWORD_HALL_HOLD_FRAME then
+                        wait(KRIS_SWORD_HALL_FRAME_TIME + KRIS_SWORD_HALL_HOLD_SECONDS)
+                    else
+                        wait(KRIS_SWORD_HALL_FRAME_TIME)
+                    end
+                end
+            end,
+            next = "idle",
+        }, function()
             moveAttackerAway(attacker)
         end)
     end
