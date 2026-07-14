@@ -1,5 +1,5 @@
 -- Background RGB color, with each channel in the 0.0-1.0 range.
-local BACKGROUND_COLOR_RGB = { 0.698, 0, 0 }
+local BACKGROUND_COLOR_RGB = { 0.698 / 2, 0, 0 }
 local BACKGROUND_FILL_RGB = { 0, 0, 0 }
 
 local WIND_TEXTURE = "battle/backgrounds/kris_finisher_wind"
@@ -13,7 +13,7 @@ local NOISE_SCALE = 1.5
 local NOISE_SPEED = 0.32
 
 local FULLSCREEN_FILTER_COLOR_RGB = { 0.698 / 4, 0, 0 }
-local FULLSCREEN_FILTER_ALPHA = 0.5
+local FULLSCREEN_FILTER_ALPHA = 0.35
 local FULLSCREEN_FILTER_NOISE_ALPHA = 0.02
 local FULLSCREEN_FILTER_NOISE_SCALE = 10.5
 local FULLSCREEN_FILTER_NOISE_SPEED = 0.32
