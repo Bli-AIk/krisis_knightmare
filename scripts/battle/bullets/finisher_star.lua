@@ -37,6 +37,14 @@ function FinisherStar:init(x, y, center, angle, radius, min_radius, travel_time,
     self:setScale(1, 1)
 end
 
+function FinisherStar:getDamage()
+    if self.scale_x <= 0.5 and self.scale_y <= 0.5 then
+        return 0
+    end
+
+    return super.getDamage(self)
+end
+
 function FinisherStar:draw()
     local r, g, b, a = self:getDrawColor()
     Draw.setColor(r, g, b, a)

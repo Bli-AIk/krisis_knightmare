@@ -32,6 +32,14 @@ function Star:init(x, y, dir, min_speed, max_speed, accel_duration)
 	self.osc_time = 0
 end
 
+function Star:getDamage()
+	if self.scale_x <= 0.5 and self.scale_y <= 0.5 then
+		return 0
+	end
+
+	return super.getDamage(self)
+end
+
 function Star:onWaveSpawn(wave)
 	super.onWaveSpawn(self, wave)
 

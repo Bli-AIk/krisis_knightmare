@@ -42,6 +42,14 @@ function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end
     self.spin_speed = options.spin_speed or SPIN_SPEED
 end
 
+function SoulDepthStar:getDamage()
+    if self.scale_x <= 0.5 and self.scale_y <= 0.5 then
+        return 0
+    end
+
+    return super.getDamage(self)
+end
+
 function SoulDepthStar:update()
     self.elapsed = self.elapsed + DT
     local progress = clamp(self.elapsed / self.duration, 0, 1)
