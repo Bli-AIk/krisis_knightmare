@@ -2,6 +2,7 @@
 local FinisherStar, super = Class(Bullet)
 
 local FADE_DISTANCE = 32
+local TP_CUTOFF_DISTANCE = FADE_DISTANCE + 8
 local DEFAULT_MIN_RADIUS = 0
 local DEFAULT_TRAVEL_TIME = 1.5
 local DEFAULT_ORBIT_SPEED = math.rad(12)
@@ -43,6 +44,14 @@ function FinisherStar:getDamage()
     end
 
     return super.getDamage(self)
+end
+
+function FinisherStar:getGrazeTension()
+    if self.radius <= TP_CUTOFF_DISTANCE then
+        return 0
+    end
+
+    return super.getGrazeTension(self)
 end
 
 function FinisherStar:draw()
