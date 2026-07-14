@@ -269,6 +269,7 @@ local function updateChapterSelectLocalization(menu)
 end
 
 local KRISIS_RANDOM_MODULUS = 2147483647
+local KRISIS_RANDOM_MULTIPLIER = 48271
 
 local function normalizeSeedValue(value)
     if value == nil or value == false or value == "" then
@@ -290,7 +291,10 @@ end
 
 function Mod:getKrisisConfiguredSeed()
     if Game and Game.getConfig then
-        return normalizeSeedValue(Game:getConfig("krisisRandomSeed"))
+        local configured_seed = normalizeSeedValue(Game:getConfig("krisisRandomSeed"))
+        if configured_seed ~= nil then
+            return configured_seed
+        end
     end
 
     local kristal_config = self.info
@@ -332,23 +336,101 @@ function Mod:getKrisisRunSeed()
     end
 
     local configured_seed = self:getKrisisConfiguredSeed()
-    if configured_seed then
+    if configured_seed ~= nil then
         self.krisis_run_seed = configured_seed
         self.krisis_random_fixed = true
     else
         local seed = os.time()
-        if love and love.math and love.math.random then
-            seed = seed + love.math.random(1, 1000000)
-        end
         if love and love.timer and love.timer.getTime then
             seed = seed + math.floor(love.timer.getTime() * 1000)
         end
+        if love and love.math and love.math.random then
+            seed = seed + love.math.random(1, KRISIS_RANDOM_MODULUS - 1)
+        end
+
         self.krisis_run_seed = seed % KRISIS_RANDOM_MODULUS
+        if self.krisis_run_seed == 0 then
+            self.krisis_run_seed = 1
+        end
         self.krisis_random_fixed = false
+        print("[KRISIS] Generated random seed: " .. tostring(self.krisis_run_seed))
     end
 
     self.krisis_seed_counter = 0
     return self.krisis_run_seed
+end
+
+function Mod:getKrisisRandomStream(label)
+    self:getKrisisRunSeed()
+    self.krisis_random_streams = self.krisis_random_streams or {}
+
+    label = tostring(label or "krisis")
+    local stream = self.krisis_random_streams[label]
+    if stream then
+        return stream
+    end
+
+    local label_seed = normalizeSeedValue(label) or 0
+    local state = (self.krisis_run_seed + label_seed * 9176 + 1009) % KRISIS_RANDOM_MODULUS
+    if state == 0 then
+        state = 1
+    end
+
+    stream = {
+        state = state,
+    }
+
+    function stream:nextFloat()
+        self.state = (self.state * KRISIS_RANDOM_MULTIPLIER) % KRISIS_RANDOM_MODULUS
+        return self.state / KRISIS_RANDOM_MODULUS
+    end
+
+    function stream:random(min, max)
+        local value = self:nextFloat()
+        if min == nil then
+            return value
+        end
+
+        if max == nil then
+            max = math.floor(min)
+            min = 1
+        else
+            min = math.ceil(min)
+            max = math.floor(max)
+        end
+
+        assert(min <= max, "invalid KRISIS random range")
+        return min + math.floor(value * (max - min + 1))
+    end
+
+    self.krisis_random_streams[label] = stream
+    return stream
+end
+
+function Mod:randomKrisis(label, min, max)
+    return self:getKrisisRandomStream(label):random(min, max)
+end
+
+function Mod:hookItemTossRandom()
+    if self.item_toss_random_hooked or not Item or not love or not love.math then
+        return
+    end
+    self.item_toss_random_hooked = true
+
+    HookSystem.hook(Item, "onToss", function(orig, item, ...)
+        local original_random = love.math.random
+        love.math.random = function(min, max)
+            return self:randomKrisis("item_toss", min, max)
+        end
+
+        local result = { pcall(orig, item, ...) }
+        love.math.random = original_random
+
+        if not result[1] then
+            error(result[2])
+        end
+        return (table.unpack or unpack)(result, 2)
+    end)
 end
 
 function Mod:nextKrisisRandomSeed(label)
@@ -535,7 +617,9 @@ function Mod:init()
     self:hookChapterSelectLocalization()
     self:hookWorldMenuRestore()
     self:hookVesselAttackSound()
+    self:hookItemTossRandom()
     self:loadKrisisRunOptions()
+    self:getKrisisRunSeed()
 
     if (envFlag("KRISIS_FINISHER_PROFILE") or envFlag("KRISIS_PROFILE")) and FinisherProfiler then
         self.finisher_profiler = FinisherProfiler()

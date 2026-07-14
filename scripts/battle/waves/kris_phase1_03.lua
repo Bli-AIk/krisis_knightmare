@@ -195,11 +195,7 @@ function KrisPhase1_03:rememberSharpSword(spawn_frame, y, scale_y)
 end
 
 function KrisPhase1_03:rollPatternSeed()
-    if Mod and Mod.nextKrisisRandomSeed then
-        return Mod:nextKrisisRandomSeed("kris_phase1_03")
-    end
-
-    return os.time()
+    return Mod:nextKrisisRandomSeed("kris_phase1_03")
 end
 
 function KrisPhase1_03:noise(index, salt)

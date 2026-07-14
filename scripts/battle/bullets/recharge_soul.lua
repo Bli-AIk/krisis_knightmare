@@ -179,8 +179,10 @@ function RechargeSoul:chooseMoveDirection()
         return nil
     end
 
-    local biased = love.math.random() < EDGE_BIAS_CHANCE
-    return TableUtils.pick(biased and best or available), left, right, top, bottom
+    local biased = Mod:randomKrisis("recharge_soul") < EDGE_BIAS_CHANCE
+    local choices = biased and best or available
+    local direction = choices[Mod:randomKrisis("recharge_soul", 1, #choices)]
+    return direction, left, right, top, bottom
 end
 
 function RechargeSoul:startMove()

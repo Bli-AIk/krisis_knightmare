@@ -51,7 +51,7 @@ local PARTICLE_WAVE_MAX_CYCLES = 1.6
 local KrisFinisherWindBackground, super = Class(Object)
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("kris_finisher_wind_background")
 end
 
 local function createParticleProfile(length, width)
@@ -100,7 +100,7 @@ local function createParticleProfile(length, width)
             PARTICLE_MIN_SEGMENT_ALPHA,
             PARTICLE_MAX_SEGMENT_ALPHA
         )
-        if love.math.random() < PARTICLE_DIM_SEGMENT_CHANCE then
+        if Mod:randomKrisis("kris_finisher_wind_background") < PARTICLE_DIM_SEGMENT_CHANCE then
             alpha = alpha * randomBetween(0.48, 0.74)
         end
 
@@ -114,12 +114,12 @@ local function createParticleProfile(length, width)
     local has_gap = false
     local previous_gap = false
     for index = 2, segment_count - 1 do
-        if not previous_gap and love.math.random() < PARTICLE_BREAK_CHANCE then
+        if not previous_gap and Mod:randomKrisis("kris_finisher_wind_background") < PARTICLE_BREAK_CHANCE then
             segments[index].gap = true
             has_gap = true
             previous_gap = true
             if index < segment_count - 2
-                and love.math.random() < PARTICLE_DOUBLE_BREAK_CHANCE
+                and Mod:randomKrisis("kris_finisher_wind_background") < PARTICLE_DOUBLE_BREAK_CHANCE
             then
                 segments[index + 1].gap = true
             end
@@ -129,7 +129,7 @@ local function createParticleProfile(length, width)
     end
 
     if not has_gap then
-        segments[love.math.random(3, segment_count - 2)].gap = true
+        segments[Mod:randomKrisis("kris_finisher_wind_background", 3, segment_count - 2)].gap = true
     end
 
     return profile, segments
@@ -218,7 +218,7 @@ function KrisFinisherWindBackground:findParticleY(height)
 
     -- Try random positions first so the rows do not look evenly distributed.
     for _ = 1, PARTICLE_POSITION_ATTEMPTS do
-        local y = love.math.random(min_y, max_y)
+        local y = Mod:randomKrisis("kris_finisher_wind_background", min_y, max_y)
         if isAvailable(y) then
             return y
         end
@@ -238,7 +238,7 @@ function KrisFinisherWindBackground:spawnParticle()
     end
 
     -- Integer dimensions keep the one-pixel gap reliable after rasterization.
-    local width = love.math.random(PARTICLE_MIN_WIDTH, PARTICLE_MAX_WIDTH)
+    local width = Mod:randomKrisis("kris_finisher_wind_background", PARTICLE_MIN_WIDTH, PARTICLE_MAX_WIDTH)
     local length = randomBetween(PARTICLE_MIN_LENGTH, PARTICLE_MAX_LENGTH)
     local speed = randomBetween(PARTICLE_MIN_SPEED, PARTICLE_MAX_SPEED)
     local height = math.ceil(

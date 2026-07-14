@@ -28,7 +28,7 @@ local function clamp(value, min, max)
 end
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("kris_rude_buster")
 end
 
 local function easeOutCubic(t)
@@ -147,7 +147,7 @@ local function spawnDiamond(wave, edge, x, y, bullet_speed, speed_factor)
     local min_speed = math.min(bullet_speed + DIAMOND_MIN_SPEED_LEAD, DIAMOND_MAX_SPEED)
     local max_speed = math.max(min_speed, math.min(bullet_speed + DIAMOND_MAX_SPEED_LEAD, DIAMOND_MAX_SPEED))
     local speed = randomBetween(min_speed, max_speed) * (speed_factor or 1)
-    local easing = love.math.random() < 0.5 and "linear" or "in-cubic"
+    local easing = Mod:randomKrisis("kris_rude_buster") < 0.5 and "linear" or "in-cubic"
 
     return wave:spawnBullet("kris_buster_diamond", x, y, direction, {
         speed = speed,

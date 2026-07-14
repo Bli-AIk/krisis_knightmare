@@ -21,7 +21,7 @@ local function clamp(value, min, max)
 end
 
 local function randomFloat(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("recharge_radial_burst")
 end
 
 local function angularDistance(a, b)
@@ -64,14 +64,14 @@ local function generateRayAngles(count)
 end
 
 local function generateRays()
-    local count = love.math.random(MIN_RAY_COUNT, MAX_RAY_COUNT)
+    local count = Mod:randomKrisis("recharge_radial_burst", MIN_RAY_COUNT, MAX_RAY_COUNT)
     count = math.max(count, #REQUIRED_RAY_RANGES)
     local angles = generateRayAngles(count)
     local rays = {}
 
     for i, angle in ipairs(angles) do
-        local thin = love.math.random() < 0.45
-        local pale = love.math.random() < 0.35
+        local thin = Mod:randomKrisis("recharge_radial_burst") < 0.45
+        local pale = Mod:randomKrisis("recharge_radial_burst") < 0.35
 
         rays[i] = {
             angle = angle,

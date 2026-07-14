@@ -52,10 +52,7 @@ local function makeWaveList(first, last)
 end
 
 local function randomWaveNumber(first, last)
-    if love and love.math and love.math.random then
-        return love.math.random(first, last)
-    end
-    return math.random(first, last)
+    return Mod:randomKrisis("kris_wave_selection", first, last)
 end
 
 local function normalizeWaveNumber(value)

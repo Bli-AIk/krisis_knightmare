@@ -19,7 +19,7 @@ local CHIP_BURST_MAX_COUNT = 3
 local CHIP_QUADRANT_PADDING = math.rad(10)
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("kris_phase1_13")
 end
 
 local BlockWall, block_wall_super = Class(Solid)
@@ -78,12 +78,12 @@ function KrisPhase1_13:getBlockYSpacing()
 end
 
 function KrisPhase1_13:getChipBurstAngles()
-    local count = love.math.random(CHIP_BURST_MIN_COUNT, CHIP_BURST_MAX_COUNT)
+    local count = Mod:randomKrisis("kris_phase1_13", CHIP_BURST_MIN_COUNT, CHIP_BURST_MAX_COUNT)
     local quadrants = { 0, 1, 2, 3 }
     local angles = {}
 
     for i = #quadrants, 2, -1 do
-        local j = love.math.random(i)
+        local j = Mod:randomKrisis("kris_phase1_13", i)
         quadrants[i], quadrants[j] = quadrants[j], quadrants[i]
     end
 
@@ -95,7 +95,7 @@ function KrisPhase1_13:getChipBurstAngles()
     end
 
     for i = #angles, 2, -1 do
-        local j = love.math.random(i)
+        local j = Mod:randomKrisis("kris_phase1_13", i)
         angles[i], angles[j] = angles[j], angles[i]
     end
 

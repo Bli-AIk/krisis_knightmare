@@ -32,7 +32,7 @@ local function easeInWithInitialSpeed(t, initial_slope)
 end
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("flying_sword_chip")
 end
 
 local function getOffscreenTarget(x, y, angle)
@@ -81,7 +81,7 @@ function FlyingSwordChip:init(x, y, angle, options)
     self.start_y = y
     self.end_x, self.end_y = getOffscreenTarget(x, y, self.angle)
 
-    local side = love.math.random() < 0.5 and -1 or 1
+    local side = Mod:randomKrisis("flying_sword_chip") < 0.5 and -1 or 1
     local curve_offset = randomBetween(CONTROL_OFFSET_MIN, CONTROL_OFFSET_MAX) * side
     local perpendicular_x = -math.sin(self.angle)
     local perpendicular_y = math.cos(self.angle)

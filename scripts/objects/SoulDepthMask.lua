@@ -79,7 +79,7 @@ local function lerp(from, to, t)
 end
 
 local function randomFloat(min, max)
-    return min + love.math.random() * (max - min)
+    return min + Mod:randomKrisis("soul_depth_mask") * (max - min)
 end
 
 local function angleDistance(a, b)
@@ -162,7 +162,7 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
 
     if self.radial_particles_enabled then
         for _ = 1, self.radial_particle_initial_count do
-            self:spawnRadialParticle(love.math.random())
+            self:spawnRadialParticle(Mod:randomKrisis("soul_depth_mask"))
         end
     end
 end
@@ -295,7 +295,7 @@ function SoulDepthMask:spawnStarBurst()
     end
 
     local center_x, center_y = self:getCenterInSoul()
-    local count = love.math.random(self.star_burst_min_count, self.star_burst_max_count)
+    local count = Mod:randomKrisis("soul_depth_mask", self.star_burst_min_count, self.star_burst_max_count)
     local angles = self:getStarBurstAngles(count)
     local distance = self.radius + STAR_EDGE_OFFSET
 
@@ -410,7 +410,11 @@ function SoulDepthMask:updateRadialParticles()
 
     self.radial_particle_timer = self.radial_particle_timer - DT
     while self.radial_particle_timer <= 0 do
-        local emit_count = love.math.random(self.radial_particle_min_emit_count, self.radial_particle_max_emit_count)
+        local emit_count = Mod:randomKrisis(
+            "soul_depth_mask",
+            self.radial_particle_min_emit_count,
+            self.radial_particle_max_emit_count
+        )
         for _ = 1, emit_count do
             self:spawnRadialParticle()
         end

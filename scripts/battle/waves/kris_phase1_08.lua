@@ -57,11 +57,7 @@ function KrisPhase1_08:init()
 end
 
 function KrisPhase1_08:rollPatternSeed()
-    if Mod and Mod.nextKrisisRandomSeed then
-        return Mod:nextKrisisRandomSeed("kris_phase1_08")
-    end
-
-    return os.time()
+    return Mod:nextKrisisRandomSeed("kris_phase1_08")
 end
 
 function KrisPhase1_08:getSpawnBounds()

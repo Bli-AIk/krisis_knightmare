@@ -26,7 +26,7 @@ local function lerp(from, to, t)
 end
 
 local function randomFloat(min, max)
-    return min + love.math.random() * (max - min)
+    return min + Mod:randomKrisis("soul_depth_finale") * (max - min)
 end
 
 local function default(value, fallback)
@@ -38,7 +38,7 @@ end
 
 local function shuffle(values)
     for i = #values, 2, -1 do
-        local j = love.math.random(i)
+        local j = Mod:randomKrisis("soul_depth_finale", i)
         values[i], values[j] = values[j], values[i]
     end
     return values
@@ -48,7 +48,7 @@ local function stratifiedAngles(count)
     local angles = {}
     local base = randomFloat(0, math.pi * 2)
     for i = 0, count - 1 do
-        local segment_t = (i + love.math.random()) / count
+        local segment_t = (i + Mod:randomKrisis("soul_depth_finale")) / count
         table.insert(angles, base + segment_t * math.pi * 2)
     end
     return shuffle(angles)
@@ -141,7 +141,7 @@ function SoulDepthFinale:spawnStarWave()
         self.first_star_wave_sound_played = true
     end
 
-    local count = love.math.random(self.star_min_count, self.star_max_count)
+    local count = Mod:randomKrisis("soul_depth_finale", self.star_min_count, self.star_max_count)
     local angles = stratifiedAngles(count)
 
     for _, angle in ipairs(angles) do

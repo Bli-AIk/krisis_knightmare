@@ -16,7 +16,7 @@ local COLOR_DARKEN = 0.58
 local KrisPlatformParticles, super = Class(Object)
 
 local function randomFloat(min, max)
-    return min + love.math.random() * (max - min)
+    return min + Mod:randomKrisis("kris_platform_particles") * (max - min)
 end
 
 local function clamp(value, min, max)
@@ -129,8 +129,8 @@ function KrisPlatformParticles:samplePosition(source_data, target_data, fade)
     local width = source_data:getWidth()
     local height = source_data:getHeight()
     for _ = 1, SAMPLE_ATTEMPTS do
-        local pixel_x = love.math.random(0, width - 1)
-        local pixel_y = love.math.random(0, height - 1)
+        local pixel_x = Mod:randomKrisis("kris_platform_particles", 0, width - 1)
+        local pixel_y = Mod:randomKrisis("kris_platform_particles", 0, height - 1)
         local _, _, _, alpha = self:getBlendedPixel(source_data, target_data, pixel_x, pixel_y, fade)
         if alpha > 0 then
             return pixel_x, pixel_y, alpha
@@ -144,8 +144,8 @@ function KrisPlatformParticles:sampleColor(source_data, target_data, fade)
     local best
 
     for _ = 1, SAMPLE_ATTEMPTS do
-        local pixel_x = love.math.random(0, width - 1)
-        local pixel_y = love.math.random(0, height - 1)
+        local pixel_x = Mod:randomKrisis("kris_platform_particles", 0, width - 1)
+        local pixel_y = Mod:randomKrisis("kris_platform_particles", 0, height - 1)
         local r, g, b, alpha = self:getBlendedPixel(source_data, target_data, pixel_x, pixel_y, fade)
 
         if alpha > 0 then
@@ -197,15 +197,15 @@ function KrisPlatformParticles:spawnParticle()
 
     local platform = self.platform
     local scale_x, scale_y = self:getPlatformScale()
-    local x = ((platform and platform.x) or 0) + (pixel_x + love.math.random()) * scale_x
-    local y = ((platform and platform.y) or 0) + (pixel_y + love.math.random()) * scale_y
+    local x = ((platform and platform.x) or 0) + (pixel_x + Mod:randomKrisis("kris_platform_particles")) * scale_x
+    local y = ((platform and platform.y) or 0) + (pixel_y + Mod:randomKrisis("kris_platform_particles")) * scale_y
 
     table.insert(self.particles, {
         x = x,
         y = y,
         vx = randomFloat(-PARTICLE_MAX_DRIFT, PARTICLE_MAX_DRIFT),
         vy = -randomFloat(PARTICLE_MIN_SPEED, PARTICLE_MAX_SPEED),
-        size = love.math.random(PARTICLE_MIN_SIZE, PARTICLE_MAX_SIZE),
+        size = Mod:randomKrisis("kris_platform_particles", PARTICLE_MIN_SIZE, PARTICLE_MAX_SIZE),
         lifetime = randomFloat(PARTICLE_MIN_LIFETIME, PARTICLE_MAX_LIFETIME),
         age = 0,
         r = r,

@@ -55,7 +55,7 @@ local function clamp(value, min, max)
 end
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("kris_phase1_07")
 end
 
 local function easeOutCubic(t)
@@ -420,7 +420,7 @@ function KrisPhase1_07:spawnChipLight()
 end
 
 function KrisPhase1_07:getChipBurstAngles()
-    local count = love.math.random(CHIP_BURST_MIN_COUNT, CHIP_BURST_MAX_COUNT)
+    local count = Mod:randomKrisis("kris_phase1_07", CHIP_BURST_MIN_COUNT, CHIP_BURST_MAX_COUNT)
     local angles = {}
 
     for quadrant = 0, 3 do
@@ -434,7 +434,7 @@ function KrisPhase1_07:getChipBurstAngles()
     end
 
     for i = #angles, 2, -1 do
-        local j = love.math.random(i)
+        local j = Mod:randomKrisis("kris_phase1_07", i)
         angles[i], angles[j] = angles[j], angles[i]
     end
 

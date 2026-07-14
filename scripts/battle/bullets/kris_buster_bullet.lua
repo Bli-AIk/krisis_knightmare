@@ -39,7 +39,7 @@ local function clamp(value, min, max)
 end
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("kris_buster_bullet")
 end
 
 local function easeOutCubic(t)
@@ -161,7 +161,7 @@ local function getDiamondCount(depth, divisor, max_count)
     local target_count = clamp(DIAMOND_START_MIN_COUNT + growth, DIAMOND_START_MIN_COUNT, max_count)
     local total_count = target_count
 
-    if depth > 2 and love.math.random() < DIAMOND_COUNT_JITTER_CHANCE then
+    if depth > 2 and Mod:randomKrisis("kris_buster_bullet") < DIAMOND_COUNT_JITTER_CHANCE then
         total_count = math.max(total_count - 1, DIAMOND_START_MIN_COUNT)
     end
 
@@ -178,7 +178,7 @@ local function spawnDiamond(wave, edge, x, y, bullet_speed, speed_factor)
     local min_speed = math.min(bullet_speed + DIAMOND_MIN_SPEED_LEAD, DIAMOND_MAX_SPEED)
     local max_speed = math.max(min_speed, math.min(bullet_speed + DIAMOND_MAX_SPEED_LEAD, DIAMOND_MAX_SPEED))
     local speed = randomBetween(min_speed, max_speed) * (speed_factor or 1)
-    local easing = love.math.random() < 0.5 and "linear" or "in-cubic"
+    local easing = Mod:randomKrisis("kris_buster_bullet") < 0.5 and "linear" or "in-cubic"
 
     return wave:spawnBullet("kris_buster_diamond", x, y, direction, {
         speed = speed,
@@ -273,7 +273,7 @@ end
 function KrisBusterBullet:getBounceSpeedFactor()
     local factors = self.bounce_speed_factors
     if type(factors) == "table" and #factors > 0 then
-        return factors[love.math.random(1, #factors)] or self.bounce_speed_factor
+        return factors[Mod:randomKrisis("kris_buster_bullet", 1, #factors)] or self.bounce_speed_factor
     end
 
     return self.bounce_speed_factor

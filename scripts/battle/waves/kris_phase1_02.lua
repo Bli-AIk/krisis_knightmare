@@ -3,7 +3,7 @@ local ShaderFX = require("src.engine.drawfx.shaderfx")
 local Rectangle = require("src.engine.objects.rectangle")
 
 local function randomBetween(min, max)
-    return min + (max - min) * love.math.random()
+    return min + (max - min) * Mod:randomKrisis("kris_phase1_02")
 end
 
 local SLASH_CIRCLE_SIZE = 200
@@ -68,7 +68,7 @@ local function shakeArena(from_x, from_y)
         local center_x, center_y = arena:getCenter()
         local angle = MathUtils.angle(from_x or center_x, from_y or center_y, center_x, center_y)
         local jitter = randomBetween(math.rad(8), math.rad(18))
-        if love.math.random() < 0.5 then
+        if Mod:randomKrisis("kris_phase1_02") < 0.5 then
             jitter = -jitter
         end
         angle = angle + jitter
@@ -169,15 +169,15 @@ function SlashParticles:stopEmission()
 end
 
 function SlashParticles:spawnParticle()
-    local angle_pool = love.math.random() < 0.8 and self.vertical_angles or self.accent_angles
-    local theta = angle_pool[love.math.random(1, #angle_pool)] + randomBetween(-0.08, 0.08)
+    local angle_pool = Mod:randomKrisis("kris_phase1_02") < 0.8 and self.vertical_angles or self.accent_angles
+    local theta = angle_pool[Mod:randomKrisis("kris_phase1_02", 1, #angle_pool)] + randomBetween(-0.08, 0.08)
     local dx, dy = math.cos(theta), math.sin(theta)
     local vertical_degrees = math.deg(math.asin(math.min(math.abs(dy), 1)))
     local vertical_amount = vertical_degrees >= 85 and 1 or 0
     local speed = randomBetween(120, 260) + randomBetween(520, 820) * vertical_amount
     local lifetime = randomBetween(0.12, 0.28) + randomBetween(0.55, 0.95) * vertical_amount
     local length = randomBetween(16, 34) + randomBetween(78, 150) * vertical_amount
-    local width = vertical_amount > 0.5 and (love.math.random() < 0.55 and 2 or 1) or 1
+    local width = vertical_amount > 0.5 and (Mod:randomKrisis("kris_phase1_02") < 0.55 and 2 or 1) or 1
     local base_x = dx * self.rx
     local base_y = dy * self.ry
 
