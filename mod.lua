@@ -270,6 +270,22 @@ end
 
 local KRISIS_RANDOM_MODULUS = 2147483647
 local KRISIS_RANDOM_MULTIPLIER = 48271
+local KRISIS_SEED_ENTRY_MUSIC = {
+    [1] = "man",
+    [2] = "man",
+    [3] = "man_nes",
+    [4] = "man_2",
+    [5] = "deltarune_piano_collections_by_trevor_alan_gomes",
+}
+local KRISIS_SEED_ENTRY_CHANCE = 50
+local KRISIS_CHAPTER3_LEFT_TARGET = 100
+local KRISIS_CHAPTER4_RIGHT_TARGET = 100
+local KRISIS_CHAPTER4_ZX_TARGET = 8
+local KRISIS_CHAPTER5_ALTERNATIONS_TARGET = 5
+local KRISIS_SEED_DIGIT_COUNT = 10
+local KRISIS_SEED_ENTRY_REACTION_TIME = 1
+local KRISIS_SEED_TRANSITION_TIME = 0.75
+local KRISIS_SEED_SLIDE_TIME = 0.35
 
 local function normalizeSeedValue(value)
     if value == nil or value == false or value == "" then
@@ -281,6 +297,14 @@ local function normalizeSeedValue(value)
     end
 
     local text = tostring(value)
+    if text:match("^%d+$") then
+        local seed = 0
+        for i = 1, #text do
+            seed = (seed * 10 + text:byte(i) - string.byte("0")) % KRISIS_RANDOM_MODULUS
+        end
+        return seed
+    end
+
     local hash = 0
     for i = 1, #text do
         hash = (hash * 131 + text:byte(i)) % KRISIS_RANDOM_MODULUS
@@ -289,11 +313,21 @@ local function normalizeSeedValue(value)
     return hash
 end
 
+local function getSeedDisplayValue(value, seed)
+    if type(value) == "string" and value ~= "" then
+        return value
+    end
+
+    return tostring(seed)
+end
+
 function Mod:getKrisisConfiguredSeed()
+    local configured_value
     if Game and Game.getConfig then
-        local configured_seed = normalizeSeedValue(Game:getConfig("krisisRandomSeed"))
+        configured_value = Game:getConfig("krisisRandomSeed")
+        local configured_seed = normalizeSeedValue(configured_value)
         if configured_seed ~= nil then
-            return configured_seed
+            return configured_seed, getSeedDisplayValue(configured_value, configured_seed)
         end
     end
 
@@ -302,7 +336,11 @@ function Mod:getKrisisConfiguredSeed()
         and (self.info.config.kristal or self.info.config.KRISTAL)
         or {}
 
-    return normalizeSeedValue(kristal_config.krisisRandomSeed)
+    configured_value = kristal_config.krisisRandomSeed
+    local configured_seed = normalizeSeedValue(configured_value)
+    if configured_seed ~= nil then
+        return configured_seed, getSeedDisplayValue(configured_value, configured_seed)
+    end
 end
 
 function Mod:getConfig(key)
@@ -335,9 +373,10 @@ function Mod:getKrisisRunSeed()
         return self.krisis_run_seed
     end
 
-    local configured_seed = self:getKrisisConfiguredSeed()
+    local configured_seed, configured_seed_display = self:getKrisisConfiguredSeed()
     if configured_seed ~= nil then
         self.krisis_run_seed = configured_seed
+        self.krisis_run_seed_display = configured_seed_display
         self.krisis_random_fixed = true
     else
         local seed = os.time()
@@ -353,6 +392,7 @@ function Mod:getKrisisRunSeed()
             self.krisis_run_seed = 1
         end
         self.krisis_random_fixed = false
+        self.krisis_run_seed_display = nil
         print("[KRISIS] Generated random seed: " .. tostring(self.krisis_run_seed))
     end
 
@@ -409,6 +449,336 @@ end
 
 function Mod:randomKrisis(label, min, max)
     return self:getKrisisRandomStream(label):random(min, max)
+end
+
+function Mod:setKrisisRunSeed(value)
+    local seed = normalizeSeedValue(value)
+    assert(seed ~= nil, "A KRISIS seed must be a number or non-empty string.")
+
+    self.krisis_run_seed = seed
+    self.krisis_run_seed_display = getSeedDisplayValue(value, seed)
+    self.krisis_random_fixed = true
+    self.krisis_random_streams = {}
+    self.krisis_seed_counter = 0
+    self:updateKrisisWindowTitle()
+    return seed
+end
+
+function Mod:getKrisisSeedPasscodeDefault()
+    if not self.krisis_random_fixed then
+        return string.rep("0", KRISIS_SEED_DIGIT_COUNT)
+    end
+
+    local display = tostring(self.krisis_run_seed_display or "")
+    if display:match("^%d+$") and #display <= KRISIS_SEED_DIGIT_COUNT then
+        return string.rep("0", KRISIS_SEED_DIGIT_COUNT - #display) .. display
+    end
+
+    return string.format("%0" .. KRISIS_SEED_DIGIT_COUNT .. "d", self:getKrisisRunSeed())
+end
+
+function Mod:updateKrisisWindowTitle()
+    if not love or not love.window or not love.window.setTitle then
+        return
+    end
+
+    local base_title = self.info and self.info.name or "KRISIS: KNIGHTMARE"
+    if Kristal and Kristal.getDesiredWindowTitle then
+        base_title = Kristal.getDesiredWindowTitle()
+    end
+
+    local title = tostring(base_title)
+    if self.krisis_random_fixed then
+        title = title .. " | " .. tostring(self.krisis_run_seed_display or self:getKrisisRunSeed())
+    end
+    if not love.window.getTitle or love.window.getTitle() ~= title then
+        love.window.setTitle(title)
+    end
+end
+
+local function getSelectedChapterIndex(menu)
+    local chapter = menu and menu.chapters and menu.chapters[menu.selected_y]
+    return chapter and chapter.index or nil
+end
+
+function Mod:clearChapterSeedInput()
+    if not Input or not Input.clear then
+        return
+    end
+
+    Input.clear("confirm", true)
+    Input.clear("cancel", true)
+    Input.clear("left", true)
+    Input.clear("right", true)
+    Input.clear("up", true)
+    Input.clear("down", true)
+end
+
+function Mod:stopChapterSeedMusic()
+    if Game and Game.world and Game.world.music then
+        Game.world.music:stop()
+    end
+end
+
+function Mod:playChapterSeedMusic(chapter_index)
+    local music = KRISIS_SEED_ENTRY_MUSIC[chapter_index]
+    if music and Game and Game.world and Game.world.music then
+        Game.world.music:play(music)
+    end
+end
+
+function Mod:resetChapterSeedInputState(menu)
+    if not menu then
+        return
+    end
+
+    menu.krisis_seed_input_chapter = nil
+    menu.krisis_seed_chapter3_left_count = 0
+    menu.krisis_seed_chapter4_right_count = 0
+    menu.krisis_seed_chapter4_armed = false
+    menu.krisis_seed_chapter4_expect_confirm = true
+    menu.krisis_seed_chapter4_zx_count = 0
+    menu.krisis_seed_chapter5_last_direction = nil
+    menu.krisis_seed_chapter5_alternations = 0
+end
+
+function Mod:prepareChapterSeedInputState(menu, chapter_index)
+    if menu.krisis_seed_input_chapter ~= chapter_index then
+        self:resetChapterSeedInputState(menu)
+        menu.krisis_seed_input_chapter = chapter_index
+    end
+end
+
+function Mod:isChapterSeedEntryBusy(menu)
+    return self.seed_passcode_menu ~= nil
+        or self.seed_passcode_closing
+        or (menu and menu.krisis_seed_entry_transitioning)
+end
+
+function Mod:openChapterSeedPasscode(menu, chapter_index)
+    if self.seed_passcode_menu then
+        return
+    end
+
+    if menu then
+        menu.x = 0
+    end
+
+    self.seed_passcode_menu = SeedPasscodeMenu(function(seed)
+        self:closeChapterSeedPasscode(menu, seed)
+    end, function()
+        self:closeChapterSeedPasscode(menu)
+    end, self:getKrisisSeedPasscodeDefault())
+    Game.world:addChild(self.seed_passcode_menu)
+    self:playChapterSeedMusic(chapter_index)
+    self:clearChapterSeedInput()
+    Game.fader:fadeIn(nil, { speed = KRISIS_SEED_TRANSITION_TIME, music = false })
+end
+
+function Mod:beginChapterSeedEntry(menu, chapter_index, slide_left)
+    if self:isChapterSeedEntryBusy(menu) then
+        return
+    end
+
+    menu.krisis_seed_entry_transitioning = true
+    self:stopChapterSeedMusic()
+
+    local function fade_to_passcode()
+        Game.fader:fadeOut(nil, { speed = KRISIS_SEED_TRANSITION_TIME, music = false })
+        local function open_passcode()
+            self:openChapterSeedPasscode(menu, chapter_index)
+        end
+        if menu.timer then
+            menu.timer:after(KRISIS_SEED_TRANSITION_TIME, open_passcode)
+        else
+            open_passcode()
+        end
+    end
+
+    local function start_transition()
+        if slide_left and menu.timer then
+            menu.timer:tween(KRISIS_SEED_SLIDE_TIME, menu, { x = -SCREEN_WIDTH }, "in-quad", fade_to_passcode)
+        else
+            fade_to_passcode()
+        end
+    end
+
+    if menu.timer then
+        menu.timer:after(KRISIS_SEED_ENTRY_REACTION_TIME, start_transition)
+    else
+        start_transition()
+    end
+end
+
+function Mod:closeChapterSeedPasscode(menu, seed)
+    if self.seed_passcode_closing then
+        return
+    end
+
+    self.seed_passcode_closing = true
+    self:stopChapterSeedMusic()
+    Game.fader:fadeOut(nil, { speed = KRISIS_SEED_TRANSITION_TIME, music = false })
+
+    local function finish_close()
+        if seed then
+            self:setKrisisRunSeed(seed)
+        end
+
+        if self.seed_passcode_menu then
+            self.seed_passcode_menu:remove()
+        end
+        self.seed_passcode_menu = nil
+
+        if menu then
+            menu.x = 0
+            menu.selected_x = 1
+            menu.state = "SELECT"
+            menu.krisis_seed_entry_transitioning = false
+            self:resetChapterSeedInputState(menu)
+        end
+
+        self:clearChapterSeedInput()
+        Game.fader:fadeIn(nil, { speed = KRISIS_SEED_TRANSITION_TIME, music = false })
+
+        local function unlock_menu()
+            self.seed_passcode_closing = false
+            if Game.world and Game.world.transitionMusic then
+                Game.world:transitionMusic("AUDIO_DRONE")
+            end
+        end
+        if menu and menu.timer then
+            menu.timer:after(KRISIS_SEED_TRANSITION_TIME, unlock_menu)
+        else
+            unlock_menu()
+        end
+    end
+
+    if menu and menu.timer then
+        menu.timer:after(KRISIS_SEED_TRANSITION_TIME, finish_close)
+    else
+        finish_close()
+    end
+end
+
+function Mod:handleChapterSeedPasscodeInput(menu, key)
+    if not self:isChapterSeedEntryBusy(menu) then
+        return false
+    end
+
+    if self.seed_passcode_menu
+        and not self.seed_passcode_closing
+        and Input.isCancel(key)
+    then
+        self.seed_passcode_menu:cancel()
+    end
+    return true
+end
+
+function Mod:handleChapterSeedInput(menu, key)
+    if menu.state ~= "CHAPTER" then
+        self:resetChapterSeedInputState(menu)
+        return false
+    end
+
+    local chapter_index = getSelectedChapterIndex(menu)
+    if chapter_index ~= 3 and chapter_index ~= 4 and chapter_index ~= 5 then
+        self:resetChapterSeedInputState(menu)
+        return false
+    end
+
+    self:prepareChapterSeedInputState(menu, chapter_index)
+
+    if chapter_index == 3 and Input.is("left", key) then
+        menu.krisis_seed_chapter3_left_count = menu.krisis_seed_chapter3_left_count + 1
+        if menu.krisis_seed_chapter3_left_count >= KRISIS_CHAPTER3_LEFT_TARGET then
+            Assets.playSound("snd_flee")
+            self:beginChapterSeedEntry(menu, chapter_index)
+            return true
+        end
+    elseif chapter_index == 4 then
+        if menu.krisis_seed_chapter4_armed then
+            local expects_confirm = menu.krisis_seed_chapter4_expect_confirm
+            if Input.isConfirm(key) and expects_confirm then
+                menu.krisis_seed_chapter4_expect_confirm = false
+                return true
+            elseif Input.isCancel(key) and not expects_confirm then
+                menu.krisis_seed_chapter4_expect_confirm = true
+                menu.krisis_seed_chapter4_zx_count = menu.krisis_seed_chapter4_zx_count + 1
+                if menu.krisis_seed_chapter4_zx_count >= KRISIS_CHAPTER4_ZX_TARGET then
+                    self:beginChapterSeedEntry(menu, chapter_index)
+                end
+                return true
+            elseif Input.isConfirm(key) or Input.isCancel(key) then
+                menu.krisis_seed_chapter4_expect_confirm = true
+                menu.krisis_seed_chapter4_zx_count = 0
+                return true
+            end
+        elseif Input.is("right", key) then
+            menu.krisis_seed_chapter4_right_count = menu.krisis_seed_chapter4_right_count + 1
+            if menu.krisis_seed_chapter4_right_count >= KRISIS_CHAPTER4_RIGHT_TARGET then
+                menu.krisis_seed_chapter4_armed = true
+                menu.krisis_seed_chapter4_expect_confirm = true
+                menu.krisis_seed_chapter4_zx_count = 0
+                self:stopChapterSeedMusic()
+                return true
+            end
+        end
+    elseif chapter_index == 5 and (Input.is("left", key) or Input.is("right", key)) then
+        local direction = Input.is("left", key) and "left" or "right"
+        local previous = menu.krisis_seed_chapter5_last_direction
+        if previous and previous ~= direction then
+            menu.krisis_seed_chapter5_alternations = menu.krisis_seed_chapter5_alternations + 1
+        else
+            menu.krisis_seed_chapter5_alternations = 0
+        end
+        menu.krisis_seed_chapter5_last_direction = direction
+
+        if menu.krisis_seed_chapter5_alternations >= KRISIS_CHAPTER5_ALTERNATIONS_TARGET then
+            self:beginChapterSeedEntry(menu, chapter_index, true)
+            return true
+        end
+    end
+
+    return false
+end
+
+function Mod:trackChapterSeedEntry(menu, old_state, old_chapter_index)
+    if old_state ~= "CHAPTER"
+        or menu.state ~= "SELECT"
+        or (old_chapter_index ~= 1 and old_chapter_index ~= 2)
+    then
+        return
+    end
+
+    if self:randomKrisis("chapter_seed_entry", 1, KRISIS_SEED_ENTRY_CHANCE) == 1 then
+        self:beginChapterSeedEntry(menu, old_chapter_index)
+    end
+end
+
+function Mod:hookChapterSeedInput()
+    if self.chapter_seed_input_hooked or not ChapterSelect or not SeedPasscodeMenu then
+        return
+    end
+    self.chapter_seed_input_hooked = true
+
+    HookSystem.hook(ChapterSelect, "onKeyPressed", function(orig, menu, key, ...)
+        if self:handleChapterSeedPasscodeInput(menu, key) then
+            return
+        end
+        if self:handleChapterSeedInput(menu, key) then
+            return
+        end
+
+        local old_state = menu.state
+        local old_chapter_index = getSelectedChapterIndex(menu)
+        local result = { pcall(orig, menu, key, ...) }
+        if not result[1] then
+            error(result[2])
+        end
+
+        self:trackChapterSeedEntry(menu, old_state, old_chapter_index)
+        return (table.unpack or unpack)(result, 2)
+    end)
 end
 
 function Mod:hookItemTossRandom()
@@ -615,11 +985,13 @@ end
 function Mod:init()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
+    self:hookChapterSeedInput()
     self:hookWorldMenuRestore()
     self:hookVesselAttackSound()
     self:hookItemTossRandom()
     self:loadKrisisRunOptions()
     self:getKrisisRunSeed()
+    self:updateKrisisWindowTitle()
 
     if (envFlag("KRISIS_FINISHER_PROFILE") or envFlag("KRISIS_PROFILE")) and FinisherProfiler then
         self.finisher_profiler = FinisherProfiler()
@@ -653,8 +1025,10 @@ end
 function Mod:postUpdate()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
+    self:hookChapterSeedInput()
     self:hookWorldMenuRestore()
     self:hookVesselAttackSound()
+    self:updateKrisisWindowTitle()
 
     if Game.getLanguage then
         local language = Game:getLanguage()
