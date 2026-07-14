@@ -17,7 +17,8 @@ function ChasingSoul:init(x, y)
 
     self.layer = SOUL_BULLET_LAYER
     self:setScale(1)
-    self.damage = 0
+    self.collider = CircleCollider(self, self.width / 2, self.height / 2, 8)
+    self.damage = 50
     self.can_graze = false
     self.destroy_on_hit = false
     self.remove_offscreen = false
