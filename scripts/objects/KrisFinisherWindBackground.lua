@@ -20,25 +20,119 @@ local FULLSCREEN_FILTER_NOISE_SPEED = 0.32
 
 -- Red particle controls. All of these values are easy to tune here.
 local PARTICLE_COLOR = { 1, 0.08, 0.06 }
-local PARTICLE_MIN_INTERVAL = 0.25 -- minimum seconds between spawns
-local PARTICLE_MAX_INTERVAL = 0.5 -- maximum seconds between spawns
+local PARTICLE_MIN_INTERVAL = 0.04 -- minimum seconds between spawns
+local PARTICLE_MAX_INTERVAL = 0.40 -- maximum seconds between spawns
 local PARTICLE_MIN_WIDTH = 2 -- vertical thickness, in pixels
 local PARTICLE_MAX_WIDTH = 5
-local PARTICLE_MIN_LENGTH = 150 -- horizontal length, in pixels
-local PARTICLE_MAX_LENGTH = 420
-local PARTICLE_MIN_SPEED = 640 -- leftward speed, in pixels per second
-local PARTICLE_MAX_SPEED = 980
+local PARTICLE_MIN_LENGTH = 150 * 2 -- horizontal length, in pixels
+local PARTICLE_MAX_LENGTH = 420 * 2
+local PARTICLE_MIN_SPEED = 820 * 2 -- leftward speed, in pixels per second
+local PARTICLE_MAX_SPEED = 1240 * 2
 local PARTICLE_MIN_ALPHA = 0.34 / 4
 local PARTICLE_MAX_ALPHA = 0.72 / 4
 local PARTICLE_MAX_COUNT = 5
 local PARTICLE_SPAWN_MARGIN = 16 -- empty space kept above and below the screen
 local PARTICLE_VERTICAL_GAP = 1 -- minimum visible gap between particle rows
 local PARTICLE_POSITION_ATTEMPTS = 96
+local PARTICLE_PROFILE_STEP = 10
+local PARTICLE_MIN_PROFILE_SEGMENTS = 14
+local PARTICLE_MIN_THICKNESS_SCALE = 0.58
+local PARTICLE_MAX_THICKNESS_SCALE = 1.18
+local PARTICLE_MIN_SEGMENT_ALPHA = 0.66
+local PARTICLE_MAX_SEGMENT_ALPHA = 1.08
+local PARTICLE_DIM_SEGMENT_CHANCE = 0.18
+local PARTICLE_BREAK_CHANCE = 0.14
+local PARTICLE_DOUBLE_BREAK_CHANCE = 0.28
+local PARTICLE_WAVE_MIN_AMPLITUDE = 0.35
+local PARTICLE_WAVE_MAX_AMPLITUDE = 1.15
+local PARTICLE_WAVE_MIN_CYCLES = 0.7
+local PARTICLE_WAVE_MAX_CYCLES = 1.6
 
 local KrisFinisherWindBackground, super = Class(Object)
 
 local function randomBetween(min, max)
     return min + (max - min) * love.math.random()
+end
+
+local function createParticleProfile(length, width)
+    local segment_count = math.max(
+        PARTICLE_MIN_PROFILE_SEGMENTS,
+        math.ceil(length / PARTICLE_PROFILE_STEP)
+    )
+    local wave_phase = randomBetween(0, math.pi * 2)
+    local detail_phase = randomBetween(0, math.pi * 2)
+    local wave_cycles = randomBetween(
+        PARTICLE_WAVE_MIN_CYCLES,
+        PARTICLE_WAVE_MAX_CYCLES
+    )
+    local detail_cycles = wave_cycles * randomBetween(1.8, 2.6)
+    local wave_amplitude = randomBetween(
+        PARTICLE_WAVE_MIN_AMPLITUDE,
+        PARTICLE_WAVE_MAX_AMPLITUDE
+    )
+    local profile = {}
+
+    for index = 0, segment_count do
+        local progress = index / segment_count
+        local center_wave = math.sin(progress * math.pi * 2 * wave_cycles + wave_phase)
+            + math.sin(progress * math.pi * 2 * detail_cycles + detail_phase) * 0.28
+        local thickness_wave = math.sin(
+            progress * math.pi * 2 * (wave_cycles * 0.72) + detail_phase
+        ) * 0.13
+        local thickness_scale = 0.84
+            + thickness_wave
+            + randomBetween(-0.13, 0.13)
+        local thickness = math.max(
+            width * PARTICLE_MIN_THICKNESS_SCALE,
+            width * math.min(PARTICLE_MAX_THICKNESS_SCALE, thickness_scale)
+        )
+
+        profile[index + 1] = {
+            offset = center_wave * wave_amplitude * 0.52
+                + randomBetween(-0.12, 0.12),
+            thickness = thickness,
+        }
+    end
+
+    local segments = {}
+    for index = 1, segment_count do
+        local alpha = randomBetween(
+            PARTICLE_MIN_SEGMENT_ALPHA,
+            PARTICLE_MAX_SEGMENT_ALPHA
+        )
+        if love.math.random() < PARTICLE_DIM_SEGMENT_CHANCE then
+            alpha = alpha * randomBetween(0.48, 0.74)
+        end
+
+        segments[index] = {
+            alpha = alpha,
+            gap = false,
+        }
+    end
+
+    -- Leave a few intentional gaps, while keeping both ends of the streak intact.
+    local has_gap = false
+    local previous_gap = false
+    for index = 2, segment_count - 1 do
+        if not previous_gap and love.math.random() < PARTICLE_BREAK_CHANCE then
+            segments[index].gap = true
+            has_gap = true
+            previous_gap = true
+            if index < segment_count - 2
+                and love.math.random() < PARTICLE_DOUBLE_BREAK_CHANCE
+            then
+                segments[index + 1].gap = true
+            end
+        else
+            previous_gap = segments[index].gap
+        end
+    end
+
+    if not has_gap then
+        segments[love.math.random(3, segment_count - 2)].gap = true
+    end
+
+    return profile, segments
 end
 
 function KrisFinisherWindBackground:init()
@@ -112,7 +206,7 @@ function KrisFinisherWindBackground:findParticleY(height)
     local function isAvailable(y)
         for _, other in ipairs(self.particles) do
             local other_y = other.y
-            local other_height = other.width
+            local other_height = other.height or other.width
             local separated_above = y + height + PARTICLE_VERTICAL_GAP <= other_y
             local separated_below = other_y + other_height + PARTICLE_VERTICAL_GAP <= y
             if not separated_above and not separated_below then
@@ -147,7 +241,12 @@ function KrisFinisherWindBackground:spawnParticle()
     local width = love.math.random(PARTICLE_MIN_WIDTH, PARTICLE_MAX_WIDTH)
     local length = randomBetween(PARTICLE_MIN_LENGTH, PARTICLE_MAX_LENGTH)
     local speed = randomBetween(PARTICLE_MIN_SPEED, PARTICLE_MAX_SPEED)
-    local y = self:findParticleY(width)
+    local height = math.ceil(
+        width * PARTICLE_MAX_THICKNESS_SCALE
+            + PARTICLE_WAVE_MAX_AMPLITUDE * 2
+    )
+    local profile, segments = createParticleProfile(length, width)
+    local y = self:findParticleY(height)
     if not y then
         return
     end
@@ -155,10 +254,13 @@ function KrisFinisherWindBackground:spawnParticle()
     table.insert(self.particles, {
         x = SCREEN_WIDTH + length,
         y = y,
+        height = height,
         width = width,
         length = length,
         speed = speed,
         alpha = randomBetween(PARTICLE_MIN_ALPHA, PARTICLE_MAX_ALPHA),
+        profile = profile,
+        segments = segments,
     })
 end
 
@@ -195,9 +297,9 @@ function KrisFinisherWindBackground:update()
     self.scroll = (self.scroll + WIND_SCROLL_SPEED * DT) % self.rotated_width
     self.next_particle = self.next_particle - DT
 
-    while self.next_particle <= 0 do
+    if self.next_particle <= 0 then
         self:spawnParticle()
-        self.next_particle = self.next_particle + randomBetween(
+        self.next_particle = randomBetween(
             PARTICLE_MIN_INTERVAL,
             PARTICLE_MAX_INTERVAL
         )
@@ -266,14 +368,39 @@ function KrisFinisherWindBackground:drawParticles()
     local old_r, old_g, old_b, old_a = love.graphics.getColor()
 
     for _, particle in ipairs(self.particles) do
-        Draw.setColor(PARTICLE_COLOR[1], PARTICLE_COLOR[2], PARTICLE_COLOR[3], particle.alpha)
-        love.graphics.rectangle(
-            "fill",
-            math.floor(particle.x),
-            math.floor(particle.y),
-            math.ceil(particle.length),
-            math.ceil(particle.width)
-        )
+        local center_y = particle.y + particle.height / 2
+        local segment_count = #particle.segments
+
+        for index, segment in ipairs(particle.segments) do
+            if not segment.gap then
+                local start_profile = particle.profile[index]
+                local end_profile = particle.profile[index + 1]
+                local start_x = particle.x + particle.length * (index - 1) / segment_count
+                local end_x = particle.x + particle.length * index / segment_count
+                local start_center = center_y + start_profile.offset
+                local end_center = center_y + end_profile.offset
+                local start_half_thickness = start_profile.thickness / 2
+                local end_half_thickness = end_profile.thickness / 2
+
+                Draw.setColor(
+                    PARTICLE_COLOR[1],
+                    PARTICLE_COLOR[2],
+                    PARTICLE_COLOR[3],
+                    particle.alpha * segment.alpha
+                )
+                love.graphics.polygon(
+                    "fill",
+                    start_x,
+                    start_center - start_half_thickness,
+                    end_x,
+                    end_center - end_half_thickness,
+                    end_x,
+                    end_center + end_half_thickness,
+                    start_x,
+                    start_center + start_half_thickness
+                )
+            end
+        end
     end
 
     Draw.setColor(old_r, old_g, old_b, old_a)
