@@ -2,6 +2,13 @@ local SeedPasscodeMenu, super = Class(Object)
 
 local SEED_DIGIT_COUNT = 10
 
+local function loc(default, id)
+    if Game and Game.loc then
+        return Game:loc(default, id)
+    end
+    return default
+end
+
 function SeedPasscodeMenu:init(on_submit, on_cancel, initial_seed)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
@@ -56,11 +63,11 @@ function SeedPasscodeMenu:draw()
     local old_font = love.graphics.getFont()
     love.graphics.setFont(self.font)
     Draw.setColor(COLORS.white)
-    Draw.printAlign("SEED", SCREEN_WIDTH / 2, 176, "center")
+    Draw.printAlign(loc("SEED", "seed_passcode.title"), SCREEN_WIDTH / 2, 176, "center")
 
     love.graphics.setFont(self.small_font)
     Draw.setColor(COLORS.gray)
-    Draw.printAlign("RANDOM SEED", SCREEN_WIDTH / 2, 202, "center")
+    Draw.printAlign(loc("RANDOM SEED", "seed_passcode.subtitle"), SCREEN_WIDTH / 2, 202, "center")
     love.graphics.setFont(old_font)
 
     super.draw(self)

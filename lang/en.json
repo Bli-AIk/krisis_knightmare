@@ -25,6 +25,9 @@
     "chapter_select.kris_shortcut_return_left": "Press ",
     "chapter_select.kris_shortcut_return_right": " to return to Chapter Select",
 
+    "seed_passcode.title": "SEED",
+    "seed_passcode.subtitle": "RANDOM SEED",
+
     "chara_vessel_name": "Vessel",
     "chara_vessel_title_chapter_4": "Dark Hero\nCarries out fate\nwith the blade.",
     "chara_vessel_xactName": "V-Action",

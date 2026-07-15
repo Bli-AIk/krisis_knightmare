@@ -25,6 +25,9 @@
     "chapter_select.kris_shortcut_return_left": "按 ",
     "chapter_select.kris_shortcut_return_right": " 返回章节选择",
 
+    "seed_passcode.title": "种子",
+    "seed_passcode.subtitle": "随机种子",
+
     "chara_vessel_name": "容器",
     "chara_vessel_title_chapter_4": "Dark Hero\nCarries out fate\nwith the blade.",
     "chara_vessel_xactName": "V-行动",
