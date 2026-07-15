@@ -280,7 +280,8 @@ local KRISIS_SEED_ENTRY_MUSIC = {
 local KRISIS_SEED_ENTRY_CHANCE = 50
 local KRISIS_CHAPTER3_LEFT_TARGET = 100
 local KRISIS_CHAPTER4_RIGHT_TARGET = 100
-local KRISIS_CHAPTER4_ZX_TARGET = 8
+local KRISIS_CHAPTER_SECRET_SOUND_START = 10
+local KRISIS_CHAPTER_SECRET_SOUND_MAX_VOLUME = 1.225
 local KRISIS_CHAPTER5_ALTERNATIONS_TARGET = 5
 local KRISIS_SEED_DIGIT_COUNT = 10
 local KRISIS_SEED_ENTRY_REACTION_TIME = 1
@@ -527,6 +528,17 @@ function Mod:playChapterSeedMusic(chapter_index)
     end
 end
 
+local function playChapterSeedProgressSound(count, target)
+    if count <= KRISIS_CHAPTER_SECRET_SOUND_START then
+        return
+    end
+
+    local progress = (count - KRISIS_CHAPTER_SECRET_SOUND_START)
+        / (target - KRISIS_CHAPTER_SECRET_SOUND_START)
+    local volume = math.min(progress, 1) * KRISIS_CHAPTER_SECRET_SOUND_MAX_VOLUME
+    Assets.playSound("ui_move", volume)
+end
+
 function Mod:resetChapterSeedInputState(menu)
     if not menu then
         return
@@ -535,9 +547,6 @@ function Mod:resetChapterSeedInputState(menu)
     menu.krisis_seed_input_chapter = nil
     menu.krisis_seed_chapter3_left_count = 0
     menu.krisis_seed_chapter4_right_count = 0
-    menu.krisis_seed_chapter4_armed = false
-    menu.krisis_seed_chapter4_expect_confirm = true
-    menu.krisis_seed_chapter4_zx_count = 0
     menu.krisis_seed_chapter5_last_direction = nil
     menu.krisis_seed_chapter5_alternations = 0
 end
@@ -690,38 +699,24 @@ function Mod:handleChapterSeedInput(menu, key)
 
     if chapter_index == 3 and Input.is("left", key) then
         menu.krisis_seed_chapter3_left_count = menu.krisis_seed_chapter3_left_count + 1
+        playChapterSeedProgressSound(
+            menu.krisis_seed_chapter3_left_count,
+            KRISIS_CHAPTER3_LEFT_TARGET
+        )
         if menu.krisis_seed_chapter3_left_count >= KRISIS_CHAPTER3_LEFT_TARGET then
             Assets.playSound("snd_flee")
             self:beginChapterSeedEntry(menu, chapter_index)
             return true
         end
-    elseif chapter_index == 4 then
-        if menu.krisis_seed_chapter4_armed then
-            local expects_confirm = menu.krisis_seed_chapter4_expect_confirm
-            if Input.isConfirm(key) and expects_confirm then
-                menu.krisis_seed_chapter4_expect_confirm = false
-                return true
-            elseif Input.isCancel(key) and not expects_confirm then
-                menu.krisis_seed_chapter4_expect_confirm = true
-                menu.krisis_seed_chapter4_zx_count = menu.krisis_seed_chapter4_zx_count + 1
-                if menu.krisis_seed_chapter4_zx_count >= KRISIS_CHAPTER4_ZX_TARGET then
-                    self:beginChapterSeedEntry(menu, chapter_index)
-                end
-                return true
-            elseif Input.isConfirm(key) or Input.isCancel(key) then
-                menu.krisis_seed_chapter4_expect_confirm = true
-                menu.krisis_seed_chapter4_zx_count = 0
-                return true
-            end
-        elseif Input.is("right", key) then
-            menu.krisis_seed_chapter4_right_count = menu.krisis_seed_chapter4_right_count + 1
-            if menu.krisis_seed_chapter4_right_count >= KRISIS_CHAPTER4_RIGHT_TARGET then
-                menu.krisis_seed_chapter4_armed = true
-                menu.krisis_seed_chapter4_expect_confirm = true
-                menu.krisis_seed_chapter4_zx_count = 0
-                self:stopChapterSeedMusic()
-                return true
-            end
+    elseif chapter_index == 4 and Input.is("right", key) then
+        menu.krisis_seed_chapter4_right_count = menu.krisis_seed_chapter4_right_count + 1
+        playChapterSeedProgressSound(
+            menu.krisis_seed_chapter4_right_count,
+            KRISIS_CHAPTER4_RIGHT_TARGET
+        )
+        if menu.krisis_seed_chapter4_right_count >= KRISIS_CHAPTER4_RIGHT_TARGET then
+            self:beginChapterSeedEntry(menu, chapter_index)
+            return true
         end
     elseif chapter_index == 5 and (Input.is("left", key) or Input.is("right", key)) then
         local direction = Input.is("left", key) and "left" or "right"
