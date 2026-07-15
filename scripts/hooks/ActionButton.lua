@@ -34,6 +34,15 @@ local function canSelectRechargeAct(enemy, battler)
 end
 
 function ActionButton:hasSpecial()
+    if self.type == "act"
+        and Game.battle
+        and Game.battle.encounter
+        and Game.battle.encounter.isMercyFinalePostlude
+        and Game.battle.encounter:isMercyFinalePostlude()
+    then
+        return false
+    end
+
     if super.hasSpecial(self) then
         return true
     end
