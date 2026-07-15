@@ -55,6 +55,7 @@
 
     "actor_kris_name": "[name:actor:kris]",
     "enemy_kris_name": "[name:actor:kris]",
+    "enemy_kris_mercy_finale_name": "???",
     "enemy_kris_check_1": "?? ATK ??? DEF",
     "enemy_kris_check_2": "黑暗给予其再生。\n[wait:5]* 化为了仅有攻击本能的怪物。",
     "enemy_kris_check_3": "用你的力量将其击败。",
@@ -74,6 +75,9 @@
     "enemy_kris_recharge_available": "* 你的灵魂中充盈着光的力量。",
     "act_check": "查看",
     "act_kris_check_description": "思考\n战术",
+    "act_kris_mercy_finale_view": "查看",
+    "act_kris_mercy_finale_leave": "脱离",
+    "act_kris_mercy_finale_view_text": "* 但是谁也没有来",
     "act_kris_recharge": "充能",
     "act_kris_recharge_description": "释放光芒",
     "act_kris_recharge_text": "* 你的【灵魂】散发出怪异的光芒！",

@@ -35,4 +35,41 @@ function Battle:returnToWorld()
     end
 end
 
+function Battle:handleAttackingInput(key)
+    local encounter = self.encounter
+    if Input.isConfirm(key)
+        and encounter
+        and encounter.isMercyFinalePostlude
+        and encounter:isMercyFinalePostlude()
+        and not self.attack_done
+        and not self.cancel_attack
+        and #self.battle_ui.attack_boxes > 0
+    then
+        -- In the postlude, confirming should always resolve the current
+        -- attack bar. The enemy still returns zero damage, so this only
+        -- restores the input response and does not make Fight effective.
+        local attack
+        for _, candidate in ipairs(self.battle_ui.attack_boxes) do
+            if not candidate.attacked then
+                attack = candidate
+                break
+            end
+        end
+
+        if attack then
+            local points = attack:hit()
+            local action = self:getActionBy(attack.battler, true)
+            if action then
+                action.points = points
+                if self:processAction(action) then
+                    self:finishAction(action)
+                end
+            end
+        end
+        return
+    end
+
+    return super.handleAttackingInput(self, key)
+end
+
 return Battle

@@ -55,6 +55,7 @@
 
     "actor_kris_name": "[name:actor:kris]",
     "enemy_kris_name": "[name:actor:kris]",
+    "enemy_kris_mercy_finale_name": "???",
     "enemy_kris_check_2": "Darkness grants them regeneration.[wait:5]\n* Transformed into a monster\nof pure aggressive instinct.",
     "enemy_kris_check_3": "Use your power to defeat them.",
     "enemy_kris_turn_1": "* [name:chara:kris] slashes into the combat.",
@@ -73,6 +74,9 @@
     "enemy_kris_recharge_available": "* Your soul is full of the POWER OF LIGHT.",
     "act_check": "Check",
     "act_kris_check_description": "Consider\nstrategy",
+    "act_kris_mercy_finale_view": "View",
+    "act_kris_mercy_finale_leave": "Leave",
+    "act_kris_mercy_finale_view_text": "* But nobody came.",
     "act_kris_recharge": "Recharge",
     "act_kris_recharge_description": "SHINE",
     "act_kris_recharge_text": "* Your SOUL emitted a strange glow!",

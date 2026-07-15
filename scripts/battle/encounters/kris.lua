@@ -27,6 +27,7 @@ local MERCY_FINALE_LAYER = BATTLE_LAYERS["ui"] - 2
 local FAST_SPEED = 4 / 30
 local MERCY_FINALE_MUSIC_FADE_TIME = 0.25
 local MERCY_FINALE_MUSIC_END_WINDOW = 1
+local MERCY_FINALE_ENEMY_TURN_DURATION = 5
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
@@ -48,6 +49,12 @@ function Kris:init()
     self.recharge_player_light = nil
     self.mercy_finale = nil
     self.mercy_finale_started = false
+    self.mercy_finale_active = false
+    self.mercy_finale_ui_released = false
+    self.mercy_finale_postlude = false
+    self.mercy_finale_suppress_narration = false
+    self.mercy_finale_enemy_turn = false
+    self.mercy_finale_enemy_turn_time = 0
     self.mercy_attack_increased = false
     self.mercy_attack_action_started = false
     self.mercy_before_actions = nil
@@ -58,12 +65,24 @@ function Kris:applyLocalization()
 end
 
 function Kris:getInitialEncounterText()
+    if self.mercy_finale_suppress_narration then
+        return ""
+    end
+
     local enemy = Game.battle and Game.battle.enemies and Game.battle.enemies[1]
     if enemy and enemy.getEncounterText then
         return enemy:getEncounterText()
     end
 
     return self.text
+end
+
+function Kris:getEncounterText()
+    if self.mercy_finale_suppress_narration then
+        return ""
+    end
+
+    return super.getEncounterText(self)
 end
 
 function Kris:getKrisEnemy()
@@ -129,6 +148,8 @@ function Kris:tryStartMercyFinale(reason)
     end
 
     self.mercy_finale_started = true
+    self.mercy_finale_active = true
+    self.mercy_finale_ui_released = false
     self.mercy_finale_reason = reason
     self:handleMercyFinaleMusic(battle)
 
@@ -139,9 +160,88 @@ function Kris:tryStartMercyFinale(reason)
         on_black_screen = function()
             self:clearRechargeForMercyFinale()
         end,
+        on_light_ready = function()
+            self:releaseMercyFinaleToPlayerTurn()
+        end,
     })
     battle:addChild(self.mercy_finale)
     return true
+end
+
+function Kris:releaseMercyFinaleToPlayerTurn()
+    if self.mercy_finale_ui_released then
+        return
+    end
+
+    self.mercy_finale_active = false
+    self.mercy_finale_ui_released = true
+    self.mercy_finale_postlude = true
+
+    local enemy = self:getKrisEnemy()
+    if enemy and enemy.enterMercyFinaleAftermath then
+        enemy:enterMercyFinaleAftermath()
+    end
+
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.mercy_finale_suppress_narration = true
+    if battle:getState() ~= "ACTIONSELECT" then
+        battle:setState("ACTIONSELECT", "MERCY_FINALE")
+    else
+        battle:showUI()
+    end
+    self.mercy_finale_suppress_narration = false
+end
+
+function Kris:isMercyFinalePostlude()
+    return self.mercy_finale_postlude == true
+end
+
+function Kris:startMercyFinaleEnemyTurn()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.mercy_finale_enemy_turn = true
+    self.mercy_finale_enemy_turn_time = MERCY_FINALE_ENEMY_TURN_DURATION
+
+    -- Use a private state so the engine does not create an arena or start a
+    -- wave. The five-second interval is still a real enemy-turn phase for
+    -- the postlude, with all player input ignored by Battle's state handler.
+    if battle.battle_ui then
+        battle.battle_ui:clearEncounterText()
+        battle.battle_ui:transitionOut()
+    end
+    if battle.tension_bar then
+        battle.tension_bar:hide()
+    end
+    battle:hideTargets()
+    if battle.arena then
+        battle.arena:remove()
+        battle.arena = nil
+    end
+    battle.current_selecting = 0
+    battle:setState("MERCY_FINALE_ENEMY_TURN", "MERCY_FINALE")
+end
+
+function Kris:finishMercyFinaleEnemyTurn()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.mercy_finale_enemy_turn = false
+    self.mercy_finale_enemy_turn_time = 0
+
+    -- nextTurn() is entered synchronously by ACTIONSELECT while the
+    -- narration guard is active, so this turn remains textless.
+    self.mercy_finale_suppress_narration = true
+    battle:setState("ACTIONSELECT", "MERCY_FINALE_RETURN")
+    self.mercy_finale_suppress_narration = false
 end
 
 function Kris:onBattleStart()
@@ -213,7 +313,12 @@ function Kris:onTurnEnd()
 end
 
 function Kris:onActionsEnd()
-    if self.mercy_finale_started then
+    if self.mercy_finale_active then
+        return true
+    end
+
+    if self.mercy_finale_postlude then
+        self:startMercyFinaleEnemyTurn()
         return true
     end
 
@@ -235,7 +340,7 @@ function Kris:onActionsEnd()
 end
 
 function Kris:beforeStateChange(old, new, reason)
-    if self.mercy_finale_started then
+    if self.mercy_finale_active then
         return true
     end
 end
@@ -307,6 +412,30 @@ function Kris:onEnemySelect(state_reason, enemy_index)
     battle.selected_enemy = enemy_index
 
     local enemy = battle:_getEnemyByIndex(enemy_index)
+    if self.mercy_finale_postlude then
+        battle:clearMenuItems()
+        battle:addMenuItem({
+            ["name"] = enemy.act_mercy_finale_view,
+            ["description"] = "",
+            ["party"] = { "vessel" },
+            ["highlight"] = nil,
+            ["callback"] = function(menu_item)
+                battle:pushAction("ACT", enemy, menu_item)
+            end,
+        })
+        battle:addMenuItem({
+            ["name"] = enemy.act_mercy_finale_leave,
+            ["description"] = "",
+            ["party"] = { "vessel" },
+            ["highlight"] = nil,
+            ["callback"] = function(menu_item)
+                battle:pushAction("ACT", enemy, menu_item)
+            end,
+        })
+        battle:setState("MENUSELECT", "ACT")
+        return true
+    end
+
     if enemy.updateRechargeActTPCost then
         enemy:updateRechargeActTPCost()
     end
@@ -718,6 +847,14 @@ end
 
 function Kris:update()
     super.update(self)
+
+    if self.mercy_finale_enemy_turn then
+        self.mercy_finale_enemy_turn_time = self.mercy_finale_enemy_turn_time - DT
+        if self.mercy_finale_enemy_turn_time <= 0 then
+            self:finishMercyFinaleEnemyTurn()
+        end
+    end
+
     self:updateRechargeMercyCooldown()
     self:updateRechargeLight()
     self:updateRechargeTension()

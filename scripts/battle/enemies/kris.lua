@@ -171,6 +171,7 @@ function Kris:applyLocalization(update_acts)
     local old_heartbeat = self.act_heartbeat
 
     self.name = Game:locName("actor", "kris", "KRIS")
+    self.mercy_finale_enemy_name = Game:loc("???", "enemy_kris_mercy_finale_name")
 
     -- Check text (automatically has "ENEMY NAME - " at the start)
     self.check = {
@@ -205,6 +206,13 @@ function Kris:applyLocalization(update_acts)
 
     self.act_check = Game:loc("Check", "act_check")
     self.act_check_description = Game:loc("Consider\nstrategy", "act_kris_check_description")
+    self.act_mercy_finale_view = Game:loc("View", "act_kris_mercy_finale_view")
+    self.act_mercy_finale_leave = Game:loc("Leave", "act_kris_mercy_finale_leave")
+    self.act_mercy_finale_view_text = Game:loc(
+        "* But nobody came.",
+        "act_kris_mercy_finale_view_text"
+    )
+    self.act_mercy_finale_leave_text = ""
     self.act_recharge = Game:loc("Recharge", "act_kris_recharge")
     self.act_recharge_description = Game:loc("SHINE", "act_kris_recharge_description")
     self.act_heartbeat = Game:loc("Heartbeat", "act_kris_heartbeat")
@@ -237,6 +245,25 @@ function Kris:applyLocalization(update_acts)
             end
         end
     end
+end
+
+function Kris:enterMercyFinaleAftermath()
+    self.mercy = 0
+    self.temporary_mercy = 0
+
+    if self.temporary_mercy_percent then
+        self.temporary_mercy_percent:remove()
+        self.temporary_mercy_percent = nil
+    end
+
+    self.name = self.mercy_finale_enemy_name or "???"
+end
+
+function Kris:isMercyFinalePostlude()
+    local encounter = Game.battle and Game.battle.encounter
+    return encounter
+        and encounter.isMercyFinalePostlude
+        and encounter:isMercyFinalePostlude()
 end
 
 function Kris:getRechargeActTPCost()
@@ -458,7 +485,11 @@ function Kris:onActStart(battler, name)
 end
 
 function Kris:onAct(battler, name)
-    if name == self.act_check then
+    if self:isMercyFinalePostlude() and name == self.act_mercy_finale_view then
+        return { self.act_mercy_finale_view_text }
+    elseif self:isMercyFinalePostlude() and name == self.act_mercy_finale_leave then
+        return { self.act_mercy_finale_leave_text }
+    elseif name == self.act_check then
         return super.onAct(self, battler, "Check")
     elseif name == self.act_heartbeat then
         local already_boosted = self.heartbeat_speed_boosted
@@ -521,6 +552,10 @@ function Kris:getEncounterText()
 end
 
 function Kris:getAttackDamage(damage, battler, points)
+    if self:isMercyFinalePostlude() then
+        return 0
+    end
+
     if battler and battler.chara.id == "vessel" then
         return points or 0
     end

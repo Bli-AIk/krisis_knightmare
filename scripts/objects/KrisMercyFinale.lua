@@ -15,6 +15,11 @@ local CIRCLE_BOB_MIN = 6
 local CIRCLE_BOB_MAX = 18
 local CIRCLE_BOB_SPEED_MIN = 4.5
 local CIRCLE_BOB_SPEED_MAX = 8
+local BLACK_SCREEN_DELAY = 1
+local LIGHT_MIN_SCALE = 0.05
+local LIGHT_GROW_DURATION = 1
+local LIGHT_SPRITE = "battle/light"
+local LIGHT_OFFSET_X = 16
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -75,8 +80,31 @@ function KrisMercyFinale:init(enemy, options)
     self.circle_time = 0
     self.circles = {}
     self.black_screen = false
+    self.player_light = nil
+    self.light_texture = Assets.getTexture(LIGHT_SPRITE)
+    self.light_mask_shader = love.graphics.newShader([[
+        extern Image light_texture;
+        extern vec2 light_center;
+        extern vec2 light_size;
+        extern float light_strength;
+
+        // The light texture is a visibility mask for the black overlay. Its
+        // alpha controls how much of the battle scene remains visible.
+        vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+            vec2 uv = (screen_coords - light_center) / light_size + vec2(0.5);
+            float illumination = 0.0;
+
+            if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+                illumination = Texel(light_texture, uv).a * light_strength;
+            }
+
+            float darkness = 1.0 - clamp(illumination, 0.0, 1.0);
+            return vec4(0.0, 0.0, 0.0, darkness) * color;
+        }
+    ]])
     self.saved_layers = {}
     self.on_black_screen = options.on_black_screen
+    self.on_light_ready = options.on_light_ready
 
     self.origin_x, self.origin_y = self:getEnemyOrigin()
     self.cover_radius = getMaxCornerDistance(self.origin_x, self.origin_y) + 180
@@ -91,6 +119,23 @@ function KrisMercyFinale:getEnemyOrigin()
             )
         end
         return self.enemy:localToScreenPos(self.enemy.width / 2, self.enemy.height / 2)
+    end
+
+    return SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
+end
+
+function KrisMercyFinale:getVesselOrigin()
+    local battle = self.battle or Game.battle
+    for _, battler in ipairs(battle and battle.party or {}) do
+        if battler.chara and battler.chara.id == "vessel" then
+            if battler.sprite then
+                return battler:localToScreenPos(
+                    (battler.sprite.width / 2) - 4.5,
+                    battler.sprite.height / 2
+                )
+            end
+            return battler:localToScreenPos(battler.width / 2, battler.height / 2)
+        end
     end
 
     return SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
@@ -198,7 +243,8 @@ end
 function KrisMercyFinale:enterBlackScreen()
     self.circles = {}
     self.flash_alpha = 0
-    self.phase = "BLACK"
+    self.phase = "BLACK_WAIT"
+    self.phase_time = 0
     self.black_screen = true
 
     if self.on_black_screen then
@@ -208,11 +254,34 @@ function KrisMercyFinale:enterBlackScreen()
     end
 end
 
+function KrisMercyFinale:spawnPlayerLight()
+    local x, y = self:getVesselOrigin()
+    self.player_light = {
+        x = x + LIGHT_OFFSET_X,
+        y = y,
+        scale = LIGHT_MIN_SCALE,
+        alpha = 1,
+    }
+    self.phase = "LIGHT"
+    self.phase_time = 0
+end
+
+function KrisMercyFinale:finishLightReveal()
+    self.phase = "READY"
+    self.phase_time = 0
+
+    if self.on_light_ready then
+        local callback = self.on_light_ready
+        self.on_light_ready = nil
+        callback(self)
+    end
+end
+
 function KrisMercyFinale:update()
     super.update(self)
     self:syncLayer()
 
-    if self.phase == "BLACK" then
+    if self.phase == "READY" then
         return
     end
 
@@ -239,6 +308,17 @@ function KrisMercyFinale:update()
         self.circle_time = self.circle_time + DT
         if self.circle_time >= CIRCLE_DURATION then
             self:enterBlackScreen()
+        end
+    elseif self.phase == "BLACK_WAIT" then
+        if self.phase_time >= BLACK_SCREEN_DELAY then
+            self:spawnPlayerLight()
+        end
+    elseif self.phase == "LIGHT" then
+        local progress = clamp(self.phase_time / LIGHT_GROW_DURATION, 0, 1)
+        local scale = LIGHT_MIN_SCALE + (1 - LIGHT_MIN_SCALE) * easeOutCubic(progress)
+        self.player_light.scale = scale
+        if self.phase_time >= LIGHT_GROW_DURATION then
+            self:finishLightReveal()
         end
     end
 end
@@ -275,6 +355,27 @@ function KrisMercyFinale:drawCircles()
     end
 end
 
+function KrisMercyFinale:drawBlackScreen()
+    if not self.player_light or not self.light_texture or not self.light_mask_shader then
+        love.graphics.setColor(0, 0, 0, 1)
+        love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        return
+    end
+
+    local width = self.light_texture:getWidth() * self.player_light.scale
+    local height = self.light_texture:getHeight() * self.player_light.scale
+    self.light_mask_shader:send("light_texture", self.light_texture)
+    self.light_mask_shader:send("light_center", { self.player_light.x, self.player_light.y })
+    self.light_mask_shader:send("light_size", { width, height })
+    self.light_mask_shader:send("light_strength", self.player_light.alpha)
+
+    local old_shader = love.graphics.getShader()
+    love.graphics.setShader(self.light_mask_shader)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    love.graphics.setShader(old_shader)
+end
+
 function KrisMercyFinale:draw()
     love.graphics.push()
     love.graphics.origin()
@@ -285,8 +386,7 @@ function KrisMercyFinale:draw()
     if self.phase == "CIRCLES" and #self.circles > 0 then
         self:drawCircles()
     elseif self.black_screen then
-        love.graphics.setColor(0, 0, 0, 1)
-        love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        self:drawBlackScreen()
     end
 
     if self.flash_alpha > 0 then
