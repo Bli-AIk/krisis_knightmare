@@ -136,6 +136,9 @@ function Kris:tryStartMercyFinale(reason)
 
     self.mercy_finale = KrisMercyFinale(enemy, {
         layer = MERCY_FINALE_LAYER,
+        on_black_screen = function()
+            self:clearRechargeForMercyFinale()
+        end,
     })
     battle:addChild(self.mercy_finale)
     return true
@@ -701,6 +704,16 @@ function Kris:clearRecharge(instant)
     self:restoreRechargePlayerLight()
     self:removeRechargeSoul(instant, self.recharge and self.recharge.enemy)
     self.recharge = nil
+end
+
+function Kris:clearRechargeForMercyFinale()
+    if not self.recharge then
+        return
+    end
+
+    self:clearRecharge(true)
+    self:setPlatformSprite(PLATFORM_SPRITE, RECHARGE_PLATFORM_FADE_TIME)
+    Game:setTension(0)
 end
 
 function Kris:update()
