@@ -1,8 +1,8 @@
 local KrisMercyFinale, super = Class(Object)
 
-local TWIST_DELAY = 0.5
+local TWIST_DELAY = 1
 local FLASH_FADE_TIME = 0.12
-local CIRCLE_DELAY = 1
+local CIRCLE_DELAY = 2
 local CIRCLE_DURATION = 4
 local CIRCLE_COUNT = 34
 local CIRCLE_MIN_RADIUS = 8

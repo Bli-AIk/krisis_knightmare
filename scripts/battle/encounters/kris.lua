@@ -25,6 +25,8 @@ local PLATFORM_LIGHT_SPRITE = "battle/backgrounds/kris_platform_light"
 local FULL_MERCY = 100
 local MERCY_FINALE_LAYER = BATTLE_LAYERS["ui"] - 2
 local FAST_SPEED = 4 / 30
+local MERCY_FINALE_MUSIC_FADE_TIME = 0.25
+local MERCY_FINALE_MUSIC_END_WINDOW = 1
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
@@ -90,6 +92,31 @@ function Kris:markKrisAttackMercyIncrease(enemy)
     end
 end
 
+function Kris:handleMercyFinaleMusic(battle)
+    local music = battle and battle.music
+    if not music then
+        return
+    end
+
+    music:setLooping(false)
+
+    if not music.source or not music:isPlaying() then
+        return
+    end
+
+    local duration = music.source:getDuration()
+    local position = music:tell()
+    local remaining = duration and duration > 0 and duration - position or nil
+
+    if remaining and remaining <= MERCY_FINALE_MUSIC_END_WINDOW then
+        return
+    end
+
+    music:fade(0, MERCY_FINALE_MUSIC_FADE_TIME, function(current_music)
+        current_music:stop()
+    end)
+end
+
 function Kris:tryStartMercyFinale(reason)
     if self.mercy_finale_started or not self:isFullMercy() then
         return false
@@ -103,6 +130,7 @@ function Kris:tryStartMercyFinale(reason)
 
     self.mercy_finale_started = true
     self.mercy_finale_reason = reason
+    self:handleMercyFinaleMusic(battle)
 
     enemy:setAnimation({ "twist", FAST_SPEED, true })
 
