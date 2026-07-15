@@ -485,7 +485,12 @@ function Kris:onAct(battler, name)
     if self:isMercyFinalePostlude() and name == self.act_mercy_finale_view then
         return { self.act_mercy_finale_view_text }
     elseif self:isMercyFinalePostlude() and name == self.act_mercy_finale_leave then
-        return { self.act_mercy_finale_leave_text }
+        local battle = Game.battle
+        local encounter = battle and battle.encounter
+        if encounter and encounter.requestMercyFinaleLeave then
+            encounter:requestMercyFinaleLeave(battler)
+        end
+        return nil
     elseif name == self.act_check then
         return super.onAct(self, battler, "Check")
     elseif name == self.act_heartbeat then

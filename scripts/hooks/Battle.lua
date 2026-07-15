@@ -52,4 +52,22 @@ function Battle:handleAttackingInput(key)
     return super.handleAttackingInput(self, key)
 end
 
+function Battle:onKeyPressed(key)
+    local encounter = self.encounter
+    if encounter
+        and encounter.isMercyFinaleDetached
+        and encounter:isMercyFinaleDetached()
+    then
+        -- Keep confirm from being consumed by a stale menu or by the next
+        -- battle state. Direction keys remain available to the encounter's
+        -- held-input movement logic.
+        Input.clear("confirm", true)
+        Input.clear("cancel", true)
+        Input.clear("menu", true)
+        return
+    end
+
+    return super.onKeyPressed(self, key)
+end
+
 return Battle

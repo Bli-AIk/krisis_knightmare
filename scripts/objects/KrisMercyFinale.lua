@@ -20,6 +20,7 @@ local LIGHT_MIN_SCALE = 0.05
 local LIGHT_GROW_DURATION = 1
 local LIGHT_SPRITE = "battle/light"
 local LIGHT_OFFSET_X = 16
+local DEFEAT_LIGHT_OFFSET_X = 11
 local LIGHT_BRIGHTNESS = 1.15
 local LIGHT_BREATH_AMPLITUDE = 0.025
 local LIGHT_BREATH_SPEED = 2
@@ -287,6 +288,17 @@ function KrisMercyFinale:update()
 
     if self.player_light then
         self.player_light.time = self.player_light.time + DT
+        local x, y = self:getVesselOrigin()
+        local offset_x = LIGHT_OFFSET_X
+        local encounter = self.battle and self.battle.encounter
+        if encounter
+            and encounter.isMercyFinaleDetached
+            and encounter:isMercyFinaleDetached()
+        then
+            offset_x = offset_x + DEFEAT_LIGHT_OFFSET_X
+        end
+        self.player_light.x = x + offset_x
+        self.player_light.y = y
     end
 
     if self.phase == "READY" then

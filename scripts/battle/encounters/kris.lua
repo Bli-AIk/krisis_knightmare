@@ -28,6 +28,8 @@ local FAST_SPEED = 4 / 30
 local MERCY_FINALE_MUSIC_FADE_TIME = 0.25
 local MERCY_FINALE_MUSIC_END_WINDOW = 1
 local MERCY_FINALE_ENEMY_TURN_DURATION = 5
+local MERCY_FINALE_UI_FADE_TIME = 0.9
+local MERCY_FINALE_DETACHED_MOVE_SPEED = 3
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
@@ -52,6 +54,10 @@ function Kris:init()
     self.mercy_finale_active = false
     self.mercy_finale_ui_released = false
     self.mercy_finale_postlude = false
+    self.mercy_finale_leave_requested = false
+    self.mercy_finale_detached = false
+    self.mercy_finale_ui_alpha = 1
+    self.mercy_finale_ui_fades = nil
     self.mercy_finale_suppress_narration = false
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
@@ -150,6 +156,10 @@ function Kris:tryStartMercyFinale(reason)
     self.mercy_finale_started = true
     self.mercy_finale_active = true
     self.mercy_finale_ui_released = false
+    self.mercy_finale_leave_requested = false
+    self.mercy_finale_detached = false
+    self.mercy_finale_ui_alpha = 1
+    self.mercy_finale_ui_fades = nil
     self.mercy_finale_reason = reason
     self:handleMercyFinaleMusic(battle)
 
@@ -198,6 +208,165 @@ end
 
 function Kris:isMercyFinalePostlude()
     return self.mercy_finale_postlude == true
+end
+
+function Kris:isMercyFinaleDetached()
+    return self.mercy_finale_detached == true
+end
+
+function Kris:requestMercyFinaleLeave(battler)
+    if not self.mercy_finale_postlude or self.mercy_finale_detached then
+        return
+    end
+
+    self.mercy_finale_leave_requested = true
+
+    local battle = Game.battle
+    local action = battle and battle:getActionBy(battler)
+    if action then
+        -- Leave has no text to advance, so finish the ACT directly. The
+        -- detached state is entered after the normal ACT end animation.
+        battle:finishAction(action)
+    end
+end
+
+function Kris:addMercyFinaleUiFade(object)
+    if not object then
+        return
+    end
+
+    self.mercy_finale_ui_fades = self.mercy_finale_ui_fades or {}
+    local fx = object:getFX("mercy_finale_detached_ui")
+    if not fx then
+        fx = object:addFX(AlphaFX(1), "mercy_finale_detached_ui")
+    end
+    table.insert(self.mercy_finale_ui_fades, fx)
+end
+
+function Kris:fadeMercyFinaleUi(battle)
+    self.mercy_finale_ui_alpha = 1
+    self.mercy_finale_ui_fades = {}
+
+    self:addMercyFinaleUiFade(battle.battle_ui)
+    self:addMercyFinaleUiFade(battle.tension_bar)
+
+    if battle.battle_ui then
+        self:addMercyFinaleUiFade(battle.battle_ui.encounter_text)
+        self:addMercyFinaleUiFade(battle.battle_ui.choice_box)
+        self:addMercyFinaleUiFade(battle.battle_ui.short_act_text_1)
+        self:addMercyFinaleUiFade(battle.battle_ui.short_act_text_2)
+        self:addMercyFinaleUiFade(battle.battle_ui.short_act_text_3)
+    end
+end
+
+function Kris:playMercyFinaleDetachedAnimation(battle)
+    local enemy = self:getKrisEnemy()
+    if enemy then
+        enemy:setAnimation({
+            "put_back",
+            1 / 15,
+            false,
+            frames = { 1 },
+            callback = function(sprite)
+                sprite:setFrame(1)
+                sprite:pause()
+            end,
+        })
+    end
+
+    local vessel = battle:getPartyBattler("vessel")
+    if not vessel then
+        return
+    end
+
+    vessel.defending = false
+    if enemy then
+        local defeat_layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.5
+        if self.mercy_finale and defeat_layer >= self.mercy_finale.layer then
+            defeat_layer = self.mercy_finale.layer - 0.5
+        end
+        vessel:setLayer(defeat_layer)
+    end
+    vessel:setAnimation({
+        "battle/defeat",
+        1 / 15,
+        false,
+        frames = { "1-10" },
+        callback = function(sprite)
+            -- Keep the final defeat pose even if the animation is interrupted.
+            sprite:setFrame(10)
+            sprite:pause()
+        end,
+    })
+end
+
+function Kris:enterMercyFinaleDetached()
+    if self.mercy_finale_detached then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.mercy_finale_detached = true
+    self.mercy_finale_leave_requested = false
+    self.mercy_finale_enemy_turn = false
+    self.mercy_finale_enemy_turn_time = 0
+
+    if battle.battle_ui then
+        battle.battle_ui:clearEncounterText()
+        battle.battle_ui.choice_box.visible = false
+        battle.battle_ui.short_act_text_1:setText("")
+        battle.battle_ui.short_act_text_2:setText("")
+        battle.battle_ui.short_act_text_3:setText("")
+    end
+    battle:clearMenuItems()
+    battle:hideTargets()
+    if battle.arena then
+        battle.arena:remove()
+        battle.arena = nil
+    end
+    battle.current_selecting = 0
+
+    self:playMercyFinaleDetachedAnimation(battle)
+    self:fadeMercyFinaleUi(battle)
+    battle:setState("MERCY_FINALE_DETACHED", "MERCY_FINALE_LEAVE")
+end
+
+function Kris:updateMercyFinaleDetached()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    local vessel = battle:getPartyBattler("vessel")
+    if vessel then
+        local dx = (Input.down("right") and 1 or 0) - (Input.down("left") and 1 or 0)
+        local dy = (Input.down("down") and 1 or 0) - (Input.down("up") and 1 or 0)
+        if dx ~= 0 or dy ~= 0 then
+            local length = math.sqrt(dx * dx + dy * dy)
+            local speed = MERCY_FINALE_DETACHED_MOVE_SPEED * DTMULT / length
+            vessel.x = vessel.x + dx * speed
+            vessel.y = vessel.y + dy * speed
+        end
+
+        local x_margin = (vessel.width * vessel.scale_x) / 2
+        local y_margin = vessel.height * vessel.scale_y
+        vessel.x = MathUtils.clamp(vessel.x, x_margin, SCREEN_WIDTH - x_margin)
+        vessel.y = MathUtils.clamp(vessel.y, y_margin, SCREEN_HEIGHT - 4)
+    end
+
+    if self.mercy_finale_ui_fades then
+        self.mercy_finale_ui_alpha = math.max(
+            0,
+            self.mercy_finale_ui_alpha - DT / MERCY_FINALE_UI_FADE_TIME
+        )
+        for _, fx in ipairs(self.mercy_finale_ui_fades) do
+            fx.alpha = self.mercy_finale_ui_alpha
+        end
+    end
 end
 
 function Kris:clearMercyFinaleHighlights()
@@ -362,6 +531,11 @@ end
 
 function Kris:onActionsEnd()
     if self.mercy_finale_active then
+        return true
+    end
+
+    if self.mercy_finale_leave_requested then
+        self:enterMercyFinaleDetached()
         return true
     end
 
@@ -900,6 +1074,10 @@ end
 
 function Kris:update()
     super.update(self)
+
+    if self.mercy_finale_detached then
+        self:updateMercyFinaleDetached()
+    end
 
     if self.mercy_finale_enemy_turn then
         self.mercy_finale_enemy_turn_time = self.mercy_finale_enemy_turn_time - DT
