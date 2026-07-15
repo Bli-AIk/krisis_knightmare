@@ -18,7 +18,7 @@ function SeedPasscodeMenu:init(on_submit, on_cancel, initial_seed)
     self.font = Assets.getFont("main")
     self.small_font = Assets.getFont("main", 16)
 
-    self.passcodebox = Passcodebox(56, 250, 529, 104, {
+    self.passcodebox = Passcodebox(56, 226, 529, 104, {
         check_correct = false,
         spacing = 9,
         color = COLORS.white,
@@ -63,11 +63,11 @@ function SeedPasscodeMenu:draw()
     local old_font = love.graphics.getFont()
     love.graphics.setFont(self.font)
     Draw.setColor(COLORS.white)
-    Draw.printAlign(loc("SEED", "seed_passcode.title"), SCREEN_WIDTH / 2, 176, "center")
+    Draw.printAlign(loc("SEED", "seed_passcode.title"), SCREEN_WIDTH / 2, 128, "center")
 
     love.graphics.setFont(self.small_font)
     Draw.setColor(COLORS.gray)
-    Draw.printAlign(loc("RANDOM SEED", "seed_passcode.subtitle"), SCREEN_WIDTH / 2, 202, "center")
+    Draw.printAlign(loc("RANDOM SEED", "seed_passcode.subtitle"), SCREEN_WIDTH / 2, 178, "center")
     love.graphics.setFont(old_font)
 
     super.draw(self)
