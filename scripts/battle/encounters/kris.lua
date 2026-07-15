@@ -29,10 +29,28 @@ local MERCY_FINALE_MUSIC_FADE_TIME = 0.25
 local MERCY_FINALE_MUSIC_END_WINDOW = 1
 local MERCY_FINALE_ENEMY_TURN_DURATION = 5
 local MERCY_FINALE_UI_FADE_TIME = 3
-local MERCY_FINALE_DETACHED_MOVE_SPEED = 3
+local MERCY_FINALE_SOUL_MOVE_SPEED = 4
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
+end
+
+local MercyFinaleActionBoxMask, action_box_mask_super = Class(Object)
+
+function MercyFinaleActionBoxMask:init(action_box)
+    action_box_mask_super.init(self, 0, action_box.box.y)
+
+    self.action_box = action_box
+    self.layer = 0.5
+end
+
+function MercyFinaleActionBoxMask:update()
+    self.y = self.action_box.box.y
+end
+
+function MercyFinaleActionBoxMask:draw()
+    Draw.setColor(0, 0, 0, 1)
+    love.graphics.rectangle("fill", 2, 2, 209, 35)
 end
 
 local MercyFinaleActionBoxBorder, action_box_border_super = Class(Object)
@@ -343,7 +361,6 @@ function Kris:enterMercyFinaleDetached()
     self.mercy_finale_leave_requested = false
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
-
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
@@ -360,6 +377,7 @@ function Kris:enterMercyFinaleDetached()
         local action_box = battle.battle_ui and battle.battle_ui.action_boxes[vessel_index]
         if action_box then
             action_box.box.y = -32
+            action_box:addChild(MercyFinaleActionBoxMask(action_box))
             action_box:addChild(MercyFinaleActionBoxBorder(action_box))
         end
     end
@@ -377,13 +395,19 @@ function Kris:updateMercyFinaleDetached()
 
     local vessel = battle:getPartyBattler("vessel")
     if vessel then
-        local dx = (Input.down("right") and 1 or 0) - (Input.down("left") and 1 or 0)
-        local dy = (Input.down("down") and 1 or 0) - (Input.down("up") and 1 or 0)
-        if dx ~= 0 or dy ~= 0 then
-            local length = math.sqrt(dx * dx + dy * dy)
-            local speed = MERCY_FINALE_DETACHED_MOVE_SPEED * DTMULT / length
-            vessel.x = vessel.x + dx * speed
-            vessel.y = vessel.y + dy * speed
+        local speed = MERCY_FINALE_SOUL_MOVE_SPEED
+        if Input.down("cancel") then
+            speed = speed / 2
+        end
+
+        local move_x, move_y = 0, 0
+        if Input.down("left") then move_x = move_x - 1 end
+        if Input.down("right") then move_x = move_x + 1 end
+        if Input.down("up") then move_y = move_y - 1 end
+        if Input.down("down") then move_y = move_y + 1 end
+
+        if move_x ~= 0 or move_y ~= 0 then
+            vessel:move(move_x, move_y, speed * DTMULT)
         end
 
         local x_margin = (vessel.width * vessel.scale_x) / 2

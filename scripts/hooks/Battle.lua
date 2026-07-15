@@ -62,7 +62,6 @@ function Battle:onKeyPressed(key)
         -- battle state. Direction keys remain available to the encounter's
         -- held-input movement logic.
         Input.clear("confirm", true)
-        Input.clear("cancel", true)
         Input.clear("menu", true)
         return
     end
