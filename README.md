@@ -81,6 +81,22 @@
 
 3. 启动 Kristal，在模组选择中选择 **krisis_knightmare**。
 
+## 调试 CLI
+
+本 mod 启用了 `terminal-cli` library。使用 `just run` 在当前终端启动，或使用
+`just term` 在独立终端启动；游戏窗口和该终端会共享同一个 Kristal debug console。
+
+在终端中输入 Lua 表达式或语句即可操作当前游戏状态，例如：
+
+```text
+=Game.world.player.x
+Game.world.player:setPosition(160, 120)
+```
+
+终端命令会进入游戏内 console 的历史记录，游戏 GUI 中输入的命令也会同步回终端。
+library 默认只在 dev mode 启用，可在 `mod.json` 的 `terminal-cli` 配置中关闭或调整
+`max_commands_per_frame`。
+
 ## 参与贡献
 
 欢迎提交 Issue 或 Pull Request。

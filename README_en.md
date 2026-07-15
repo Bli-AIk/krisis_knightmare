@@ -81,6 +81,25 @@ This project is a fan-game adaptation of the Bilibili animation [KRISIS KNIGHTMA
 
 3. Launch Kristal and select **krisis_knightmare** from the mod menu.
 
+## Debug CLI
+
+This mod enables the `terminal-cli` library. Run `just run` in the current terminal,
+or use `just term` to launch a separate terminal. The terminal and the game window
+share the same Kristal debug console.
+
+Enter Lua expressions or statements in the terminal to inspect and change the live
+game state, for example:
+
+```text
+=Game.world.player.x
+Game.world.player:setPosition(160, 120)
+```
+
+Terminal commands are added to the in-game console history, and commands entered in
+the game GUI are echoed back to the terminal. The library is enabled only in dev mode
+by default; disable it or change `max_commands_per_frame` in the `terminal-cli` section
+of `mod.json` as needed.
+
 ## Contributing
 
 Issues and Pull Requests are welcome.

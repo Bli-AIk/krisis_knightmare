@@ -97,6 +97,11 @@
             "wheel_rotate_step": 5,
             "max_undo": 64
         },
+        "terminal-cli": {
+            "enabled": true,
+            "only_dev": true,
+            "max_commands_per_frame": 8
+        },
         "wave-video-debug": {
             "enabled": false,
             //"enabled": true,
