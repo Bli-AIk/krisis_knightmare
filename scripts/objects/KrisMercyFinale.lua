@@ -20,6 +20,9 @@ local LIGHT_MIN_SCALE = 0.05
 local LIGHT_GROW_DURATION = 1
 local LIGHT_SPRITE = "battle/light"
 local LIGHT_OFFSET_X = 16
+local LIGHT_BRIGHTNESS = 1.15
+local LIGHT_BREATH_AMPLITUDE = 0.025
+local LIGHT_BREATH_SPEED = 2
 
 local function clamp(value, min, max)
     return math.max(min, math.min(max, value))
@@ -261,6 +264,7 @@ function KrisMercyFinale:spawnPlayerLight()
         y = y,
         scale = LIGHT_MIN_SCALE,
         alpha = 1,
+        time = 0,
     }
     self.phase = "LIGHT"
     self.phase_time = 0
@@ -280,6 +284,10 @@ end
 function KrisMercyFinale:update()
     super.update(self)
     self:syncLayer()
+
+    if self.player_light then
+        self.player_light.time = self.player_light.time + DT
+    end
 
     if self.phase == "READY" then
         return
@@ -362,12 +370,18 @@ function KrisMercyFinale:drawBlackScreen()
         return
     end
 
-    local width = self.light_texture:getWidth() * self.player_light.scale
-    local height = self.light_texture:getHeight() * self.player_light.scale
+    local breathing = 1 + math.sin(self.player_light.time * LIGHT_BREATH_SPEED)
+        * LIGHT_BREATH_AMPLITUDE
+    local scale = self.player_light.scale * breathing
+    local width = self.light_texture:getWidth() * scale
+    local height = self.light_texture:getHeight() * scale
     self.light_mask_shader:send("light_texture", self.light_texture)
     self.light_mask_shader:send("light_center", { self.player_light.x, self.player_light.y })
     self.light_mask_shader:send("light_size", { width, height })
-    self.light_mask_shader:send("light_strength", self.player_light.alpha)
+    self.light_mask_shader:send(
+        "light_strength",
+        self.player_light.alpha * LIGHT_BRIGHTNESS
+    )
 
     local old_shader = love.graphics.getShader()
     love.graphics.setShader(self.light_mask_shader)

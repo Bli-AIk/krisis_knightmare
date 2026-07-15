@@ -208,10 +208,7 @@ function Kris:applyLocalization(update_acts)
     self.act_check_description = Game:loc("Consider\nstrategy", "act_kris_check_description")
     self.act_mercy_finale_view = Game:loc("View", "act_kris_mercy_finale_view")
     self.act_mercy_finale_leave = Game:loc("Leave", "act_kris_mercy_finale_leave")
-    self.act_mercy_finale_view_text = Game:loc(
-        "* But nobody came.",
-        "act_kris_mercy_finale_view_text"
-    )
+    self.act_mercy_finale_view_text = Game:loc("", "act_kris_mercy_finale_view_text")
     self.act_mercy_finale_leave_text = ""
     self.act_recharge = Game:loc("Recharge", "act_kris_recharge")
     self.act_recharge_description = Game:loc("SHINE", "act_kris_recharge_description")

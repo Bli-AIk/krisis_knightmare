@@ -214,10 +214,6 @@ function Kris:startMercyFinaleEnemyTurn()
     -- the postlude, with all player input ignored by Battle's state handler.
     if battle.battle_ui then
         battle.battle_ui:clearEncounterText()
-        battle.battle_ui:transitionOut()
-    end
-    if battle.tension_bar then
-        battle.tension_bar:hide()
     end
     battle:hideTargets()
     if battle.arena then
@@ -236,6 +232,11 @@ function Kris:finishMercyFinaleEnemyTurn()
 
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
+
+    local enemy = self:getKrisEnemy()
+    if enemy then
+        enemy:resetSprite()
+    end
 
     -- nextTurn() is entered synchronously by ACTIONSELECT while the
     -- narration guard is active, so this turn remains textless.
