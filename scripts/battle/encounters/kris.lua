@@ -28,11 +28,34 @@ local FAST_SPEED = 4 / 30
 local MERCY_FINALE_MUSIC_FADE_TIME = 0.25
 local MERCY_FINALE_MUSIC_END_WINDOW = 1
 local MERCY_FINALE_ENEMY_TURN_DURATION = 5
-local MERCY_FINALE_UI_FADE_TIME = 0.9
+local MERCY_FINALE_UI_FADE_TIME = 3
 local MERCY_FINALE_DETACHED_MOVE_SPEED = 3
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
+end
+
+local MercyFinaleActionBoxBorder, action_box_border_super = Class(Object)
+
+function MercyFinaleActionBoxBorder:init(action_box)
+    action_box_border_super.init(self, 0, action_box.box.y)
+
+    self.action_box = action_box
+    self.layer = 2
+end
+
+function MercyFinaleActionBoxBorder:update()
+    self.y = self.action_box.box.y
+end
+
+function MercyFinaleActionBoxBorder:draw()
+    local r, g, b, a = self.action_box.battler.chara:getColor()
+    Draw.setColor(r, g, b, a)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(0, 1, 213, 1)
+    love.graphics.line(1, 1, 1, 36)
+    love.graphics.line(212, 1, 212, 36)
+    Draw.setColor(1, 1, 1, 1)
 end
 
 function Kris:init()
@@ -222,6 +245,15 @@ function Kris:requestMercyFinaleLeave(battler)
     self.mercy_finale_leave_requested = true
 
     local battle = Game.battle
+    local vessel_index = battle and battle:getPartyIndex("vessel")
+    if vessel_index then
+        battle.current_selecting = vessel_index
+        local action_box = battle.battle_ui and battle.battle_ui.action_boxes[vessel_index]
+        if action_box then
+            action_box.box.y = -32
+        end
+    end
+
     local action = battle and battle:getActionBy(battler)
     if action then
         -- Leave has no text to advance, so finish the ACT directly. The
@@ -247,15 +279,12 @@ function Kris:fadeMercyFinaleUi(battle)
     self.mercy_finale_ui_alpha = 1
     self.mercy_finale_ui_fades = {}
 
-    self:addMercyFinaleUiFade(battle.battle_ui)
-    self:addMercyFinaleUiFade(battle.tension_bar)
-
     if battle.battle_ui then
-        self:addMercyFinaleUiFade(battle.battle_ui.encounter_text)
-        self:addMercyFinaleUiFade(battle.battle_ui.choice_box)
-        self:addMercyFinaleUiFade(battle.battle_ui.short_act_text_1)
-        self:addMercyFinaleUiFade(battle.battle_ui.short_act_text_2)
-        self:addMercyFinaleUiFade(battle.battle_ui.short_act_text_3)
+        for _, action_box in ipairs(battle.battle_ui.action_boxes or {}) do
+            -- The display contains only the portrait, name, HP and their
+            -- status panel. Keep the action buttons and battle text visible.
+            self:addMercyFinaleUiFade(action_box.box)
+        end
     end
 end
 
@@ -315,20 +344,25 @@ function Kris:enterMercyFinaleDetached()
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
 
-    if battle.battle_ui then
-        battle.battle_ui:clearEncounterText()
-        battle.battle_ui.choice_box.visible = false
-        battle.battle_ui.short_act_text_1:setText("")
-        battle.battle_ui.short_act_text_2:setText("")
-        battle.battle_ui.short_act_text_3:setText("")
-    end
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
         battle.arena:remove()
         battle.arena = nil
     end
-    battle.current_selecting = 0
+
+    -- The engine clears this index after committing the final action, which
+    -- makes ActionBox retract. Keep the vessel's action strip in its open
+    -- position while the detached state is active.
+    local vessel_index = battle:getPartyIndex("vessel")
+    if vessel_index then
+        battle.current_selecting = vessel_index
+        local action_box = battle.battle_ui and battle.battle_ui.action_boxes[vessel_index]
+        if action_box then
+            action_box.box.y = -32
+            action_box:addChild(MercyFinaleActionBoxBorder(action_box))
+        end
+    end
 
     self:playMercyFinaleDetachedAnimation(battle)
     self:fadeMercyFinaleUi(battle)
