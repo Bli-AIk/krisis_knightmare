@@ -552,7 +552,17 @@ function Kris:hurt(amount, battler, on_defeat, color, show_status, attacked)
     if battler and battler.chara.id == "vessel" then
         local vessel_damage, mercy = getVesselAttackResults(amount)
         if vessel_damage then
+            local old_mercy = self.mercy
             self:addMercy(mercy)
+
+            if self.mercy > old_mercy
+                and Game.battle
+                and Game.battle.encounter
+                and Game.battle.encounter.markKrisAttackMercyIncrease
+            then
+                Game.battle.encounter:markKrisAttackMercyIncrease(self)
+            end
+
             local action = Game.battle and Game.battle.getCurrentAction and Game.battle:getCurrentAction()
             if not action or not action.krisis_vessel_attack_pre_hurt then
                 battler:hurt(vessel_damage, true)

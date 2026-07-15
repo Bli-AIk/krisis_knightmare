@@ -22,6 +22,13 @@ local RECHARGE_RETURN_TARGET_OFFSET_X = -2
 local RECHARGE_RETURN_TARGET_OFFSET_Y = 1
 local PLATFORM_SPRITE = "battle/backgrounds/kris_platform_adjusted"
 local PLATFORM_LIGHT_SPRITE = "battle/backgrounds/kris_platform_light"
+local FULL_MERCY = 100
+local MERCY_FINALE_LAYER = BATTLE_LAYERS["ui"] - 2
+local FAST_SPEED = 4 / 30
+
+local function isAttackAction(action)
+    return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
+end
 
 function Kris:init()
     super.init(self)
@@ -31,12 +38,17 @@ function Kris:init()
     self.background = false
     self.hide_world = true
 
-    self:addEnemy("kris", 507, 239)
+    self.kris_enemy = self:addEnemy("kris", 507, 239)
 
     self.recharge = nil
     self.recharge_soul = nil
     self.recharge_light_radius = nil
     self.recharge_player_light = nil
+    self.mercy_finale = nil
+    self.mercy_finale_started = false
+    self.mercy_attack_increased = false
+    self.mercy_attack_action_started = false
+    self.mercy_before_actions = nil
 end
 
 function Kris:applyLocalization()
@@ -52,12 +64,69 @@ function Kris:getInitialEncounterText()
     return self.text
 end
 
+function Kris:getKrisEnemy()
+    if self.kris_enemy and self.kris_enemy.parent then
+        return self.kris_enemy
+    end
+
+    local battle = Game.battle
+    for _, enemy in ipairs(battle and battle.enemies or {}) do
+        if enemy.actor and enemy.actor.id == "kris" then
+            self.kris_enemy = enemy
+            return enemy
+        end
+    end
+end
+
+function Kris:isFullMercy()
+    local enemy = self:getKrisEnemy()
+    local mercy = enemy and (enemy.mercy or 0) + (enemy.temporary_mercy or 0)
+    return enemy and not enemy.done_state and mercy >= FULL_MERCY
+end
+
+function Kris:markKrisAttackMercyIncrease(enemy)
+    if enemy == self:getKrisEnemy() then
+        self.mercy_attack_increased = true
+    end
+end
+
+function Kris:tryStartMercyFinale(reason)
+    if self.mercy_finale_started or not self:isFullMercy() then
+        return false
+    end
+
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy then
+        return false
+    end
+
+    self.mercy_finale_started = true
+    self.mercy_finale_reason = reason
+
+    enemy:setAnimation({ "twist", FAST_SPEED, true })
+
+    self.mercy_finale = KrisMercyFinale(enemy, {
+        layer = MERCY_FINALE_LAYER,
+    })
+    battle:addChild(self.mercy_finale)
+    return true
+end
+
 function Kris:onBattleStart()
     local initial_tp = Game:getConfig("krisisInitialTP")
     if initial_tp ~= nil then
         initial_tp = tonumber(initial_tp)
         if initial_tp then
             Game:setTension(initial_tp)
+        end
+    end
+
+    local initial_mercy = Game:getConfig("krisisInitialMercy")
+    if initial_mercy ~= nil then
+        local enemy = self:getKrisEnemy()
+        if enemy then
+            enemy.mercy = MathUtils.clamp(tonumber(initial_mercy) or 0, 0, 100)
         end
     end
 
@@ -72,6 +141,10 @@ function Kris:onBattleStart()
             capture = Game:getConfig("krisisDebugRechargeRadialCapture"),
             quit_after_capture = Game:getConfig("krisisDebugRechargeRadialQuit"),
         })
+    end
+
+    if self:isFullMercy() then
+        self:tryStartMercyFinale("battle_start")
     end
 end
 
@@ -91,22 +164,73 @@ function Kris:startFinisherBattle()
 end
 
 function Kris:onTurnEnd()
-    local recharge = self.recharge
-    if not recharge or recharge.draining or recharge.expiring then
-        return
+    if not self.mercy_finale_started and self:isFullMercy() then
+        self:tryStartMercyFinale("turn_end")
+        return true
     end
 
-    recharge.turns_remaining = math.max((recharge.turns_remaining or 1) - 1, 0)
-    if recharge.turns_remaining <= 0 then
-        recharge.expiring = true
-        if recharge.enemy and recharge.enemy.finishRechargeWavePhaseAdvance then
-            recharge.enemy:finishRechargeWavePhaseAdvance()
+    local recharge = self.recharge
+    if recharge and not recharge.draining and not recharge.expiring then
+        recharge.turns_remaining = math.max((recharge.turns_remaining or 1) - 1, 0)
+        if recharge.turns_remaining <= 0 then
+            recharge.expiring = true
+            if recharge.enemy and recharge.enemy.finishRechargeWavePhaseAdvance then
+                recharge.enemy:finishRechargeWavePhaseAdvance()
+            end
+        end
+    end
+end
+
+function Kris:onActionsEnd()
+    if self.mercy_finale_started then
+        return true
+    end
+
+    local enemy = self:getKrisEnemy()
+    local mercy_increased = self.mercy_attack_increased
+    if not mercy_increased
+        and self.mercy_attack_action_started
+        and self.mercy_before_actions ~= nil
+        and enemy
+    then
+        mercy_increased = (enemy.mercy or 0) > self.mercy_before_actions
+    end
+
+    if mercy_increased and self:isFullMercy()
+        and self:tryStartMercyFinale("attack")
+    then
+        return true
+    end
+end
+
+function Kris:beforeStateChange(old, new, reason)
+    if self.mercy_finale_started then
+        return true
+    end
+end
+
+function Kris:onActionsStart()
+    self.mercy_attack_increased = false
+    self.mercy_attack_action_started = false
+
+    local enemy = self:getKrisEnemy()
+    self.mercy_before_actions = enemy and enemy.mercy or nil
+
+    local battle = Game.battle
+    for _, action in pairs(battle and battle.character_actions or {}) do
+        if isAttackAction(action) then
+            self.mercy_attack_action_started = true
+            break
         end
     end
 end
 
 function Kris:onStateChange(old, new, reason)
-    if new == "ACTIONSELECT" then
+    if new == "ATTACKING" then
+        local battle = Game.battle
+        self.mercy_attack_action_started = self.mercy_attack_action_started
+            or (battle and #battle.attackers > 0 or false)
+    elseif new == "ACTIONSELECT" then
         self:beginRechargeDrain()
     elseif new == "DEFENDINGBEGIN" or new == "DEFENDING" then
         self:updateRechargeLight()

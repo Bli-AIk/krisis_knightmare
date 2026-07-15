@@ -221,6 +221,15 @@ local function parseNonNegativeNumber(value)
     return number
 end
 
+local function parseMercyValue(value)
+    local number = tonumber(value)
+    if not number or number < 0 or number > 100 then
+        return nil
+    end
+
+    return number
+end
+
 local function chapterNameKey(index)
     return "chapter_select.chapter_" .. tostring(index) .. "_name"
 end
@@ -349,6 +358,11 @@ function Mod:getConfig(key)
         self:loadKrisisRunOptions()
         if self.krisis_run_initial_tp ~= nil then
             return self.krisis_run_initial_tp
+        end
+    elseif key == "krisisInitialMercy" then
+        self:loadKrisisRunOptions()
+        if self.krisis_run_initial_mercy ~= nil then
+            return self.krisis_run_initial_mercy
         end
     elseif key == "krisisDebugRechargeRadial" then
         return envFlag("KRISIS_DEBUG_RECHARGE_RADIAL")
@@ -943,6 +957,10 @@ function Mod:loadKrisisRunOptions()
     if not has_initial_tp then
         initial_tp, has_initial_tp = getKristalArg("initial-tp")
     end
+    local initial_mercy, has_initial_mercy = getKristalArg("mercy")
+    if not has_initial_mercy then
+        initial_mercy, has_initial_mercy = getKristalArg("initial-mercy")
+    end
 
     if has_wave then
         self.krisis_run_wave = parsePositiveInteger(wave)
@@ -965,7 +983,15 @@ function Mod:loadKrisisRunOptions()
         end
     end
 
-    if (self.krisis_run_wave or self.krisis_run_wave_force or self.krisis_run_initial_tp ~= nil)
+    if has_initial_mercy then
+        self.krisis_run_initial_mercy = parseMercyValue(initial_mercy)
+        if self.krisis_run_initial_mercy == nil then
+            print("Ignoring invalid --mercy value: " .. tostring(initial_mercy))
+        end
+    end
+
+    if (self.krisis_run_wave or self.krisis_run_wave_force or self.krisis_run_initial_tp ~= nil
+        or self.krisis_run_initial_mercy ~= nil)
         and not has_encounter
     then
         self:setTemporaryDefaultBattleEntry("kris")
