@@ -200,6 +200,43 @@ function Kris:isMercyFinalePostlude()
     return self.mercy_finale_postlude == true
 end
 
+function Kris:clearMercyFinaleHighlights()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    for _, battler in ipairs(battle.enemies or {}) do
+        if battler.highlight then
+            battler.highlight.amount = 0
+        end
+        battler.flash_timer = 0
+        battler.last_highlighted = false
+    end
+
+    for _, battler in ipairs(battle.party or {}) do
+        if battler.highlight then
+            battler.highlight.amount = 0
+        end
+        battler.flash_timer = 0
+        battler.last_highlighted = false
+    end
+end
+
+function Kris:resetMercyFinalePlayerSprites()
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    for _, battler in ipairs(battle.party or {}) do
+        battler.defending = false
+        if battler.sprite and battler.sprite.anim ~= "battle/idle" then
+            battler:resetSprite()
+        end
+    end
+end
+
 function Kris:startMercyFinaleEnemyTurn()
     local battle = Game.battle
     if not battle then
@@ -236,6 +273,16 @@ function Kris:finishMercyFinaleEnemyTurn()
     local enemy = self:getKrisEnemy()
     if enemy then
         enemy:resetSprite()
+    end
+
+    for _, battler in ipairs(battle.party or {}) do
+        local was_defending = battler.defending
+        battler.defending = false
+        if was_defending
+            or (battler.sprite and battler.sprite.anim == "battle/defend")
+        then
+            battler:resetSprite()
+        end
     end
 
     -- nextTurn() is entered synchronously by ACTIONSELECT while the
@@ -369,6 +416,10 @@ function Kris:onStateChange(old, new, reason)
             or (battle and #battle.attackers > 0 or false)
     elseif new == "ACTIONSELECT" then
         self:beginRechargeDrain()
+        if self.mercy_finale_postlude then
+            self:resetMercyFinalePlayerSprites()
+            self:clearMercyFinaleHighlights()
+        end
     elseif new == "DEFENDINGBEGIN" or new == "DEFENDING" then
         self:updateRechargeLight()
     elseif new == "DEFENDINGEND" then
@@ -414,6 +465,7 @@ function Kris:onEnemySelect(state_reason, enemy_index)
 
     local enemy = battle:_getEnemyByIndex(enemy_index)
     if self.mercy_finale_postlude then
+        self:clearMercyFinaleHighlights()
         battle:clearMenuItems()
         battle:addMenuItem({
             ["name"] = enemy.act_mercy_finale_view,
