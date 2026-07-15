@@ -97,6 +97,15 @@ jobs:
           unzip -l dist/krisis-knightmare-release-win64.zip | grep -F "KRISIS-KNIGHTMARE-release.exe"
           unzip -l dist/krisis-knightmare-debug-win64.zip | grep -F "KRISIS-KNIGHTMARE-debug.exe"
 
+      - name: Generate and verify SHA-256 manifest
+        run: |
+          set -euo pipefail
+
+          .github/scripts/generate_sha256sums.sh dist
+          test -s dist/SHA256SUMS
+          test "$(wc -l < dist/SHA256SUMS)" -eq 4
+          (cd dist && sha256sum -c SHA256SUMS)
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -106,6 +115,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/SHA256SUMS
           if-no-files-found: error
 
       - name: Upload release assets
@@ -121,6 +131,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/SHA256SUMS
           )
           release_flags=()
 
@@ -130,10 +141,16 @@ jobs:
             release_flags+=(--prerelease)
           fi
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --title "$title" "${release_flags[@]}"
-          else
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --title "$title" --generate-notes "${release_flags[@]}"
           fi
+
+          gh release view "$RELEASE_TAG" --json body --jq '.body' > existing_release_notes.md
+          .github/scripts/prepare_release_notes.sh \
+            "$RELEASE_TAG" existing_release_notes.md release_notes_with_security.md
+          gh release edit "$RELEASE_TAG" \
+            --title "$title" \
+            --notes-file release_notes_with_security.md \
+            "${release_flags[@]}"
 
           gh release upload "$RELEASE_TAG" "${files[@]}" --clobber

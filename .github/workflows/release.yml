@@ -74,6 +74,15 @@ jobs:
           unzip -l dist/krisis-knightmare-release-win64.zip | grep -F "KRISIS-KNIGHTMARE-release.exe"
           unzip -l dist/krisis-knightmare-debug-win64.zip | grep -F "KRISIS-KNIGHTMARE-debug.exe"
 
+      - name: Generate and verify SHA-256 manifest
+        run: |
+          set -euo pipefail
+
+          .github/scripts/generate_sha256sums.sh dist
+          test -s dist/SHA256SUMS
+          test "$(wc -l < dist/SHA256SUMS)" -eq 4
+          (cd dist && sha256sum -c SHA256SUMS)
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -83,6 +92,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/SHA256SUMS
           if-no-files-found: error
 
       - name: Generate release notes
@@ -104,6 +114,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/SHA256SUMS
           )
           release_flags=()
 
@@ -114,7 +125,18 @@ jobs:
           fi
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "$title" "${release_flags[@]}"
+            gh release view "$GITHUB_REF_NAME" --json body --jq '.body' > existing_release_notes.md
+            notes_source=existing_release_notes.md
+            if [ ! -s "$notes_source" ]; then
+              notes_source=release_notes.md
+            fi
+            .github/scripts/prepare_release_notes.sh \
+              "$GITHUB_REF_NAME" "$notes_source" release_notes_with_security.md
+
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "$title" \
+              --notes-file release_notes_with_security.md \
+              "${release_flags[@]}"
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
           else
             gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "$title" --notes-file release_notes.md "${release_flags[@]}"
