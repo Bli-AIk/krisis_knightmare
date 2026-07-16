@@ -578,22 +578,10 @@ function Kris:showMercyFinalePutBackHeart()
     end
 
     local x, y = self.mercy_finale:getEnemyOrigin()
-    local burst = HeartBurst(x - 2, y + 1, { 1, 1, 1 })
+    local burst = HeartBurst(x - 2, y + 1, { 1, 0, 0 })
     burst.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.1
     battle:addChild(burst)
     self.mercy_finale_put_back_heart_shown = true
-end
-
-local function getMercyFinaleTextWidth(text)
-    local font = Assets.getFont("main_mono")
-    local scale = Assets.getFontScale("main_mono")
-    local width = 0
-
-    for line in string.gmatch(text, "[^\n]+") do
-        width = math.max(width, font:getWidth(line) * scale)
-    end
-
-    return width
 end
 
 function Kris:showMercyFinaleFinalNarration()
@@ -617,7 +605,6 @@ function Kris:showMercyFinaleFinalNarration()
     local left_x = encounter_text.x + encounter_text.text_x
     local text_y = encounter_text.y + encounter_text.text_y
     local right_edge = SCREEN_WIDTH - 30 - MERCY_FINALE_RIGHT_TEXT_OFFSET_X
-    local right_width = getMercyFinaleTextWidth(self.mercy_finale_promised_text)
     local text_layer = encounter_text.layer + 1
     local style_text = function(text)
         return "[instant][style:none][color:00ff00]"
@@ -647,9 +634,9 @@ function Kris:showMercyFinaleFinalNarration()
 
     local right_text = DialogueText(
         style_text(self.mercy_finale_promised_text),
-        right_edge - right_width,
+        0,
         text_y,
-        right_width + 2,
+        SCREEN_WIDTH,
         SCREEN_HEIGHT,
         {
             font = "main_mono",
@@ -665,6 +652,10 @@ function Kris:showMercyFinaleFinalNarration()
     right_text.auto_advance = false
     right_text.layer = text_layer
     battle:addChild(right_text)
+
+    -- Position using the width after the language hook has added CJK spacing.
+    local right_width = right_text:getTextWidth()
+    right_text.x = math.max(30, right_edge - right_width)
 
     self.mercy_finale_narration_texts = { left_text, right_text }
     self.mercy_finale_detached_phase = "NARRATION"
