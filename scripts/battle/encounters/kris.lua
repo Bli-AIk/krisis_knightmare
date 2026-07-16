@@ -516,10 +516,11 @@ function Kris:handleMercyFinaleDetachedInput(key)
             sprite:pause()
             self.mercy_finale_detached_phase = "LIGHT_FADE"
             if self.mercy_finale then
+                -- Keep Kris visible while the light mask fades away.
+                self.mercy_finale:setEnemyAboveBlackScreen(true)
                 self.mercy_finale:startPlayerLightFade(
                     MERCY_FINALE_LIGHT_FADE_TIME,
                     function(finale)
-                        finale:setEnemyAboveBlackScreen(true)
                         self.mercy_finale_detached_phase = "FINISHED"
                     end
                 )
