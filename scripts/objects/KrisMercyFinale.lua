@@ -22,7 +22,9 @@ local LIGHT_SPRITE = "battle/light"
 local LIGHT_OFFSET_X = 16
 -- Keeps the final defeat pose centered in the player light.
 local DEFEAT_LIGHT_OFFSET_X = 11
-local LIGHT_BRIGHTNESS = 1.15
+-- The light texture's brightest alpha is 128/255, so 2x reaches a clear
+-- center while the softer edge of the mask remains visible.
+local LIGHT_BRIGHTNESS = 2.0
 local LIGHT_BREATH_AMPLITUDE = 0.025
 local LIGHT_BREATH_SPEED = 2
 
