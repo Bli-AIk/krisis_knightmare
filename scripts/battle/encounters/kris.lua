@@ -41,9 +41,11 @@ local MERCY_FINALE_MEMORY_TEXT_DELAY = 2
 local MERCY_FINALE_MEMORY_TEXT_DURATION = 2
 local MERCY_FINALE_FINAL_REINSTALL_DELAY = 2
 local MERCY_FINALE_FINAL_AFTERIMAGE_WAIT = 2
-local MERCY_FINALE_SOUL_GRAB_SPEED = FAST_SPEED
+local MERCY_FINALE_SOUL_GRAB_SPEED = 3 / 30
 local MERCY_FINALE_SOUL_THROW_SPEED = FAST_SPEED
 local MERCY_FINALE_SOUL_IDLE_WAIT = 3
+local MERCY_FINALE_SOUL_GRAB_RETURN_TIME = 0.12
+local MERCY_FINALE_SOUL_GRAB_X_OFFSET = -8
 local MERCY_FINALE_SOUL_AFTERIMAGE_INTERVAL = 0.08
 local MERCY_FINALE_SOUL_AFTERIMAGE_ALPHA = 0.35
 local MERCY_FINALE_SOUL_AFTERIMAGE_FADE_SPEED = 0.045
@@ -89,8 +91,29 @@ local MERCY_FINALE_SOUL_THROW_OFFSETS = {
     { 0, 0 },
 }
 
--- Keep the body position aligned to the animation frame. This intentionally
--- uses stepped positions so the jump reads like the source sprite animation.
+local function easeOutCubic(progress)
+    return 1 - (1 - progress) ^ 3
+end
+
+-- Keep the source key positions while easing between them continuously.
+local function getSmoothSoulMotionOffset(offsets, progress)
+    local segment = MathUtils.clamp(progress or 0, 0, #offsets - 1)
+    local frame_index = math.floor(segment) + 1
+    if frame_index >= #offsets then
+        local final_offset = offsets[#offsets]
+        return final_offset[1], final_offset[2]
+    end
+
+    local offset = offsets[frame_index]
+    local next_offset = offsets[frame_index + 1]
+    local eased_progress = easeOutCubic(segment - math.floor(segment))
+    return
+        offset[1] + (next_offset[1] - offset[1]) * eased_progress,
+        offset[2] + (next_offset[2] - offset[2]) * eased_progress
+end
+
+-- Throw motion uses exact frame-keyed offsets because those frames are
+-- intentionally authored as individual poses.
 local function getSoulMotionOffset(offsets, frame)
     local frame_index = MathUtils.clamp(frame or 1, 1, #offsets)
     local offset = offsets[frame_index]
@@ -1177,17 +1200,19 @@ function Kris:updateMercyFinaleSoulCutscene()
     local offset_x, offset_y = 0, 0
 
     if phase == "SOUL_GRAB" then
-        local frame = enemy.sprite.frame or 1
-        offset_x, offset_y = getSoulMotionOffset(
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        local progress = self.mercy_finale_detached_timer / MERCY_FINALE_SOUL_GRAB_SPEED
+        offset_x, offset_y = getSmoothSoulMotionOffset(
             MERCY_FINALE_SOUL_GRAB_OFFSETS,
-            frame
+            progress
         )
         self:setMercyFinaleSoulSceneEnemyOrigin(
             enemy,
-            target_x + offset_x,
+            target_x + MERCY_FINALE_SOUL_GRAB_X_OFFSET + offset_x,
             target_y + offset_y
         )
 
+        local frame = enemy.sprite.frame or 1
         if frame >= 3 then
             self.mercy_finale_soul_afterimage_timer = self.mercy_finale_soul_afterimage_timer + DT
             while self.mercy_finale_soul_afterimage_timer >= MERCY_FINALE_SOUL_AFTERIMAGE_INTERVAL do
@@ -1198,6 +1223,19 @@ function Kris:updateMercyFinaleSoulCutscene()
         else
             self.mercy_finale_soul_afterimage_timer = 0
         end
+    elseif phase == "SOUL_IDLE" then
+        local return_progress = MathUtils.clamp(
+            self.mercy_finale_detached_timer / MERCY_FINALE_SOUL_GRAB_RETURN_TIME,
+            0,
+            1
+        )
+        local return_offset = MERCY_FINALE_SOUL_GRAB_X_OFFSET
+            * (1 - easeOutCubic(return_progress))
+        self:setMercyFinaleSoulSceneEnemyOrigin(
+            enemy,
+            target_x + return_offset,
+            target_y
+        )
     elseif phase == "SOUL_THROW" then
         local frame = enemy.sprite.frame or 1
         offset_x, offset_y = getSoulMotionOffset(
@@ -1247,7 +1285,7 @@ function Kris:startMercyFinaleSoulCutscene()
     enemy.active = true
     self:setMercyFinaleSoulSceneEnemyOrigin(
         enemy,
-        target_x + first_offset[1],
+        target_x + MERCY_FINALE_SOUL_GRAB_X_OFFSET + first_offset[1],
         target_y + first_offset[2]
     )
     enemy:setAnimation({

@@ -2,6 +2,7 @@ local actor, super = Class(Actor, "kris")
 
 local NORMAL_SPEED = 5 / 30
 local FAST_SPEED = 4 / 30
+local GRAB_SOUL_SPEED = 3 / 30
 
 function actor:init()
     super.init(self)
@@ -24,7 +25,7 @@ function actor:init()
         ["catch_sword"] = { "catch_sword", NORMAL_SPEED, false, next = "idle" },
         ["catch_sword_ready"] = { "catch_sword", NORMAL_SPEED, false, frames = { "1-4" } },
         ["catch_sword_finish"] = { "catch_sword", FAST_SPEED, false, frames = { "5-6" } },
-        ["grab_soul"] = { "grab_soul", NORMAL_SPEED, false, next = "idle" },
+        ["grab_soul"] = { "grab_soul", GRAB_SOUL_SPEED, false, next = "idle" },
         ["throw_soul"] = { "throw_soul", NORMAL_SPEED, false, next = "idle" },
         ["put_back"] = { "put_back", NORMAL_SPEED, false, next = "idle" },
 
