@@ -41,6 +41,15 @@ local MERCY_FINALE_MEMORY_TEXT_DELAY = 2
 local MERCY_FINALE_MEMORY_TEXT_DURATION = 2
 local MERCY_FINALE_FINAL_REINSTALL_DELAY = 2
 local MERCY_FINALE_FINAL_AFTERIMAGE_WAIT = 2
+local MERCY_FINALE_SOUL_GRAB_SPEED = 5 / 30
+local MERCY_FINALE_SOUL_THROW_SPEED = FAST_SPEED
+local MERCY_FINALE_SOUL_IDLE_WAIT = 3
+local MERCY_FINALE_SOUL_AFTERIMAGE_INTERVAL = 0.08
+local MERCY_FINALE_SOUL_AFTERIMAGE_ALPHA = 0.35
+local MERCY_FINALE_SOUL_AFTERIMAGE_FADE_SPEED = 0.045
+local MERCY_FINALE_SOUL_HEART_EXPAND_TIME = 0.18
+local MERCY_FINALE_SOUL_HEART_HOLD_TIME = 1.15
+local MERCY_FINALE_SOUL_HEART_FADE_TIME = 0.25
 local MERCY_FINALE_SCREEN_SHAKE_AMOUNT = 2
 local MERCY_FINALE_SCREEN_SHAKE_PERIOD = 0.25
 local MERCY_FINALE_RIGHT_TEXT_OFFSET_X = 32
@@ -50,6 +59,42 @@ local MERCY_FINALE_PUT_BACK_FRAMES = {
     4, 5, 6, 7,
     8, 9, 10, 11, 12,
 }
+
+-- These offsets are relative to the final center pose. They follow the
+-- reference clip's upper-left grab into a diagonal return to center.
+local MERCY_FINALE_SOUL_GRAB_OFFSETS = {
+    { -65, -82 },
+    { -66, -62 },
+    { -43, -47 },
+    { -19, -26 },
+    { -3, -8 },
+    { 0, 0 },
+}
+
+local MERCY_FINALE_SOUL_THROW_OFFSETS = {
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 },
+    { 0, -4 },
+    { 2, -8 },
+    { 4, -5 },
+    { 6, -8 },
+    { 0, 0 },
+}
+
+-- Keep the body position aligned to the animation frame. This intentionally
+-- uses stepped positions so the jump reads like the source sprite animation.
+local function getSoulMotionOffset(offsets, frame)
+    local frame_index = MathUtils.clamp(frame or 1, 1, #offsets)
+    local offset = offsets[frame_index]
+    return offset[1], offset[2]
+end
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
@@ -281,6 +326,54 @@ function MercyFinaleAfterimage:draw()
     afterimage_super.draw(self)
 end
 
+local MercyFinaleSoulHeart, soul_heart_super = Class(Object)
+
+function MercyFinaleSoulHeart:init(x, y)
+    soul_heart_super.init(self, x, y, 16, 16)
+
+    self.timer = 0
+    self.expand_time = MERCY_FINALE_SOUL_HEART_EXPAND_TIME
+    self.hold_time = MERCY_FINALE_SOUL_HEART_HOLD_TIME
+    self.fade_time = MERCY_FINALE_SOUL_HEART_FADE_TIME
+    self.start_scale = 0.25
+    self.end_scale = 4.5
+
+    self.sprite = Sprite("player/heart")
+    self.sprite:setOrigin(0.5, 0.5)
+    self.sprite:setColor(1, 0, 0, 1)
+    self.sprite:setScale(self.start_scale)
+    self:addChild(self.sprite)
+end
+
+function MercyFinaleSoulHeart:update()
+    self.timer = self.timer + DT
+
+    local scale
+    if self.timer <= self.expand_time then
+        local progress = MathUtils.clamp(self.timer / self.expand_time, 0, 1)
+        scale = self.start_scale + (self.end_scale - self.start_scale) * progress
+    else
+        scale = self.end_scale
+    end
+
+    local fade_start = self.expand_time + self.hold_time
+    if self.timer <= fade_start then
+        self.alpha = 1
+    else
+        local progress = MathUtils.clamp((self.timer - fade_start) / self.fade_time, 0, 1)
+        self.alpha = 1 - progress
+    end
+
+    self.sprite:setScale(scale)
+    self.sprite.alpha = self.alpha
+    if self.alpha <= 0 then
+        self:remove()
+        return
+    end
+
+    soul_heart_super.update(self)
+end
+
 function Kris:init()
     super.init(self)
 
@@ -310,6 +403,9 @@ function Kris:init()
     self.mercy_finale_narration_texts = nil
     self.mercy_finale_memory_line = nil
     self.mercy_finale_afterimage = nil
+    self.mercy_finale_soul_heart = nil
+    self.mercy_finale_soul_afterimage_timer = 0
+    self.mercy_finale_soul_afterimages = {}
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
     self.mercy_finale_screen_shake_restore = nil
@@ -448,6 +544,49 @@ function Kris:tryStartMercyFinale(reason)
     })
     battle:addChild(self.mercy_finale)
     return true
+end
+
+function Kris:startMercyFinaleProceedDebug()
+    if self.mercy_finale_started then
+        return
+    end
+
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy then
+        return
+    end
+
+    self.mercy_finale_started = true
+    self.mercy_finale_active = false
+    self.mercy_finale_ui_released = true
+    self.mercy_finale_postlude = true
+    self.mercy_finale_detached = true
+    self.mercy_finale_leave_requested = false
+    self.mercy_finale_ui_alpha = 1
+    self.mercy_finale_ui_fades = nil
+    self.mercy_finale_detached_phase = "FINAL_AFTERIMAGE_WAIT"
+    self.mercy_finale_detached_timer = 0
+    self.mercy_finale_suppress_narration = true
+
+    self.mercy_finale = KrisMercyFinale(enemy, {
+        layer = MERCY_FINALE_LAYER,
+    })
+    battle:addChild(self.mercy_finale)
+    battle:showUI()
+    battle:clearMenuItems()
+    battle:hideTargets()
+
+    local vessel = battle:getPartyBattler("vessel")
+    if vessel then
+        vessel.visible = false
+        vessel.active = false
+    end
+
+    self.mercy_finale:showFinalBlackScreen()
+    self:showMercyFinaleProceed()
+    battle:setState("MERCY_FINALE_DETACHED", "MERCY_FINALE_DEBUG")
+    self.mercy_finale_suppress_narration = false
 end
 
 function Kris:releaseMercyFinaleToPlayerTurn()
@@ -605,6 +744,11 @@ function Kris:enterMercyFinaleDetached()
         self.mercy_finale_afterimage:remove()
     end
     self.mercy_finale_afterimage = nil
+    if self.mercy_finale_soul_heart and self.mercy_finale_soul_heart.parent then
+        self.mercy_finale_soul_heart:remove()
+    end
+    self.mercy_finale_soul_heart = nil
+    self.mercy_finale_soul_afterimage_timer = 0
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
@@ -752,6 +896,29 @@ function Kris:updateMercyFinaleDetached()
         if self.mercy_finale_detached_timer >= MERCY_FINALE_FINAL_AFTERIMAGE_WAIT then
             self:showMercyFinaleProceed()
         end
+    elseif phase == "SOUL_GRAB" then
+        self:updateMercyFinaleSoulCutscene()
+    elseif phase == "SOUL_IDLE" then
+        self:updateMercyFinaleSoulCutscene()
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_SOUL_IDLE_WAIT then
+            self:startMercyFinaleSoulThrow()
+        end
+    elseif phase == "SOUL_THROW" then
+        self:updateMercyFinaleSoulCutscene()
+    elseif phase == "SOUL_HEART" then
+        self:updateMercyFinaleSoulCutscene()
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_SOUL_HEART_EXPAND_TIME
+            + MERCY_FINALE_SOUL_HEART_HOLD_TIME
+            + MERCY_FINALE_SOUL_HEART_FADE_TIME
+        then
+            local enemy = self:getKrisEnemy()
+            if enemy then
+                enemy:setAnimation({ "idle", 5 / 30, true })
+            end
+            self.mercy_finale_detached_phase = "SOUL_DONE"
+        end
     end
 
     if self.mercy_finale_ui_fades then
@@ -890,6 +1057,205 @@ function Kris:showMercyFinaleAfterimage()
     afterimage.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) - 0.001
     battle:addChild(afterimage)
     self.mercy_finale_afterimage = afterimage
+end
+
+function Kris:getMercyFinaleSoulSceneTarget()
+    return SCREEN_WIDTH / 2 + 10, SCREEN_HEIGHT * 0.43
+end
+
+function Kris:setMercyFinaleSoulSceneEnemyOrigin(enemy, x, y)
+    if not enemy or not enemy.sprite then
+        return
+    end
+
+    local sprite = enemy.sprite
+    local scale_x = enemy.scale_x or 1
+    local scale_y = enemy.scale_y or 1
+    local local_x = (sprite.width / 2) + 4.5
+    local local_y = (sprite.height / 2) + 7
+
+    -- Battlers use a centered/bottom origin; convert the visible sprite anchor
+    -- used by KrisMercyFinale back to the battler position.
+    enemy.x = x - (local_x - enemy.width / 2) * scale_x
+    enemy.y = y - (local_y - enemy.height) * scale_y
+end
+
+function Kris:clearMercyFinaleSoulCutsceneEffects()
+    for _, image in ipairs(self.mercy_finale_soul_afterimages or {}) do
+        if image.parent then
+            image:remove()
+        end
+    end
+    self.mercy_finale_soul_afterimages = {}
+
+    if self.mercy_finale_soul_heart and self.mercy_finale_soul_heart.parent then
+        self.mercy_finale_soul_heart:remove()
+    end
+    self.mercy_finale_soul_heart = nil
+end
+
+function Kris:spawnMercyFinaleSoulAfterimage()
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy or not enemy.parent then
+        return
+    end
+
+    local image = AfterImage(
+        enemy,
+        MERCY_FINALE_SOUL_AFTERIMAGE_ALPHA,
+        MERCY_FINALE_SOUL_AFTERIMAGE_FADE_SPEED
+    )
+    image:addFX(ColorMaskFX({ 0.2, 0, 0 }, 1))
+    image.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) - 0.001
+    battle:addChild(image)
+    table.insert(self.mercy_finale_soul_afterimages, image)
+end
+
+function Kris:updateMercyFinaleSoulCutscene()
+    local enemy = self:getKrisEnemy()
+    if not enemy or not enemy.sprite then
+        return
+    end
+
+    local target_x, target_y = self:getMercyFinaleSoulSceneTarget()
+    local phase = self.mercy_finale_detached_phase
+    local offset_x, offset_y = 0, 0
+
+    if phase == "SOUL_GRAB" then
+        local frame = enemy.sprite.frame or 1
+        offset_x, offset_y = getSoulMotionOffset(
+            MERCY_FINALE_SOUL_GRAB_OFFSETS,
+            frame
+        )
+        self:setMercyFinaleSoulSceneEnemyOrigin(
+            enemy,
+            target_x + offset_x,
+            target_y + offset_y
+        )
+
+        if frame >= 3 then
+            self.mercy_finale_soul_afterimage_timer = self.mercy_finale_soul_afterimage_timer + DT
+            while self.mercy_finale_soul_afterimage_timer >= MERCY_FINALE_SOUL_AFTERIMAGE_INTERVAL do
+                self.mercy_finale_soul_afterimage_timer = self.mercy_finale_soul_afterimage_timer
+                    - MERCY_FINALE_SOUL_AFTERIMAGE_INTERVAL
+                self:spawnMercyFinaleSoulAfterimage()
+            end
+        else
+            self.mercy_finale_soul_afterimage_timer = 0
+        end
+    elseif phase == "SOUL_THROW" then
+        local frame = enemy.sprite.frame or 1
+        offset_x, offset_y = getSoulMotionOffset(
+            MERCY_FINALE_SOUL_THROW_OFFSETS,
+            frame
+        )
+        self:setMercyFinaleSoulSceneEnemyOrigin(
+            enemy,
+            target_x + offset_x,
+            target_y + offset_y
+        )
+    else
+        self:setMercyFinaleSoulSceneEnemyOrigin(enemy, target_x, target_y)
+    end
+end
+
+function Kris:startMercyFinaleSoulCutscene()
+    if self.mercy_finale_detached_phase ~= "PROCEED" then
+        return
+    end
+
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy or not self.mercy_finale then
+        return
+    end
+
+    self:clearMercyFinaleNarrationTexts()
+    self:clearMercyFinaleSoulCutsceneEffects()
+    if battle.battle_ui then
+        battle.battle_ui:clearEncounterText()
+    end
+
+    self.mercy_finale:hideFinalBlackScreen()
+    self.mercy_finale:setEnemyAboveBlackScreen(false)
+    self.mercy_finale_ui_alpha = 1
+    for _, fx in ipairs(self.mercy_finale_ui_fades or {}) do
+        fx.alpha = 1
+    end
+
+    local target_x, target_y = self:getMercyFinaleSoulSceneTarget()
+    local first_offset = MERCY_FINALE_SOUL_GRAB_OFFSETS[1]
+    self.mercy_finale_detached_phase = "SOUL_GRAB"
+    self.mercy_finale_detached_timer = 0
+    self.mercy_finale_soul_afterimage_timer = 0
+    enemy.visible = true
+    enemy.active = true
+    self:setMercyFinaleSoulSceneEnemyOrigin(
+        enemy,
+        target_x + first_offset[1],
+        target_y + first_offset[2]
+    )
+    enemy:setAnimation({
+        "grab_soul",
+        MERCY_FINALE_SOUL_GRAB_SPEED,
+        false,
+        callback = function(sprite)
+            -- Hold throw_soul_1 during the center wait. This custom animation
+            -- has no `next`, so it cannot fall back to the actor's idle pose.
+            sprite:setAnimation({
+                "throw_soul",
+                MERCY_FINALE_SOUL_THROW_SPEED,
+                false,
+                frames = { 1 },
+            })
+            sprite:setFrame(1)
+            sprite:pause()
+            self.mercy_finale_detached_phase = "SOUL_IDLE"
+            self.mercy_finale_detached_timer = 0
+        end,
+    })
+end
+
+function Kris:startMercyFinaleSoulThrow()
+    if self.mercy_finale_detached_phase ~= "SOUL_IDLE" then
+        return
+    end
+
+    local enemy = self:getKrisEnemy()
+    if not enemy then
+        return
+    end
+
+    self.mercy_finale_detached_phase = "SOUL_THROW"
+    self.mercy_finale_detached_timer = 0
+    enemy:setAnimation({
+        "throw_soul",
+        MERCY_FINALE_SOUL_THROW_SPEED,
+        false,
+        frames = { "1-14" },
+        callback = function(sprite)
+            sprite:setFrame(14)
+            sprite:pause()
+            self:spawnMercyFinaleSoulHeart()
+            self.mercy_finale_detached_phase = "SOUL_HEART"
+            self.mercy_finale_detached_timer = 0
+        end,
+    })
+end
+
+function Kris:spawnMercyFinaleSoulHeart()
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy or not self.mercy_finale then
+        return
+    end
+
+    local x, y = self.mercy_finale:getEnemyOrigin()
+    local heart = MercyFinaleSoulHeart(x - 22, y - 16)
+    heart.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.1
+    battle:addChild(heart)
+    self.mercy_finale_soul_heart = heart
 end
 
 function Kris:clearMercyFinaleNarrationTexts()
@@ -1095,7 +1461,17 @@ function Kris:showMercyFinaleReinstallPrompt()
 end
 
 function Kris:handleMercyFinaleDetachedInput(key)
-    if self.mercy_finale_detached_phase ~= "PROMPT" or not Input.isConfirm(key) then
+    if not Input.isConfirm(key) then
+        return
+    end
+
+    if self.mercy_finale_detached_phase == "PROCEED" then
+        Input.clear("confirm", true)
+        self:startMercyFinaleSoulCutscene()
+        return
+    end
+
+    if self.mercy_finale_detached_phase ~= "PROMPT" then
         return
     end
 
@@ -1246,6 +1622,11 @@ function Kris:onBattleStart()
         if enemy.updateRechargeActTPCost then
             enemy:updateRechargeActTPCost()
         end
+    end
+
+    if Mod and Mod.isKrisisRunProceed and Mod:isKrisisRunProceed() then
+        self:startMercyFinaleProceedDebug()
+        return
     end
 
     if Game:getConfig("krisisDebugRechargeRadial") then

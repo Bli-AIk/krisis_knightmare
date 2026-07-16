@@ -358,6 +358,18 @@ function KrisMercyFinale:showFinalBlackScreen()
     end
 end
 
+function KrisMercyFinale:hideFinalBlackScreen()
+    self.black_screen = false
+    self.final_black_screen = false
+    self.phase = "FADED"
+    self.phase_time = 0
+    self.layer = self:getLayerBelowBattleUi(self.battle)
+
+    if self.battle then
+        self.battle.update_child_list = true
+    end
+end
+
 function KrisMercyFinale:update()
     super.update(self)
     self:syncLayer()

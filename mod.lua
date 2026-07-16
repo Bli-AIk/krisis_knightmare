@@ -961,6 +961,9 @@ function Mod:loadKrisisRunOptions()
     if not has_initial_mercy then
         initial_mercy, has_initial_mercy = getKristalArg("initial-mercy")
     end
+    local _, has_proceed = getKristalArg("proceed")
+
+    self.krisis_run_proceed = has_proceed
 
     if has_wave then
         self.krisis_run_wave = parsePositiveInteger(wave)
@@ -991,11 +994,16 @@ function Mod:loadKrisisRunOptions()
     end
 
     if (self.krisis_run_wave or self.krisis_run_wave_force or self.krisis_run_initial_tp ~= nil
-        or self.krisis_run_initial_mercy ~= nil)
+        or self.krisis_run_initial_mercy ~= nil or self.krisis_run_proceed)
         and not has_encounter
     then
         self:setTemporaryDefaultBattleEntry("kris")
     end
+end
+
+function Mod:isKrisisRunProceed()
+    self:loadKrisisRunOptions()
+    return self.krisis_run_proceed == true
 end
 
 function Mod:getKrisisRunWaveOptions()

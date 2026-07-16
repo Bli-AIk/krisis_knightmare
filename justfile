@@ -10,13 +10,14 @@ run *args:
 
     usage() {
       printf '%s\n' \
-        'usage: just run [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n] [--mercy n|-m n]' \
+        'usage: just run [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n] [--mercy n|-m n] [--proceed|-p]' \
         '' \
         '  --encounter, -e       Start directly in an encounter. Defaults to "kris".' \
         '  --wave, -w            Start the encounter from a specific wave number.' \
         '  --wave-force, -wf     Lock the encounter to a specific wave number.' \
         '  --tp, --initial-tp    Set the starting battle TP. Use -tp as shorthand.' \
-        '  --mercy, -m           Set the starting enemy mercy (0-100).'
+        '  --mercy, -m           Set the starting enemy mercy (0-100).' \
+        '  --proceed, -p         Start directly at the final "PROCEED" prompt.'
     }
 
     kristal_args=()
@@ -24,6 +25,7 @@ run *args:
     wave_requested=0
     tp_requested=0
     mercy_requested=0
+    proceed_requested=0
 
     require_value() {
       local flag=$1
@@ -103,6 +105,11 @@ run *args:
           kristal_args+=(--mercy "$(require_value -m "${1#-m}")")
           shift
           ;;
+        --proceed|-p)
+          proceed_requested=1
+          kristal_args+=(--proceed)
+          shift
+          ;;
         --wave-force=*)
           wave_requested=1
           kristal_args+=(--wave-force "$(require_value --wave-force "${1#--wave-force=}")")
@@ -153,7 +160,7 @@ run *args:
       esac
     done
 
-    if { [ "$wave_requested" -eq 1 ] || [ "$tp_requested" -eq 1 ] || [ "$mercy_requested" -eq 1 ]; } && [ "$encounter_requested" -eq 0 ]; then
+    if { [ "$wave_requested" -eq 1 ] || [ "$tp_requested" -eq 1 ] || [ "$mercy_requested" -eq 1 ] || [ "$proceed_requested" -eq 1 ]; } && [ "$encounter_requested" -eq 0 ]; then
       kristal_args+=(--encounter kris)
     fi
 
