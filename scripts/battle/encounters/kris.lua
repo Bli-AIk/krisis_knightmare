@@ -1525,9 +1525,9 @@ function Kris:showMercyFinaleProceed()
     local proceed_spacing = self.mercy_finale_proceed_text == "继续前进" and 2 or 8
     local proceed_text = DialogueText(
         "[instant][voice:none][style:none][color:00ff00]"
-            .. "[image:player/heart:-16:1:2:2][spacing:"
+            .. "[image:player/heart:-96:1:2:2][spacing:"
             .. proceed_spacing
-            .. "][shake:1]"
+            .. "][shake:1] "
             .. self.mercy_finale_proceed_text
             .. "[color:reset][style:reset]",
         0,
