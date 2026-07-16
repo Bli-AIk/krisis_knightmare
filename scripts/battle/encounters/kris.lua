@@ -33,6 +33,12 @@ local MERCY_FINALE_SOUL_MOVE_SPEED = 4
 local MERCY_FINALE_ATTACH_DISTANCE = 18
 local MERCY_FINALE_REINSTALL_DELAY = 1
 local MERCY_FINALE_LIGHT_FADE_TIME = 1
+local MERCY_FINALE_POST_REINSTALL_WAIT = 5
+local MERCY_FINALE_ANGRY_SHAKE_WAIT = 1
+local MERCY_FINALE_NARRATION_WAIT = 1
+local MERCY_FINALE_SCREEN_SHAKE_AMOUNT = 2
+local MERCY_FINALE_SCREEN_SHAKE_PERIOD = 0.25
+local MERCY_FINALE_RIGHT_TEXT_OFFSET_X = 32
 local MERCY_FINALE_PUT_BACK_FRAMES = {
     1, 2, 3,
     4, 5, 6, 7,
@@ -110,6 +116,11 @@ function Kris:init()
     self.mercy_finale_ui_fades = nil
     self.mercy_finale_detached_phase = nil
     self.mercy_finale_detached_timer = 0
+    self.mercy_finale_put_back_heart_shown = false
+    self.mercy_finale_narration_texts = nil
+    self.mercy_finale_screen_shaking = false
+    self.mercy_finale_screen_shake_time = 0
+    self.mercy_finale_screen_shake_restore = nil
     self.mercy_finale_suppress_narration = false
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
@@ -121,6 +132,14 @@ end
 function Kris:applyLocalization()
     self.text = Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1")
     self.mercy_finale_reinstall_text = Game:loc("REINSTALL", "act_kris_mercy_finale_reinstall")
+    self.mercy_finale_do_what_text = Game:loc(
+        "DO WHAT\nYOU SHALL DO",
+        "act_kris_mercy_finale_do_what"
+    )
+    self.mercy_finale_promised_text = Game:loc(
+        "YOU\nPROMISED",
+        "act_kris_mercy_finale_promised"
+    )
 end
 
 function Kris:getInitialEncounterText()
@@ -375,6 +394,9 @@ function Kris:enterMercyFinaleDetached()
     self.mercy_finale_enemy_turn_time = 0
     self.mercy_finale_detached_phase = "MOVING"
     self.mercy_finale_detached_timer = 0
+    self.mercy_finale_put_back_heart_shown = false
+    self.mercy_finale_screen_shaking = false
+    self.mercy_finale_screen_shake_time = 0
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
@@ -409,6 +431,9 @@ function Kris:updateMercyFinaleDetached()
 
     local vessel = battle:getPartyBattler("vessel")
     local phase = self.mercy_finale_detached_phase
+    if self.mercy_finale_screen_shaking then
+        self:updateMercyFinaleScreenShake(battle)
+    end
     if vessel and phase == "MOVING" then
         local speed = MERCY_FINALE_SOUL_MOVE_SPEED
         if Input.down("cancel") then
@@ -461,6 +486,30 @@ function Kris:updateMercyFinaleDetached()
                 self:showMercyFinaleReinstallPrompt()
             end
         end
+    elseif phase == "REINSTALLING" then
+        self:showMercyFinalePutBackHeart()
+    elseif phase == "POST_REINSTALL_WAIT" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_POST_REINSTALL_WAIT then
+            local enemy = self:getKrisEnemy()
+            if enemy then
+                enemy:setAnimation({ "angry_shake", FAST_SPEED, true })
+            end
+            self.mercy_finale_detached_phase = "ANGRY_SHAKE_WAIT"
+            self.mercy_finale_detached_timer = 0
+        end
+    elseif phase == "ANGRY_SHAKE_WAIT" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_ANGRY_SHAKE_WAIT then
+            self:startMercyFinaleScreenShake(battle)
+            self.mercy_finale_detached_phase = "NARRATION_WAIT"
+            self.mercy_finale_detached_timer = 0
+        end
+    elseif phase == "NARRATION_WAIT" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_NARRATION_WAIT then
+            self:showMercyFinaleFinalNarration()
+        end
     end
 
     if self.mercy_finale_ui_fades then
@@ -472,6 +521,153 @@ function Kris:updateMercyFinaleDetached()
             fx.alpha = self.mercy_finale_ui_alpha
         end
     end
+end
+
+function Kris:startMercyFinaleScreenShake(battle)
+    if self.mercy_finale_screen_shaking or not battle or not battle.graphics then
+        return
+    end
+
+    local graphics = battle.graphics
+    self.mercy_finale_screen_shaking = true
+    self.mercy_finale_screen_shake_time = 0
+    self.mercy_finale_screen_shake_restore = {
+        shake_x = graphics.shake_x,
+        shake_y = graphics.shake_y,
+        shake_friction = graphics.shake_friction,
+        shake_delay = graphics.shake_delay,
+        shake_timer = graphics.shake_timer,
+    }
+end
+
+function Kris:updateMercyFinaleScreenShake(battle)
+    if not battle or not battle.graphics then
+        return
+    end
+
+    self.mercy_finale_screen_shake_time = self.mercy_finale_screen_shake_time + DT
+
+    local half_period = MERCY_FINALE_SCREEN_SHAKE_PERIOD / 2
+    local pulse = math.floor(self.mercy_finale_screen_shake_time / half_period) % 2
+    local diagonal = math.floor(self.mercy_finale_screen_shake_time / MERCY_FINALE_SCREEN_SHAKE_PERIOD) % 2
+    local horizontal = pulse == 0 and -1 or 1
+    local vertical
+    if diagonal == 0 then
+        vertical = pulse == 0 and 1 or -1
+    else
+        vertical = pulse == 0 and -1 or 1
+    end
+
+    local graphics = battle.graphics
+    graphics.shake_x = horizontal * MERCY_FINALE_SCREEN_SHAKE_AMOUNT
+    graphics.shake_y = vertical * MERCY_FINALE_SCREEN_SHAKE_AMOUNT
+    graphics.shake_friction = 0
+    graphics.shake_delay = math.huge
+    graphics.shake_timer = 0
+end
+
+function Kris:showMercyFinalePutBackHeart()
+    if self.mercy_finale_put_back_heart_shown then
+        return
+    end
+
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy or not enemy.sprite or enemy.sprite.frame ~= 8 then
+        return
+    end
+
+    local x, y = self.mercy_finale:getEnemyOrigin()
+    local burst = HeartBurst(x - 2, y + 1, { 1, 1, 1 })
+    burst.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.1
+    battle:addChild(burst)
+    self.mercy_finale_put_back_heart_shown = true
+end
+
+local function getMercyFinaleTextWidth(text)
+    local font = Assets.getFont("main_mono")
+    local scale = Assets.getFontScale("main_mono")
+    local width = 0
+
+    for line in string.gmatch(text, "[^\n]+") do
+        width = math.max(width, font:getWidth(line) * scale)
+    end
+
+    return width
+end
+
+function Kris:showMercyFinaleFinalNarration()
+    if self.mercy_finale_detached_phase ~= "NARRATION_WAIT" then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle or not battle.battle_ui then
+        return
+    end
+
+    battle.battle_ui:clearEncounterText()
+    for _, text in ipairs(self.mercy_finale_narration_texts or {}) do
+        if text.parent then
+            text:remove()
+        end
+    end
+
+    local encounter_text = battle.battle_ui.encounter_text
+    local left_x = encounter_text.x + encounter_text.text_x
+    local text_y = encounter_text.y + encounter_text.text_y
+    local right_edge = SCREEN_WIDTH - 30 - MERCY_FINALE_RIGHT_TEXT_OFFSET_X
+    local right_width = getMercyFinaleTextWidth(self.mercy_finale_promised_text)
+    local text_layer = encounter_text.layer + 1
+    local style_text = function(text)
+        return "[instant][style:none][color:00ff00]"
+            .. text
+            .. "[color:reset][style:reset]"
+    end
+
+    local left_text = DialogueText(
+        style_text(self.mercy_finale_do_what_text),
+        left_x,
+        text_y,
+        SCREEN_WIDTH - left_x,
+        SCREEN_HEIGHT,
+        {
+            font = "main_mono",
+            style = "none",
+            color = { 0, 1, 0, 1 },
+            wrap = false,
+            line_offset = 0,
+        }
+    )
+    left_text.skippable = false
+    left_text.can_advance = false
+    left_text.auto_advance = false
+    left_text.layer = text_layer
+    battle:addChild(left_text)
+
+    local right_text = DialogueText(
+        style_text(self.mercy_finale_promised_text),
+        right_edge - right_width,
+        text_y,
+        right_width + 2,
+        SCREEN_HEIGHT,
+        {
+            font = "main_mono",
+            style = "none",
+            color = { 0, 1, 0, 1 },
+            wrap = false,
+            line_offset = 0,
+            align = "left",
+        }
+    )
+    right_text.skippable = false
+    right_text.can_advance = false
+    right_text.auto_advance = false
+    right_text.layer = text_layer
+    battle:addChild(right_text)
+
+    self.mercy_finale_narration_texts = { left_text, right_text }
+    self.mercy_finale_detached_phase = "NARRATION"
 end
 
 function Kris:showMercyFinaleReinstallPrompt()
@@ -502,6 +698,8 @@ function Kris:handleMercyFinaleDetachedInput(key)
 
     Input.clear("confirm", true)
     self.mercy_finale_detached_phase = "REINSTALLING"
+    self.mercy_finale_detached_timer = 0
+    self.mercy_finale_put_back_heart_shown = false
     battle.battle_ui:clearEncounterText()
     vessel.visible = false
     vessel.active = false
@@ -514,16 +712,12 @@ function Kris:handleMercyFinaleDetachedInput(key)
         callback = function(sprite)
             sprite:setFrame(12)
             sprite:pause()
-            self.mercy_finale_detached_phase = "LIGHT_FADE"
+            self.mercy_finale_detached_phase = "POST_REINSTALL_WAIT"
+            self.mercy_finale_detached_timer = 0
             if self.mercy_finale then
                 -- Keep Kris visible while the light mask fades away.
                 self.mercy_finale:setEnemyAboveBlackScreen(true)
-                self.mercy_finale:startPlayerLightFade(
-                    MERCY_FINALE_LIGHT_FADE_TIME,
-                    function(finale)
-                        self.mercy_finale_detached_phase = "FINISHED"
-                    end
-                )
+                self.mercy_finale:startPlayerLightFade(MERCY_FINALE_LIGHT_FADE_TIME)
             end
         end,
     })
