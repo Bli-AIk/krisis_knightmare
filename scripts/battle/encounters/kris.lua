@@ -41,17 +41,18 @@ local MERCY_FINALE_MEMORY_TEXT_DELAY = 2
 local MERCY_FINALE_MEMORY_TEXT_DURATION = 2
 local MERCY_FINALE_FINAL_REINSTALL_DELAY = 2
 local MERCY_FINALE_FINAL_AFTERIMAGE_WAIT = 2
-local MERCY_FINALE_SOUL_GRAB_SPEED = 5 / 30
+local MERCY_FINALE_SOUL_GRAB_SPEED = FAST_SPEED
 local MERCY_FINALE_SOUL_THROW_SPEED = FAST_SPEED
 local MERCY_FINALE_SOUL_IDLE_WAIT = 3
 local MERCY_FINALE_SOUL_AFTERIMAGE_INTERVAL = 0.08
 local MERCY_FINALE_SOUL_AFTERIMAGE_ALPHA = 0.35
 local MERCY_FINALE_SOUL_AFTERIMAGE_FADE_SPEED = 0.045
 local MERCY_FINALE_SOUL_HEART_EXPAND_TIME = 0.18
-local MERCY_FINALE_SOUL_HEART_HOLD_TIME = 1.15
-local MERCY_FINALE_SOUL_HEART_FADE_TIME = 0.25
+local MERCY_FINALE_SOUL_HEART_HOLD_TIME = 5
 local MERCY_FINALE_SCREEN_SHAKE_AMOUNT = 2
 local MERCY_FINALE_SCREEN_SHAKE_PERIOD = 0.25
+local MERCY_FINALE_THROW_SHAKE_AMOUNT = 4
+local MERCY_FINALE_THROW_SHAKE_DURATION = 0.45
 local MERCY_FINALE_RIGHT_TEXT_OFFSET_X = 32
 local MERCY_FINALE_PUT_BACK_FRAMES = {
     1, 2, 3,
@@ -334,13 +335,12 @@ function MercyFinaleSoulHeart:init(x, y)
     self.timer = 0
     self.expand_time = MERCY_FINALE_SOUL_HEART_EXPAND_TIME
     self.hold_time = MERCY_FINALE_SOUL_HEART_HOLD_TIME
-    self.fade_time = MERCY_FINALE_SOUL_HEART_FADE_TIME
     self.start_scale = 0.25
-    self.end_scale = 4.5
 
     self.sprite = Sprite("player/heart")
     self.sprite:setOrigin(0.5, 0.5)
     self.sprite:setColor(1, 0, 0, 1)
+    self.end_scale = math.max(SCREEN_WIDTH, SCREEN_HEIGHT) / self.sprite.width * 2.0
     self.sprite:setScale(self.start_scale)
     self:addChild(self.sprite)
 end
@@ -356,18 +356,12 @@ function MercyFinaleSoulHeart:update()
         scale = self.end_scale
     end
 
-    local fade_start = self.expand_time + self.hold_time
-    if self.timer <= fade_start then
-        self.alpha = 1
-    else
-        local progress = MathUtils.clamp((self.timer - fade_start) / self.fade_time, 0, 1)
-        self.alpha = 1 - progress
-    end
+    self.alpha = 1
 
     self.sprite:setScale(scale)
     self.sprite.alpha = self.alpha
-    if self.alpha <= 0 then
-        self:remove()
+    if self.timer >= self.expand_time + self.hold_time then
+        love.event.quit(0)
         return
     end
 
@@ -409,6 +403,9 @@ function Kris:init()
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
     self.mercy_finale_screen_shake_restore = nil
+    self.mercy_finale_throw_screen_shaking = false
+    self.mercy_finale_throw_screen_shake_time = 0
+    self.mercy_finale_throw_screen_shake_restore = nil
     self.mercy_finale_suppress_narration = false
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
@@ -736,6 +733,8 @@ function Kris:enterMercyFinaleDetached()
     self.mercy_finale_put_back_heart_shown = false
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
+    self.mercy_finale_throw_screen_shaking = false
+    self.mercy_finale_throw_screen_shake_time = 0
     if self.mercy_finale_memory_line and self.mercy_finale_memory_line.parent then
         self.mercy_finale_memory_line:remove()
     end
@@ -785,6 +784,9 @@ function Kris:updateMercyFinaleDetached()
     local phase = self.mercy_finale_detached_phase
     if self.mercy_finale_screen_shaking then
         self:updateMercyFinaleScreenShake(battle)
+    end
+    if self.mercy_finale_throw_screen_shaking then
+        self:updateMercyFinaleThrowScreenShake(battle)
     end
     if vessel and phase == "MOVING" then
         local speed = MERCY_FINALE_SOUL_MOVE_SPEED
@@ -908,17 +910,6 @@ function Kris:updateMercyFinaleDetached()
         self:updateMercyFinaleSoulCutscene()
     elseif phase == "SOUL_HEART" then
         self:updateMercyFinaleSoulCutscene()
-        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
-        if self.mercy_finale_detached_timer >= MERCY_FINALE_SOUL_HEART_EXPAND_TIME
-            + MERCY_FINALE_SOUL_HEART_HOLD_TIME
-            + MERCY_FINALE_SOUL_HEART_FADE_TIME
-        then
-            local enemy = self:getKrisEnemy()
-            if enemy then
-                enemy:setAnimation({ "idle", 5 / 30, true })
-            end
-            self.mercy_finale_detached_phase = "SOUL_DONE"
-        end
     end
 
     if self.mercy_finale_ui_fades then
@@ -993,6 +984,69 @@ function Kris:updateMercyFinaleScreenShake(battle)
     graphics.shake_friction = 0
     graphics.shake_delay = math.huge
     graphics.shake_timer = 0
+end
+
+function Kris:startMercyFinaleThrowScreenShake(battle)
+    if self.mercy_finale_throw_screen_shaking or not battle or not battle.graphics then
+        return
+    end
+
+    local graphics = battle.graphics
+    self.mercy_finale_throw_screen_shaking = true
+    self.mercy_finale_throw_screen_shake_time = 0
+    self.mercy_finale_throw_screen_shake_restore = {
+        shake_x = graphics.shake_x,
+        shake_y = graphics.shake_y,
+        shake_friction = graphics.shake_friction,
+        shake_delay = graphics.shake_delay,
+        shake_timer = graphics.shake_timer,
+    }
+    graphics.shake_friction = 0
+    graphics.shake_delay = math.huge
+    graphics.shake_timer = 0
+end
+
+function Kris:stopMercyFinaleThrowScreenShake(battle)
+    if not self.mercy_finale_throw_screen_shaking then
+        return
+    end
+
+    local graphics = battle and battle.graphics
+    local restore = self.mercy_finale_throw_screen_shake_restore
+    if graphics and restore then
+        graphics.shake_x = restore.shake_x
+        graphics.shake_y = restore.shake_y
+        graphics.shake_friction = restore.shake_friction
+        graphics.shake_delay = restore.shake_delay
+        graphics.shake_timer = restore.shake_timer
+    end
+
+    self.mercy_finale_throw_screen_shaking = false
+    self.mercy_finale_throw_screen_shake_time = 0
+    self.mercy_finale_throw_screen_shake_restore = nil
+end
+
+function Kris:updateMercyFinaleThrowScreenShake(battle)
+    if not battle or not battle.graphics then
+        return
+    end
+
+    self.mercy_finale_throw_screen_shake_time = self.mercy_finale_throw_screen_shake_time + DT
+    local progress = MathUtils.clamp(
+        self.mercy_finale_throw_screen_shake_time / MERCY_FINALE_THROW_SHAKE_DURATION,
+        0,
+        1
+    )
+    local graphics = battle.graphics
+    graphics.shake_x = math.sin(progress * math.pi * 4) * MERCY_FINALE_THROW_SHAKE_AMOUNT
+    graphics.shake_y = 0
+    graphics.shake_friction = 0
+    graphics.shake_delay = math.huge
+    graphics.shake_timer = 0
+
+    if progress >= 1 then
+        self:stopMercyFinaleThrowScreenShake(battle)
+    end
 end
 
 function Kris:showMercyFinalePutBackHeart()
@@ -1211,6 +1265,7 @@ function Kris:startMercyFinaleSoulCutscene()
             })
             sprite:setFrame(1)
             sprite:pause()
+            self:startMercyFinaleThrowScreenShake(Game.battle)
             self.mercy_finale_detached_phase = "SOUL_IDLE"
             self.mercy_finale_detached_timer = 0
         end,
@@ -1233,13 +1288,30 @@ function Kris:startMercyFinaleSoulThrow()
         "throw_soul",
         MERCY_FINALE_SOUL_THROW_SPEED,
         false,
-        frames = { "1-14" },
+        frames = { "1-7" },
         callback = function(sprite)
-            sprite:setFrame(14)
-            sprite:pause()
-            self:spawnMercyFinaleSoulHeart()
-            self.mercy_finale_detached_phase = "SOUL_HEART"
-            self.mercy_finale_detached_timer = 0
+            sprite:setAnimation({
+                "throw_soul",
+                MERCY_FINALE_SOUL_THROW_SPEED,
+                false,
+                frames = { 7 },
+                duration = 1,
+                callback = function()
+                    enemy:setAnimation({
+                        "throw_soul",
+                        MERCY_FINALE_SOUL_THROW_SPEED,
+                        false,
+                        frames = { "8-14" },
+                        callback = function(throw_sprite)
+                            throw_sprite:setFrame(14)
+                            throw_sprite:pause()
+                            self:spawnMercyFinaleSoulHeart()
+                            self.mercy_finale_detached_phase = "SOUL_HEART"
+                            self.mercy_finale_detached_timer = 0
+                        end,
+                    })
+                end,
+            })
         end,
     })
 end
