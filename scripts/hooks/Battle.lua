@@ -58,6 +58,9 @@ function Battle:onKeyPressed(key)
         and encounter.isMercyFinaleDetached
         and encounter:isMercyFinaleDetached()
     then
+        if encounter.handleMercyFinaleDetachedInput then
+            encounter:handleMercyFinaleDetachedInput(key)
+        end
         -- Keep confirm from being consumed by a stale menu or by the next
         -- battle state. Direction keys remain available to the encounter's
         -- held-input movement logic.

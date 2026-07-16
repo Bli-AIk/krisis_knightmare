@@ -30,6 +30,15 @@ local MERCY_FINALE_MUSIC_END_WINDOW = 1
 local MERCY_FINALE_ENEMY_TURN_DURATION = 5
 local MERCY_FINALE_UI_FADE_TIME = 3
 local MERCY_FINALE_SOUL_MOVE_SPEED = 4
+local MERCY_FINALE_ATTACH_DISTANCE = 18
+local MERCY_FINALE_REINSTALL_DELAY = 1
+local MERCY_FINALE_LIGHT_FADE_TIME = 1
+local MERCY_FINALE_PUT_BACK_FRAMES = {
+    1, 2, 3,
+    4, 5, 6, 7,
+    4, 5, 6, 7,
+    8, 9, 10, 11, 12,
+}
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
@@ -99,6 +108,8 @@ function Kris:init()
     self.mercy_finale_detached = false
     self.mercy_finale_ui_alpha = 1
     self.mercy_finale_ui_fades = nil
+    self.mercy_finale_detached_phase = nil
+    self.mercy_finale_detached_timer = 0
     self.mercy_finale_suppress_narration = false
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
@@ -109,6 +120,7 @@ end
 
 function Kris:applyLocalization()
     self.text = Game:loc("* [name:chara:kris] slashes into the combat.", "enemy_kris_turn_1")
+    self.mercy_finale_reinstall_text = Game:loc("REINSTALL", "act_kris_mercy_finale_reinstall")
 end
 
 function Kris:getInitialEncounterText()
@@ -361,6 +373,8 @@ function Kris:enterMercyFinaleDetached()
     self.mercy_finale_leave_requested = false
     self.mercy_finale_enemy_turn = false
     self.mercy_finale_enemy_turn_time = 0
+    self.mercy_finale_detached_phase = "MOVING"
+    self.mercy_finale_detached_timer = 0
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
@@ -394,7 +408,8 @@ function Kris:updateMercyFinaleDetached()
     end
 
     local vessel = battle:getPartyBattler("vessel")
-    if vessel then
+    local phase = self.mercy_finale_detached_phase
+    if vessel and phase == "MOVING" then
         local speed = MERCY_FINALE_SOUL_MOVE_SPEED
         if Input.down("cancel") then
             speed = speed / 2
@@ -414,6 +429,38 @@ function Kris:updateMercyFinaleDetached()
         local y_margin = vessel.height * vessel.scale_y
         vessel.x = MathUtils.clamp(vessel.x, x_margin, SCREEN_WIDTH - x_margin)
         vessel.y = MathUtils.clamp(vessel.y, y_margin, SCREEN_HEIGHT - 4)
+
+        if self.mercy_finale then
+            local target_x, target_y = self.mercy_finale:getEnemyOrigin()
+            local light_x, light_y = self.mercy_finale:getDetachedLightOrigin()
+            if MathUtils.dist(target_x, target_y, light_x, light_y) <= MERCY_FINALE_ATTACH_DISTANCE then
+                self.mercy_finale_detached_phase = "ATTACHING"
+            end
+        end
+    elseif vessel and phase == "ATTACHING" then
+        local target_x, target_y = self.mercy_finale:getDetachedVesselTarget()
+        local vessel_x, vessel_y = self.mercy_finale:getVesselOrigin()
+        local move_x, move_y = target_x - vessel_x, target_y - vessel_y
+        local distance = MathUtils.dist(0, 0, move_x, move_y)
+        local step = MERCY_FINALE_SOUL_MOVE_SPEED * DTMULT
+        if distance <= step then
+            vessel:move(move_x, move_y)
+            self.mercy_finale_detached_phase = "LOCKED"
+            self.mercy_finale_detached_timer = 0
+        elseif distance > 0 then
+            vessel:move(move_x / distance, move_y / distance, step)
+        end
+    elseif vessel and (phase == "LOCKED" or phase == "PROMPT") then
+        local target_x, target_y = self.mercy_finale:getDetachedVesselTarget()
+        local vessel_x, vessel_y = self.mercy_finale:getVesselOrigin()
+        vessel:move(target_x - vessel_x, target_y - vessel_y)
+
+        if phase == "LOCKED" then
+            self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+            if self.mercy_finale_detached_timer >= MERCY_FINALE_REINSTALL_DELAY then
+                self:showMercyFinaleReinstallPrompt()
+            end
+        end
     end
 
     if self.mercy_finale_ui_fades then
@@ -425,6 +472,60 @@ function Kris:updateMercyFinaleDetached()
             fx.alpha = self.mercy_finale_ui_alpha
         end
     end
+end
+
+function Kris:showMercyFinaleReinstallPrompt()
+    if self.mercy_finale_detached_phase ~= "LOCKED" then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle or not battle.battle_ui then
+        return
+    end
+
+    battle:infoText("[instant][style:none][color:00ff00]" .. self.mercy_finale_reinstall_text .. "[color:reset][style:reset]")
+    self.mercy_finale_detached_phase = "PROMPT"
+end
+
+function Kris:handleMercyFinaleDetachedInput(key)
+    if self.mercy_finale_detached_phase ~= "PROMPT" or not Input.isConfirm(key) then
+        return
+    end
+
+    local battle = Game.battle
+    local vessel = battle and battle:getPartyBattler("vessel")
+    local enemy = self:getKrisEnemy()
+    if not battle or not vessel or not enemy then
+        return
+    end
+
+    Input.clear("confirm", true)
+    self.mercy_finale_detached_phase = "REINSTALLING"
+    battle.battle_ui:clearEncounterText()
+    vessel.visible = false
+    vessel.active = false
+
+    enemy:setAnimation({
+        "put_back",
+        FAST_SPEED,
+        false,
+        frames = MERCY_FINALE_PUT_BACK_FRAMES,
+        callback = function(sprite)
+            sprite:setFrame(12)
+            sprite:pause()
+            self.mercy_finale_detached_phase = "LIGHT_FADE"
+            if self.mercy_finale then
+                self.mercy_finale:startPlayerLightFade(
+                    MERCY_FINALE_LIGHT_FADE_TIME,
+                    function(finale)
+                        finale:setEnemyAboveBlackScreen(true)
+                        self.mercy_finale_detached_phase = "FINISHED"
+                    end
+                )
+            end
+        end,
+    })
 end
 
 function Kris:clearMercyFinaleHighlights()

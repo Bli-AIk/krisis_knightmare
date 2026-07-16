@@ -20,6 +20,7 @@ local LIGHT_MIN_SCALE = 0.05
 local LIGHT_GROW_DURATION = 1
 local LIGHT_SPRITE = "battle/light"
 local LIGHT_OFFSET_X = 16
+-- Keeps the final defeat pose centered in the player light.
 local DEFEAT_LIGHT_OFFSET_X = 11
 local LIGHT_BRIGHTNESS = 1.15
 local LIGHT_BREATH_AMPLITUDE = 0.025
@@ -85,6 +86,10 @@ function KrisMercyFinale:init(enemy, options)
     self.circles = {}
     self.black_screen = false
     self.player_light = nil
+    self.light_fade_start_alpha = nil
+    self.light_fade_duration = nil
+    self.on_light_faded = nil
+    self.enemy_above_black_screen = false
     self.light_texture = Assets.getTexture(LIGHT_SPRITE)
     self.light_mask_shader = love.graphics.newShader([[
         extern Image light_texture;
@@ -95,11 +100,13 @@ function KrisMercyFinale:init(enemy, options)
         // The light texture is a visibility mask for the black overlay. Its
         // alpha controls how much of the battle scene remains visible.
         vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
-            vec2 uv = (screen_coords - light_center) / light_size + vec2(0.5);
             float illumination = 0.0;
 
-            if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-                illumination = Texel(light_texture, uv).a * light_strength;
+            if (light_size.x > 0.0 && light_size.y > 0.0) {
+                vec2 uv = (screen_coords - light_center) / light_size + vec2(0.5);
+                if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+                    illumination = Texel(light_texture, uv).a * light_strength;
+                }
             }
 
             float darkness = 1.0 - clamp(illumination, 0.0, 1.0);
@@ -117,9 +124,11 @@ end
 function KrisMercyFinale:getEnemyOrigin()
     if self.enemy and self.enemy.parent then
         if self.enemy.sprite then
+            -- Kris's 108x60 frames place the visible body center at this offset
+            -- from the canvas center.
             return self.enemy:localToScreenPos(
-                (self.enemy.sprite.width / 2) - 4.5,
-                self.enemy.sprite.height / 2
+                (self.enemy.sprite.width / 2) + 4.5,
+                (self.enemy.sprite.height / 2) + 7
             )
         end
         return self.enemy:localToScreenPos(self.enemy.width / 2, self.enemy.height / 2)
@@ -145,6 +154,16 @@ function KrisMercyFinale:getVesselOrigin()
     return SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
 end
 
+function KrisMercyFinale:getDetachedLightOrigin()
+    local x, y = self:getVesselOrigin()
+    return x + LIGHT_OFFSET_X + DEFEAT_LIGHT_OFFSET_X, y
+end
+
+function KrisMercyFinale:getDetachedVesselTarget()
+    local x, y = self:getEnemyOrigin()
+    return x - LIGHT_OFFSET_X - DEFEAT_LIGHT_OFFSET_X, y
+end
+
 function KrisMercyFinale:getLayerBelowBattleUi(battle)
     local ui_layer = battle.battle_ui and battle.battle_ui.layer or BATTLE_LAYERS["ui"]
     local tp_layer = battle.tension_bar and battle.tension_bar.layer or (ui_layer - 1)
@@ -164,7 +183,11 @@ function KrisMercyFinale:syncLayer()
     self.layer = layer
     for child, _ in pairs(self.saved_layers) do
         if child.parent == self.battle then
-            child.layer = self.layer - 1
+            if child == self.enemy and self.enemy_above_black_screen then
+                child.layer = self.layer + 0.01
+            else
+                child.layer = self.layer - 1
+            end
         end
     end
     self.battle.update_child_list = true
@@ -282,6 +305,36 @@ function KrisMercyFinale:finishLightReveal()
     end
 end
 
+function KrisMercyFinale:startPlayerLightFade(duration, callback)
+    if not self.player_light then
+        if callback then
+            callback(self)
+        end
+        return
+    end
+
+    self.light_fade_start_alpha = self.player_light.alpha
+    self.light_fade_duration = duration or 1
+    self.phase = "LIGHT_FADE"
+    self.phase_time = 0
+    self.on_light_faded = callback
+end
+
+function KrisMercyFinale:setEnemyAboveBlackScreen(above)
+    self.enemy_above_black_screen = above == true
+
+    if not self.enemy or not self.battle then
+        return
+    end
+
+    if self.enemy_above_black_screen then
+        self.enemy.layer = self.layer + 0.01
+    elseif self.saved_layers[self.enemy] ~= nil then
+        self.enemy.layer = self.saved_layers[self.enemy]
+    end
+    self.battle.update_child_list = true
+end
+
 function KrisMercyFinale:update()
     super.update(self)
     self:syncLayer()
@@ -295,13 +348,14 @@ function KrisMercyFinale:update()
             and encounter.isMercyFinaleDetached
             and encounter:isMercyFinaleDetached()
         then
-            offset_x = offset_x + DEFEAT_LIGHT_OFFSET_X
+            x, y = self:getDetachedLightOrigin()
+            offset_x = 0
         end
         self.player_light.x = x + offset_x
         self.player_light.y = y
     end
 
-    if self.phase == "READY" then
+    if self.phase == "READY" or self.phase == "FADED" then
         return
     end
 
@@ -339,6 +393,18 @@ function KrisMercyFinale:update()
         self.player_light.scale = scale
         if self.phase_time >= LIGHT_GROW_DURATION then
             self:finishLightReveal()
+        end
+    elseif self.phase == "LIGHT_FADE" then
+        local progress = clamp(self.phase_time / self.light_fade_duration, 0, 1)
+        self.player_light.alpha = self.light_fade_start_alpha * (1 - progress)
+        if self.phase_time >= self.light_fade_duration then
+            self.player_light.alpha = 0
+            self.phase = "FADED"
+            if self.on_light_faded then
+                local callback = self.on_light_faded
+                self.on_light_faded = nil
+                callback(self)
+            end
         end
     end
 end
