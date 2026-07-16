@@ -97,15 +97,15 @@ end
 local MercyFinaleMemoryLine, memory_line_super = Class(Object)
 
 local MEMORY_LINE_SEGMENTS = 80
-local MEMORY_LINE_BASE_WIDTH = 2
-local MEMORY_LINE_MAX_WIDTH = 6
+local MEMORY_LINE_BASE_WIDTH = 1
+local MEMORY_LINE_MAX_WIDTH = 3
 local MEMORY_LINE_NOISE_INTERVAL = 0.24
 local MEMORY_LINE_NOISE_CELL_SPAN = 2
 local MEMORY_LINE_SCROLL_SPEED = 500
-local MEMORY_LINE_NOISE_TEXTURE_WIDTH = 64
-local MEMORY_LINE_NOISE_TEXTURE_HEIGHT = 8
-local MEMORY_LINE_NOISE_STRETCH_X = 6
-local MEMORY_LINE_NOISE_ALPHA = 0.85
+local MEMORY_LINE_NOISE_TEXTURE_WIDTH = 128
+local MEMORY_LINE_NOISE_TEXTURE_HEIGHT = 5
+local MEMORY_LINE_NOISE_STRETCH_X = 4
+local MEMORY_LINE_NOISE_ALPHA = 1
 
 local function memoryLineNoise(index, time, offset, scroll)
     local segment_width = SCREEN_WIDTH / MEMORY_LINE_SEGMENTS
@@ -131,9 +131,10 @@ function MercyFinaleMemoryLine:init(finale)
     )
     for y = 0, MEMORY_LINE_NOISE_TEXTURE_HEIGHT - 1 do
         for x = 0, MEMORY_LINE_NOISE_TEXTURE_WIDTH - 1 do
-            local value = math.sin((x + 1) * 19.17 + (y + 1) * 37.41) * 43758.5453
+            local band = math.floor(y / 2)
+            local value = math.sin((x + 1) * 19.17 + (band + 1) * 37.41) * 43758.5453
             value = value - math.floor(value)
-            local alpha = value < 0.27 and MEMORY_LINE_NOISE_ALPHA or 0
+            local alpha = value < 0.31 and MEMORY_LINE_NOISE_ALPHA or 0
             noise_data:setPixel(x, y, 0, 0, 0, alpha)
         end
     end
