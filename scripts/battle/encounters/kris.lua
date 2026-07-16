@@ -39,6 +39,8 @@ local MERCY_FINALE_NARRATION_WAIT = 1
 local MERCY_FINALE_FIRST_TEXT_DURATION = 2
 local MERCY_FINALE_MEMORY_TEXT_DELAY = 2
 local MERCY_FINALE_MEMORY_TEXT_DURATION = 2
+local MERCY_FINALE_FINAL_REINSTALL_DELAY = 2
+local MERCY_FINALE_FINAL_AFTERIMAGE_WAIT = 2
 local MERCY_FINALE_SCREEN_SHAKE_AMOUNT = 2
 local MERCY_FINALE_SCREEN_SHAKE_PERIOD = 0.25
 local MERCY_FINALE_RIGHT_TEXT_OFFSET_X = 32
@@ -228,6 +230,57 @@ function MercyFinaleMemoryLine:draw()
     love.graphics.pop()
 end
 
+local MercyFinaleAfterimage, afterimage_super = Class(Object)
+
+local MERCY_FINALE_AFTERIMAGE_ALPHA = 0.25
+local MERCY_FINALE_AFTERIMAGE_AMPLITUDE = 1.5
+local MERCY_FINALE_AFTERIMAGE_SPEED = 5
+
+function MercyFinaleAfterimage:init(sprite)
+    afterimage_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.sprite = sprite
+    self.time = 0
+    self.alpha = MERCY_FINALE_AFTERIMAGE_ALPHA
+    self.canvas = love.graphics.newCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    Draw.pushCanvas(self.canvas)
+    love.graphics.push()
+    love.graphics.origin()
+    love.graphics.clear()
+    love.graphics.applyTransform(self.sprite:getFullTransform())
+    Draw.setColor(self.sprite:getDrawColor())
+    self.sprite:draw()
+    love.graphics.pop()
+    Draw.popCanvas()
+end
+
+function MercyFinaleAfterimage:update()
+    self.time = self.time + DT
+    self.x = math.sin(self.time * MERCY_FINALE_AFTERIMAGE_SPEED) * MERCY_FINALE_AFTERIMAGE_AMPLITUDE
+    afterimage_super.update(self)
+end
+
+function MercyFinaleAfterimage:onRemove(parent)
+    if self.canvas then
+        self.canvas:release()
+        self.canvas = nil
+    end
+    afterimage_super.onRemove(self, parent)
+end
+
+function MercyFinaleAfterimage:applyTransformTo(transform)
+    if self.parent then
+        transform:reset()
+    end
+    afterimage_super.applyTransformTo(self, transform)
+end
+
+function MercyFinaleAfterimage:draw()
+    Draw.draw(self.canvas)
+    afterimage_super.draw(self)
+end
+
 function Kris:init()
     super.init(self)
 
@@ -256,6 +309,7 @@ function Kris:init()
     self.mercy_finale_put_back_heart_shown = false
     self.mercy_finale_narration_texts = nil
     self.mercy_finale_memory_line = nil
+    self.mercy_finale_afterimage = nil
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
     self.mercy_finale_screen_shake_restore = nil
@@ -281,6 +335,10 @@ function Kris:applyLocalization()
     self.mercy_finale_memorize_text = Game:loc(
         "MEMORIZE",
         "act_kris_mercy_finale_memorize"
+    )
+    self.mercy_finale_proceed_text = Game:loc(
+        "PROCEED",
+        "act_kris_mercy_finale_proceed"
     )
 end
 
@@ -543,6 +601,10 @@ function Kris:enterMercyFinaleDetached()
         self.mercy_finale_memory_line:remove()
     end
     self.mercy_finale_memory_line = nil
+    if self.mercy_finale_afterimage and self.mercy_finale_afterimage.parent then
+        self.mercy_finale_afterimage:remove()
+    end
+    self.mercy_finale_afterimage = nil
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
@@ -678,6 +740,18 @@ function Kris:updateMercyFinaleDetached()
             self.mercy_finale_detached_phase = "MEMORY_DONE"
             self.mercy_finale_detached_timer = 0
         end
+    elseif phase == "MEMORY_DONE" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_FINAL_REINSTALL_DELAY then
+            self:startMercyFinaleFinalReinstall()
+        end
+    elseif phase == "FINAL_REINSTALLING" then
+        self:showMercyFinalePutBackHeart()
+    elseif phase == "FINAL_AFTERIMAGE_WAIT" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_FINAL_AFTERIMAGE_WAIT then
+            self:showMercyFinaleProceed()
+        end
     end
 
     if self.mercy_finale_ui_fades then
@@ -706,6 +780,26 @@ function Kris:startMercyFinaleScreenShake(battle)
         shake_delay = graphics.shake_delay,
         shake_timer = graphics.shake_timer,
     }
+end
+
+function Kris:stopMercyFinaleScreenShake(battle)
+    if not self.mercy_finale_screen_shaking then
+        return
+    end
+
+    local graphics = battle and battle.graphics
+    local restore = self.mercy_finale_screen_shake_restore
+    if graphics and restore then
+        graphics.shake_x = restore.shake_x
+        graphics.shake_y = restore.shake_y
+        graphics.shake_friction = restore.shake_friction
+        graphics.shake_delay = restore.shake_delay
+        graphics.shake_timer = restore.shake_timer
+    end
+
+    self.mercy_finale_screen_shaking = false
+    self.mercy_finale_screen_shake_time = 0
+    self.mercy_finale_screen_shake_restore = nil
 end
 
 function Kris:updateMercyFinaleScreenShake(battle)
@@ -750,6 +844,52 @@ function Kris:showMercyFinalePutBackHeart()
     burst.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.1
     battle:addChild(burst)
     self.mercy_finale_put_back_heart_shown = true
+end
+
+function Kris:startMercyFinaleFinalReinstall()
+    if self.mercy_finale_detached_phase ~= "MEMORY_DONE" then
+        return
+    end
+
+    local enemy = self:getKrisEnemy()
+    if not enemy then
+        return
+    end
+
+    self.mercy_finale_detached_phase = "FINAL_REINSTALLING"
+    self.mercy_finale_detached_timer = 0
+    self.mercy_finale_put_back_heart_shown = false
+    enemy:setAnimation({
+        "put_back",
+        FAST_SPEED,
+        false,
+        frames = { 12, 11, 10, 9, 8, 7 },
+        callback = function(sprite)
+            sprite:setFrame(7)
+            sprite:pause()
+            self:stopMercyFinaleScreenShake(Game.battle)
+            self:showMercyFinaleAfterimage()
+            self.mercy_finale_detached_phase = "FINAL_AFTERIMAGE_WAIT"
+            self.mercy_finale_detached_timer = 0
+        end,
+    })
+end
+
+function Kris:showMercyFinaleAfterimage()
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy or not enemy.sprite then
+        return
+    end
+
+    if self.mercy_finale_afterimage and self.mercy_finale_afterimage.parent then
+        self.mercy_finale_afterimage:remove()
+    end
+
+    local afterimage = MercyFinaleAfterimage(enemy.sprite)
+    afterimage.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) - 0.001
+    battle:addChild(afterimage)
+    self.mercy_finale_afterimage = afterimage
 end
 
 function Kris:clearMercyFinaleNarrationTexts()
@@ -878,6 +1018,66 @@ function Kris:showMercyFinaleMemoryNarration()
         self.mercy_finale_detached_phase = "MEMORY_TEXT"
         self.mercy_finale_detached_timer = 0
     end
+end
+
+function Kris:showMercyFinaleProceed()
+    if self.mercy_finale_detached_phase ~= "FINAL_AFTERIMAGE_WAIT" then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle or not battle.battle_ui or not self.mercy_finale then
+        return
+    end
+
+    self:clearMercyFinaleNarrationTexts()
+    battle.battle_ui:clearEncounterText()
+
+    if self.mercy_finale_memory_line and self.mercy_finale_memory_line.parent then
+        self.mercy_finale_memory_line:remove()
+    end
+    self.mercy_finale_memory_line = nil
+
+    if self.mercy_finale_afterimage and self.mercy_finale_afterimage.parent then
+        self.mercy_finale_afterimage:remove()
+    end
+    self.mercy_finale_afterimage = nil
+
+    self.mercy_finale:setEnemyAboveBlackScreen(false)
+    self.mercy_finale:showFinalBlackScreen()
+
+    local proceed_spacing = self.mercy_finale_proceed_text == "继续前进" and 2 or 8
+    local proceed_text = DialogueText(
+        "[instant][voice:none][style:none][color:00ff00]"
+            .. "[image:player/heart:-6:0:2:2][spacing:"
+            .. proceed_spacing
+            .. "][shake:1]"
+            .. self.mercy_finale_proceed_text
+            .. "[color:reset][style:reset]",
+        0,
+        SCREEN_HEIGHT / 2 - 8,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        {
+            font = "main_mono",
+            style = "none",
+            color = { 0, 1, 0, 1 },
+            wrap = false,
+            line_offset = 0,
+            align = "center",
+        }
+    )
+    proceed_text.skippable = false
+    proceed_text.can_advance = false
+    proceed_text.auto_advance = false
+    proceed_text.layer = self.mercy_finale.layer + 1
+    battle:addChild(proceed_text)
+    for _, sprite in ipairs(proceed_text.sprites) do
+        sprite:setColor(1, 0, 0, 1)
+    end
+    self.mercy_finale_narration_texts = { proceed_text }
+    self.mercy_finale_detached_phase = "PROCEED"
+    self.mercy_finale_detached_timer = 0
 end
 
 function Kris:showMercyFinaleReinstallPrompt()

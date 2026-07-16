@@ -87,6 +87,7 @@ function KrisMercyFinale:init(enemy, options)
     self.circle_time = 0
     self.circles = {}
     self.black_screen = false
+    self.final_black_screen = false
     self.player_light = nil
     self.light_fade_start_alpha = nil
     self.light_fade_duration = nil
@@ -177,7 +178,9 @@ function KrisMercyFinale:syncLayer()
         return
     end
 
-    local layer = self:getLayerBelowBattleUi(self.battle)
+    local layer = self.final_black_screen
+        and BATTLE_LAYERS["top"]
+        or self:getLayerBelowBattleUi(self.battle)
     if self.layer == layer then
         return
     end
@@ -335,6 +338,24 @@ function KrisMercyFinale:setEnemyAboveBlackScreen(above)
         self.enemy.layer = self.saved_layers[self.enemy]
     end
     self.battle.update_child_list = true
+end
+
+function KrisMercyFinale:showFinalBlackScreen()
+    self.circles = {}
+    self.flash_alpha = 0
+    self.black_screen = true
+    self.final_black_screen = true
+    self.phase = "FINAL_BLACK"
+    self.phase_time = 0
+    self.layer = BATTLE_LAYERS["top"]
+
+    if self.battle then
+        self.battle.update_child_list = true
+    end
+
+    if self.player_light then
+        self.player_light.alpha = 0
+    end
 end
 
 function KrisMercyFinale:update()
