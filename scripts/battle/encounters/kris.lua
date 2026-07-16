@@ -36,6 +36,9 @@ local MERCY_FINALE_LIGHT_FADE_TIME = 1
 local MERCY_FINALE_POST_REINSTALL_WAIT = 5
 local MERCY_FINALE_ANGRY_SHAKE_WAIT = 1
 local MERCY_FINALE_NARRATION_WAIT = 1
+local MERCY_FINALE_FIRST_TEXT_DURATION = 2
+local MERCY_FINALE_MEMORY_TEXT_DELAY = 2
+local MERCY_FINALE_MEMORY_TEXT_DURATION = 2
 local MERCY_FINALE_SCREEN_SHAKE_AMOUNT = 2
 local MERCY_FINALE_SCREEN_SHAKE_PERIOD = 0.25
 local MERCY_FINALE_RIGHT_TEXT_OFFSET_X = 32
@@ -91,6 +94,139 @@ function MercyFinaleActionBoxBorder:draw()
     Draw.setColor(1, 1, 1, 1)
 end
 
+local MercyFinaleMemoryLine, memory_line_super = Class(Object)
+
+local MEMORY_LINE_SEGMENTS = 80
+local MEMORY_LINE_BASE_WIDTH = 2
+local MEMORY_LINE_MAX_WIDTH = 6
+local MEMORY_LINE_NOISE_INTERVAL = 0.24
+local MEMORY_LINE_NOISE_CELL_SPAN = 2
+local MEMORY_LINE_SCROLL_SPEED = 500
+local MEMORY_LINE_NOISE_TEXTURE_WIDTH = 64
+local MEMORY_LINE_NOISE_TEXTURE_HEIGHT = 8
+local MEMORY_LINE_NOISE_STRETCH_X = 6
+local MEMORY_LINE_NOISE_ALPHA = 0.85
+
+local function memoryLineNoise(index, time, offset, scroll)
+    local segment_width = SCREEN_WIDTH / MEMORY_LINE_SEGMENTS
+    local scroll_index = scroll / segment_width
+    local cell = math.floor((index + scroll_index + offset) / MEMORY_LINE_NOISE_CELL_SPAN)
+    local step = math.floor(time / MEMORY_LINE_NOISE_INTERVAL)
+    local value = math.sin(cell * 17.123 + step * 41.731 + offset * 3.7) * 43758.5453
+    return value - math.floor(value)
+end
+
+function MercyFinaleMemoryLine:init(finale)
+    memory_line_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.finale = finale
+    self.time = 0
+    self.scroll = 0
+    self.center_y = SCREEN_HEIGHT / 2
+    self.layer = BATTLE_LAYERS["ui"] - 1
+
+    local noise_data = love.image.newImageData(
+        MEMORY_LINE_NOISE_TEXTURE_WIDTH,
+        MEMORY_LINE_NOISE_TEXTURE_HEIGHT
+    )
+    for y = 0, MEMORY_LINE_NOISE_TEXTURE_HEIGHT - 1 do
+        for x = 0, MEMORY_LINE_NOISE_TEXTURE_WIDTH - 1 do
+            local value = math.sin((x + 1) * 19.17 + (y + 1) * 37.41) * 43758.5453
+            value = value - math.floor(value)
+            local alpha = value < 0.27 and MEMORY_LINE_NOISE_ALPHA or 0
+            noise_data:setPixel(x, y, 0, 0, 0, alpha)
+        end
+    end
+
+    self.noise_texture = love.graphics.newImage(noise_data)
+    self.noise_texture:setFilter("nearest", "nearest")
+    self.noise_texture:setWrap("repeat", "clamp")
+    self.noise_source_width = SCREEN_WIDTH / MEMORY_LINE_NOISE_STRETCH_X
+    self.noise_quad = love.graphics.newQuad(
+        0,
+        0,
+        self.noise_source_width,
+        MEMORY_LINE_NOISE_TEXTURE_HEIGHT,
+        MEMORY_LINE_NOISE_TEXTURE_WIDTH,
+        MEMORY_LINE_NOISE_TEXTURE_HEIGHT
+    )
+end
+
+function MercyFinaleMemoryLine:update()
+    self.time = self.time + DT
+    self.scroll = (self.scroll + MEMORY_LINE_SCROLL_SPEED * DT) % SCREEN_WIDTH
+    memory_line_super.update(self)
+end
+
+function MercyFinaleMemoryLine:draw()
+    local old_shader = love.graphics.getShader()
+    local old_blend, old_alpha_mode = love.graphics.getBlendMode()
+
+    love.graphics.push()
+    love.graphics.setShader()
+    love.graphics.setBlendMode("alpha")
+
+    love.graphics.setColor(1, 1, 1, 1)
+    local center_y = self.center_y
+    if self.finale and self.finale.origin_y then
+        center_y = self.finale.origin_y
+    end
+
+    love.graphics.rectangle("fill", 0, center_y - 0.5, SCREEN_WIDTH, 1)
+
+    local segment_width = SCREEN_WIDTH / MEMORY_LINE_SEGMENTS
+    for index = 0, MEMORY_LINE_SEGMENTS - 1 do
+        local x1 = index * segment_width
+        local x2 = (index + 1) * segment_width + 0.5
+        local width_a = MEMORY_LINE_BASE_WIDTH
+            + memoryLineNoise(index, self.time, 2.1, self.scroll) * MEMORY_LINE_MAX_WIDTH
+        local width_b = MEMORY_LINE_BASE_WIDTH
+            + memoryLineNoise(index + 1, self.time, 7.4, self.scroll) * MEMORY_LINE_MAX_WIDTH
+        local center_offset_a = (memoryLineNoise(index, self.time, 12.8, self.scroll) - 0.5) * 1.5
+        local center_offset_b = (memoryLineNoise(index + 1, self.time, 18.6, self.scroll) - 0.5) * 1.5
+
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.polygon(
+            "fill",
+            x1,
+            center_y + center_offset_a - width_a / 2,
+            x2,
+            center_y + center_offset_b - width_b / 2,
+            x2,
+            center_y + center_offset_b + width_b / 2,
+            x1,
+            center_y + center_offset_a + width_a / 2
+        )
+
+    end
+
+    if self.noise_texture then
+        local source_x = self.scroll / MEMORY_LINE_NOISE_STRETCH_X
+        self.noise_quad:setViewport(
+            source_x,
+            0,
+            self.noise_source_width,
+            MEMORY_LINE_NOISE_TEXTURE_HEIGHT,
+            MEMORY_LINE_NOISE_TEXTURE_WIDTH,
+            MEMORY_LINE_NOISE_TEXTURE_HEIGHT
+        )
+        love.graphics.setColor(0, 0, 0, 1)
+        love.graphics.draw(
+            self.noise_texture,
+            self.noise_quad,
+            0,
+            center_y - MEMORY_LINE_NOISE_TEXTURE_HEIGHT / 2,
+            0,
+            MEMORY_LINE_NOISE_STRETCH_X,
+            1
+        )
+    end
+
+    love.graphics.setShader(old_shader)
+    love.graphics.setBlendMode(old_blend, old_alpha_mode)
+    love.graphics.pop()
+end
+
 function Kris:init()
     super.init(self)
 
@@ -118,6 +254,7 @@ function Kris:init()
     self.mercy_finale_detached_timer = 0
     self.mercy_finale_put_back_heart_shown = false
     self.mercy_finale_narration_texts = nil
+    self.mercy_finale_memory_line = nil
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
     self.mercy_finale_screen_shake_restore = nil
@@ -139,6 +276,10 @@ function Kris:applyLocalization()
     self.mercy_finale_promised_text = Game:loc(
         "YOU\nPROMISED",
         "act_kris_mercy_finale_promised"
+    )
+    self.mercy_finale_memorize_text = Game:loc(
+        "MEMORIZE",
+        "act_kris_mercy_finale_memorize"
     )
 end
 
@@ -397,6 +538,10 @@ function Kris:enterMercyFinaleDetached()
     self.mercy_finale_put_back_heart_shown = false
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
+    if self.mercy_finale_memory_line and self.mercy_finale_memory_line.parent then
+        self.mercy_finale_memory_line:remove()
+    end
+    self.mercy_finale_memory_line = nil
     battle:clearMenuItems()
     battle:hideTargets()
     if battle.arena then
@@ -510,6 +655,28 @@ function Kris:updateMercyFinaleDetached()
         if self.mercy_finale_detached_timer >= MERCY_FINALE_NARRATION_WAIT then
             self:showMercyFinaleFinalNarration()
         end
+    elseif phase == "NARRATION" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_FIRST_TEXT_DURATION then
+            self:clearMercyFinaleNarrationTexts()
+            battle.battle_ui:clearEncounterText()
+            self:showMercyFinaleMemoryLine(battle)
+            self.mercy_finale_detached_phase = "MEMORY_WAIT"
+            self.mercy_finale_detached_timer = 0
+        end
+    elseif phase == "MEMORY_WAIT" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_MEMORY_TEXT_DELAY then
+            self:showMercyFinaleMemoryNarration()
+        end
+    elseif phase == "MEMORY_TEXT" then
+        self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
+        if self.mercy_finale_detached_timer >= MERCY_FINALE_MEMORY_TEXT_DURATION then
+            self:clearMercyFinaleNarrationTexts()
+            battle.battle_ui:clearEncounterText()
+            self.mercy_finale_detached_phase = "MEMORY_DONE"
+            self.mercy_finale_detached_timer = 0
+        end
     end
 
     if self.mercy_finale_ui_fades then
@@ -584,22 +751,22 @@ function Kris:showMercyFinalePutBackHeart()
     self.mercy_finale_put_back_heart_shown = true
 end
 
-function Kris:showMercyFinaleFinalNarration()
-    if self.mercy_finale_detached_phase ~= "NARRATION_WAIT" then
-        return
-    end
-
-    local battle = Game.battle
-    if not battle or not battle.battle_ui then
-        return
-    end
-
-    battle.battle_ui:clearEncounterText()
+function Kris:clearMercyFinaleNarrationTexts()
     for _, text in ipairs(self.mercy_finale_narration_texts or {}) do
         if text.parent then
             text:remove()
         end
     end
+    self.mercy_finale_narration_texts = nil
+end
+
+function Kris:showMercyFinaleNarrationTexts(left_value, right_value)
+    local battle = Game.battle
+    if not battle or not battle.battle_ui then
+        return false
+    end
+
+    self:clearMercyFinaleNarrationTexts()
 
     local encounter_text = battle.battle_ui.encounter_text
     local left_x = encounter_text.x + encounter_text.text_x
@@ -613,7 +780,7 @@ function Kris:showMercyFinaleFinalNarration()
     end
 
     local left_text = DialogueText(
-        style_text(self.mercy_finale_do_what_text),
+        style_text(left_value),
         left_x,
         text_y,
         SCREEN_WIDTH - left_x,
@@ -633,7 +800,7 @@ function Kris:showMercyFinaleFinalNarration()
     battle:addChild(left_text)
 
     local right_text = DialogueText(
-        style_text(self.mercy_finale_promised_text),
+        style_text(right_value),
         0,
         text_y,
         SCREEN_WIDTH,
@@ -658,7 +825,58 @@ function Kris:showMercyFinaleFinalNarration()
     right_text.x = math.max(30, right_edge - right_width)
 
     self.mercy_finale_narration_texts = { left_text, right_text }
-    self.mercy_finale_detached_phase = "NARRATION"
+    return true
+end
+
+function Kris:showMercyFinaleMemoryLine(battle)
+    if self.mercy_finale_memory_line and self.mercy_finale_memory_line.parent then
+        return
+    end
+
+    local line = MercyFinaleMemoryLine(self.mercy_finale)
+    line.layer = (self.mercy_finale and self.mercy_finale.layer or BATTLE_LAYERS["ui"] - 2) + 0.005
+    battle:addChild(line)
+    self.mercy_finale_memory_line = line
+end
+
+function Kris:showMercyFinaleFinalNarration()
+    if self.mercy_finale_detached_phase ~= "NARRATION_WAIT" then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle or not battle.battle_ui then
+        return
+    end
+
+    battle.battle_ui:clearEncounterText()
+    if self:showMercyFinaleNarrationTexts(
+        self.mercy_finale_do_what_text,
+        self.mercy_finale_promised_text
+    ) then
+        self.mercy_finale_detached_phase = "NARRATION"
+        self.mercy_finale_detached_timer = 0
+    end
+end
+
+function Kris:showMercyFinaleMemoryNarration()
+    if self.mercy_finale_detached_phase ~= "MEMORY_WAIT" then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle or not battle.battle_ui then
+        return
+    end
+
+    battle.battle_ui:clearEncounterText()
+    if self:showMercyFinaleNarrationTexts(
+        self.mercy_finale_memorize_text,
+        self.mercy_finale_memorize_text
+    ) then
+        self.mercy_finale_detached_phase = "MEMORY_TEXT"
+        self.mercy_finale_detached_timer = 0
+    end
 end
 
 function Kris:showMercyFinaleReinstallPrompt()
