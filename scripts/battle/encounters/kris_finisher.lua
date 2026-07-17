@@ -9,6 +9,15 @@ local FINISHER_KRIS_ANIMATION_SPEED = 4 / 30
 local FINISHER_KRIS_SCALE = 2
 local FINISHER_KRIS_MOVE_DISTANCE = 17
 local FINISHER_KRIS_MOVE_SEGMENT_TIME = 2
+local FINISHER_WARP_BACKGROUND_ALPHA = 0.15
+local FINISHER_SLIDE_HOLD_FRAME = 6
+local FINISHER_SLIDE_LOOP_START_FRAME = 3
+local FINISHER_SLIDE_LOOP_COUNT = 2
+local FINISHER_SLIDE_LAST_WAIT_FRAME = 8
+local FINISHER_SLIDE_END_FRAME = 9
+local FINISHER_SLIDE_AFTERIMAGE_ALPHA = 0.5
+local FINISHER_SLIDE_AFTERIMAGE_FADE_SPEED = 0.05
+local FINISHER_SLIDE_AFTERIMAGE_SPEED = 2
 
 local FINISHER_STAR_WAVE_MAX_INTERVAL = 15 / 30
 local FINISHER_STAR_WAVE_MIN_INTERVAL = 15 / 60
@@ -200,6 +209,7 @@ function KrisFinisher:init()
     self.finisher_transition_shader = nil
     self.finisher_wind_background = nil
     self.finisher_warp_background = nil
+    self.finisher_slide_afterimage = nil
     self.finisher_tp_reached = false
 end
 
@@ -522,9 +532,63 @@ end
 function KrisFinisher:startFinisherWarpBackground(battle)
     self:clearFinisherWarpBackground()
 
-    local background = KrisFinisherWarpBackground()
+    local background = KrisFinisherWarpBackground(FINISHER_WARP_BACKGROUND_ALPHA)
     self.finisher_warp_background = background
     battle:addChild(background)
+end
+
+function KrisFinisher:clearFinisherSlideAfterImage()
+    local afterimage = self.finisher_slide_afterimage
+    if afterimage and afterimage.parent then
+        afterimage:remove()
+    end
+    self.finisher_slide_afterimage = nil
+end
+
+function KrisFinisher:startFinisherSlideAnimation(battle)
+    local sprite = self.finisher_kris_sprite
+    if not sprite or not sprite.parent then
+        return
+    end
+
+    self:clearFinisherSlideAfterImage()
+
+    sprite:setAnimation({
+        "finisher_slide",
+        function(anim_sprite, wait)
+            for frame = 1, FINISHER_SLIDE_HOLD_FRAME - 1 do
+                anim_sprite:setFrame(frame)
+                wait(FINISHER_KRIS_ANIMATION_SPEED)
+            end
+
+            for _ = 1, FINISHER_SLIDE_LOOP_COUNT do
+                for frame = FINISHER_SLIDE_LOOP_START_FRAME, FINISHER_SLIDE_HOLD_FRAME do
+                    anim_sprite:setFrame(frame)
+                    wait(FINISHER_KRIS_ANIMATION_SPEED)
+                end
+            end
+
+            for frame = FINISHER_SLIDE_HOLD_FRAME + 1, FINISHER_SLIDE_LAST_WAIT_FRAME do
+                anim_sprite:setFrame(frame)
+                wait(FINISHER_KRIS_ANIMATION_SPEED)
+            end
+
+            anim_sprite:setFrame(FINISHER_SLIDE_END_FRAME)
+        end,
+        callback = function(anim_sprite)
+            anim_sprite:setFrame(FINISHER_SLIDE_END_FRAME)
+            self:clearFinisherSlideAfterImage()
+        end,
+    })
+
+    local afterimage = AfterImage(
+        sprite,
+        FINISHER_SLIDE_AFTERIMAGE_ALPHA,
+        FINISHER_SLIDE_AFTERIMAGE_FADE_SPEED
+    )
+    afterimage.physics.speed_x = -FINISHER_SLIDE_AFTERIMAGE_SPEED
+    battle:addChild(afterimage)
+    self.finisher_slide_afterimage = afterimage
 end
 
 function KrisFinisher:triggerFinisherTPReached()
@@ -542,8 +606,13 @@ function KrisFinisher:triggerFinisherTPReached()
     self:clearFinisherStars()
     self:clearFinisherBulletObjects(battle)
     self:stopFinisherTransition()
-    self:clearFinisherWindBackground()
+    if self.finisher_wind_background then
+        self.finisher_wind_background:stopWindAnimation()
+        -- Keep the red fullscreen filter from the pre-50 TP scene.
+        self.finisher_wind_background:setFullscreenFilterProgress(1)
+    end
     self:startFinisherWarpBackground(battle)
+    self:startFinisherSlideAnimation(battle)
 
     battle:addChild(RechargeWhiteFlash(nil, {
         hold_time = 0.05,
@@ -756,6 +825,9 @@ end
 function KrisFinisher:updateFinisherKris()
     local kris = self.finisher_kris
     if not kris or not kris.parent then
+        return
+    end
+    if self.finisher_tp_reached then
         return
     end
 
@@ -1002,6 +1074,7 @@ end
 function KrisFinisher:onBattleEnd()
     self:clearFinisherWindBackground()
     self:clearFinisherWarpBackground()
+    self:clearFinisherSlideAfterImage()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
     self:restoreVesselDamageNumbers()

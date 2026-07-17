@@ -4,7 +4,7 @@ local FRAME_RATE = 60
 local FRAME_COUNT = 218
 local FRAMES_PER_CHANNEL = 5
 local FRAMES_PER_TEXTURE = FRAMES_PER_CHANNEL * 3
-local OUTPUT_ALPHA = 0.36
+local DEFAULT_ALPHA = 0.15
 local TEXTURE_PREFIX = "battle/backgrounds/kris_finisher_warp_"
 
 local WARP_SHADER_SOURCE = [[
@@ -57,21 +57,25 @@ local function getTexturePath(index)
     return TEXTURE_PREFIX .. string.format("%02d", index)
 end
 
-function KrisFinisherWarpBackground:init()
+function KrisFinisherWarpBackground:init(alpha)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
     self.layer = BATTLE_LAYERS["background"]
+    self.alpha = alpha == nil and DEFAULT_ALPHA or MathUtils.clamp(alpha, 0, 1)
     self.elapsed = -1 / FRAME_RATE
     self.frame_index = 0
     self.texture_index = nil
     self.texture = nil
     self.shader = love.graphics.newShader(WARP_SHADER_SOURCE)
 
-    self.shader:send("outputAlpha", OUTPUT_ALPHA)
     self.shader:send("palette1", { 0x2F / 255, 0, 0 })
     self.shader:send("palette2", { 0x67 / 255, 0, 0 })
     self.shader:send("palette3", { 1, 0, 0 })
     self:setFrame(0)
+end
+
+function KrisFinisherWarpBackground:setAlpha(alpha)
+    self.alpha = MathUtils.clamp(alpha, 0, 1)
 end
 
 function KrisFinisherWarpBackground:setFrame(frame_index)
@@ -110,6 +114,7 @@ function KrisFinisherWarpBackground:draw()
 
     love.graphics.push()
     love.graphics.origin()
+    self.shader:send("outputAlpha", self.alpha)
     self.shader:send("frameSlot", self.frame_index % FRAMES_PER_TEXTURE)
     love.graphics.setShader(self.shader)
     Draw.setColor(1, 1, 1, 1)

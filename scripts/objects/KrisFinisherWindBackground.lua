@@ -143,6 +143,7 @@ function KrisFinisherWindBackground:init()
     self.scroll = 0
     self.next_particle = randomBetween(PARTICLE_MIN_INTERVAL, PARTICLE_MAX_INTERVAL)
     self.particles = {}
+    self.wind_animation_active = true
     self.fullscreen_filter_progress = 0
 
     self.texture = Assets.getTexture(WIND_TEXTURE)
@@ -280,6 +281,11 @@ function KrisFinisherWindBackground:setFullscreenFilterProgress(progress)
     self.fullscreen_filter_progress = math.max(0, math.min(1, progress))
 end
 
+function KrisFinisherWindBackground:stopWindAnimation()
+    self.wind_animation_active = false
+    self.particles = {}
+end
+
 function KrisFinisherWindBackground:clear()
     self.particles = {}
     self.fullscreen_filter_progress = 0
@@ -294,6 +300,10 @@ function KrisFinisherWindBackground:update()
     super.update(self)
 
     self.time = self.time + DT
+    if not self.wind_animation_active then
+        return
+    end
+
     self.scroll = (self.scroll + WIND_SCROLL_SPEED * DT) % self.rotated_width
     self.next_particle = self.next_particle - DT
 
@@ -446,6 +456,10 @@ end
 
 function KrisFinisherWindBackground:draw()
     self:drawBase()
+    if not self.wind_animation_active then
+        return
+    end
+
     self:drawWind()
     self:drawParticles()
 end

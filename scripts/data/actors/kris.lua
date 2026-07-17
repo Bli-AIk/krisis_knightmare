@@ -28,6 +28,7 @@ function actor:init()
         ["grab_soul"] = { "grab_soul", GRAB_SOUL_SPEED, false, next = "idle" },
         ["throw_soul"] = { "throw_soul", NORMAL_SPEED, false, next = "idle" },
         ["put_back"] = { "put_back", NORMAL_SPEED, false, next = "idle" },
+        ["memory"] = { "memory", FAST_SPEED, false, next = "idle" },
 
         ["slash1"] = { "slash1", FAST_SPEED, false, next = "idle" },
         ["slash2"] = { "slash2", FAST_SPEED, false, next = "idle" },

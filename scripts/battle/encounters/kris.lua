@@ -1106,12 +1106,12 @@ function Kris:startMercyFinaleFinalReinstall()
     self.mercy_finale_detached_timer = 0
     self.mercy_finale_put_back_heart_shown = false
     enemy:setAnimation({
-        "put_back",
+        "memory",
         FAST_SPEED,
         false,
-        frames = { 12, 11, 10, 9, 8, 7 },
+        frames = { "1-4" },
         callback = function(sprite)
-            sprite:setFrame(7)
+            sprite:setFrame(4)
             sprite:pause()
             self:stopMercyFinaleScreenShake(Game.battle)
             self:showMercyFinaleAfterimage()
