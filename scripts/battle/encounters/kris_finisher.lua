@@ -32,10 +32,14 @@ local FINISHER_SWORD_BLUR_FADE_SPEED = 0.12
 local FINISHER_SWORD_BLUR_DRIFT = -5
 
 local FINISHER_ELLIPSE_GROW_TIME = 0.22
-local FINISHER_ELLIPSE_CENTER_Y = SCREEN_HEIGHT * 0.90
+local FINISHER_ELLIPSE_START_CENTER_Y = SCREEN_HEIGHT * 0.90
+local FINISHER_ELLIPSE_TARGET_CENTER_Y = SCREEN_HEIGHT * 0.05
 local FINISHER_ELLIPSE_RADIUS_X = SCREEN_WIDTH * 0.125
 local FINISHER_ELLIPSE_START_RADIUS_Y = SCREEN_HEIGHT * 0.20
-local FINISHER_ELLIPSE_TARGET_RADIUS_Y = SCREEN_HEIGHT * 1.25
+local FINISHER_ELLIPSE_TARGET_RADIUS_Y = SCREEN_HEIGHT * 0.95
+local FINISHER_ELLIPSE_SCALE_AMPLITUDE = 0.025
+local FINISHER_ELLIPSE_HORIZONTAL_SCALE_AMPLITUDE = 0.075
+local FINISHER_ELLIPSE_SCALE_PERIOD = 0.25
 
 local FINISHER_STAR_WAVE_MAX_INTERVAL = 15 / 30
 local FINISHER_STAR_WAVE_MIN_INTERVAL = 15 / 60
@@ -238,7 +242,7 @@ function FinisherEllipse:init(options)
     self.grow_finished = false
     self.on_grow_complete = options.on_grow_complete
     self.center_x = SCREEN_WIDTH / 2
-    self.center_y = FINISHER_ELLIPSE_CENTER_Y
+    self.center_y = FINISHER_ELLIPSE_START_CENTER_Y
     self.radius_x = FINISHER_ELLIPSE_RADIUS_X
     self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
     self:setColor(0, 0, 0, 1)
@@ -249,8 +253,21 @@ function FinisherEllipse:update()
 
     local progress = clamp(self.elapsed / FINISHER_ELLIPSE_GROW_TIME, 0, 1)
     local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
-    self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
-        + (FINISHER_ELLIPSE_TARGET_RADIUS_Y - FINISHER_ELLIPSE_START_RADIUS_Y) * eased
+    if self.grow_finished then
+        local cycle = (self.elapsed - FINISHER_ELLIPSE_GROW_TIME)
+            / FINISHER_ELLIPSE_SCALE_PERIOD
+        local scale_wave = math.sin(cycle * math.pi * 2)
+        local scale_y = 1 + FINISHER_ELLIPSE_SCALE_AMPLITUDE * scale_wave
+        local scale_x = 1 + FINISHER_ELLIPSE_HORIZONTAL_SCALE_AMPLITUDE * scale_wave
+        self.radius_x = FINISHER_ELLIPSE_RADIUS_X * scale_x
+        self.radius_y = FINISHER_ELLIPSE_TARGET_RADIUS_Y * scale_y
+        self.center_y = SCREEN_HEIGHT - self.radius_y
+    else
+        self.center_y = FINISHER_ELLIPSE_START_CENTER_Y
+            + (FINISHER_ELLIPSE_TARGET_CENTER_Y - FINISHER_ELLIPSE_START_CENTER_Y) * eased
+        self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
+            + (FINISHER_ELLIPSE_TARGET_RADIUS_Y - FINISHER_ELLIPSE_START_RADIUS_Y) * eased
+    end
 
     if progress >= 1 and not self.grow_finished then
         self.grow_finished = true
