@@ -40,6 +40,7 @@ local FINISHER_ELLIPSE_TARGET_RADIUS_Y = SCREEN_HEIGHT * 0.95
 local FINISHER_ELLIPSE_SCALE_AMPLITUDE = 0.025
 local FINISHER_ELLIPSE_HORIZONTAL_SCALE_AMPLITUDE = 0.075
 local FINISHER_ELLIPSE_SCALE_PERIOD = 0.25
+local FINISHER_ELLIPSE_PIXEL_STEP = 2
 
 local FINISHER_STAR_WAVE_MAX_INTERVAL = 15 / 30
 local FINISHER_STAR_WAVE_MIN_INTERVAL = 15 / 60
@@ -285,13 +286,24 @@ function FinisherEllipse:draw()
     love.graphics.push()
     love.graphics.origin()
     Draw.setColor(r, g, b, a)
-    love.graphics.ellipse(
-        "fill",
-        self.center_x,
-        self.center_y,
-        self.radius_x,
-        self.radius_y
-    )
+
+    -- Fill the ellipse in snapped scanlines so its boundary keeps a chunky,
+    -- deliberately pixelated staircase instead of a smooth vector edge.
+    local step = FINISHER_ELLIPSE_PIXEL_STEP
+    local top = math.floor((self.center_y - self.radius_y) / step) * step
+    local bottom = math.ceil((self.center_y + self.radius_y) / step) * step
+    for y = top, bottom - step, step do
+        local sample_y = y + step / 2
+        local normalized_y = (sample_y - self.center_y) / self.radius_y
+        if math.abs(normalized_y) <= 1 then
+            local half_width = self.radius_x
+                * math.sqrt(1 - normalized_y * normalized_y)
+            local left = math.floor((self.center_x - half_width) / step) * step
+            local right = math.ceil((self.center_x + half_width) / step) * step
+            love.graphics.rectangle("fill", left, y, right - left, step)
+        end
+    end
+
     love.graphics.pop()
 end
 
