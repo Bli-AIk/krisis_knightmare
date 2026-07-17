@@ -390,6 +390,84 @@ function Loading:draw()
     write_text(path, text)
 
 
+def patch_kristal_https_archive_fallback(args: argparse.Namespace) -> None:
+    stage_dir = Path(args.stage_dir)
+    path = stage_dir / "src/lib/https.lua"
+    text = read_text(path)
+
+    needle = '''local search_paths = { "", (love.filesystem.getRealDirectory("lib/") or "") .. "/lib/" }
+
+local ok, module
+for _, search_path in ipairs(search_paths) do
+    ok, module = pcall(package.loadlib, search_path .. name, "luaopen_https")
+
+    if not module then
+        ok = false
+    end
+
+    if ok then
+        break
+    end
+end
+
+HTTPS_AVAILABLE = ok
+
+if not ok then
+    return
+end
+
+return module()
+'''
+    replacement = '''local function tryLoadLibrary(path)
+    local load_ok, loaded = pcall(package.loadlib, path, "luaopen_https")
+    if not loaded then
+        load_ok = false
+    end
+    return load_ok, loaded
+end
+
+local search_paths = { "", (love.filesystem.getRealDirectory("lib/") or "") .. "/lib/" }
+
+local ok, module
+for _, search_path in ipairs(search_paths) do
+    ok, module = tryLoadLibrary(search_path .. name)
+
+    if ok then
+        break
+    end
+end
+
+if not ok and love.filesystem.getInfo and love.filesystem.getInfo("lib/" .. name) then
+    -- Native libraries cannot be loaded directly from a .love archive.
+    local embedded_data = love.filesystem.read("lib/" .. name)
+    local save_directory = love.filesystem.getSaveDirectory and love.filesystem.getSaveDirectory()
+    if type(embedded_data) == "string" and save_directory then
+        local cache_name = "krisis_" .. name
+        local cache_info = love.filesystem.getInfo(cache_name)
+        local cache_ready = cache_info and cache_info.size == #embedded_data
+        if not cache_ready then
+            cache_ready = love.filesystem.write(cache_name, embedded_data)
+        end
+        if cache_ready then
+            ok, module = tryLoadLibrary(save_directory .. "/" .. cache_name)
+        end
+    end
+end
+
+HTTPS_AVAILABLE = ok
+
+if not ok then
+    return
+end
+
+return module()
+'''
+    if needle not in text:
+        raise SystemExit(f"Could not find Kristal HTTPS loader in {path}")
+    text = text.replace(needle, replacement, 1)
+    write_text(path, text)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build helper for KRISIS standalone packages.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -434,6 +512,10 @@ def build_parser() -> argparse.ArgumentParser:
     startup_credit_parser = subparsers.add_parser("patch-kristal-startup-credit")
     startup_credit_parser.add_argument("stage_dir")
     startup_credit_parser.set_defaults(func=patch_kristal_startup_credit)
+
+    https_archive_parser = subparsers.add_parser("patch-kristal-https-archive-fallback")
+    https_archive_parser.add_argument("stage_dir")
+    https_archive_parser.set_defaults(func=patch_kristal_https_archive_fallback)
 
     return parser
 

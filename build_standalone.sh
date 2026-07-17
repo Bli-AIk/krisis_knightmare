@@ -188,6 +188,12 @@ patch_kristal_startup_credit() {
   python3 "$BUILD_HELPER" patch-kristal-startup-credit "$stage_dir"
 }
 
+patch_kristal_https_archive_fallback() {
+  stage_dir="$1"
+
+  python3 "$BUILD_HELPER" patch-kristal-https-archive-fallback "$stage_dir"
+}
+
 copy_overlay_if_set() {
   variant="$1"
   destination="$2"
@@ -202,6 +208,17 @@ copy_overlay_if_set() {
     log "Applying $variant overlay: $overlay_dir"
     rsync -a "$overlay_dir"/ "$destination"/
   fi
+}
+
+copy_kristal_windows_libraries() {
+  stage_dir="$1"
+  destination="$2"
+
+  for library in "$stage_dir"/lib/*.dll; do
+    if [ -f "$library" ]; then
+      cp "$library" "$destination"/
+    fi
+  done
 }
 
 prepare_stage() {
@@ -256,6 +273,7 @@ prepare_stage() {
   patch_lua_config "$variant" "$stage_dir" "$release_mode"
   patch_default_framerate "$stage_dir"
   patch_kristal_startup_credit "$stage_dir"
+  patch_kristal_https_archive_fallback "$stage_dir"
   patch_mod_manifest "$staged_mod_dir" "$mod_dev" "$object_editor_enabled"
   if [ "$variant" = "release" ]; then
     patch_kristal_release_debug_input "$stage_dir"
@@ -324,6 +342,7 @@ build_variant() {
     cat "$love_dir/love.exe" "$love_file" > "$package_dir/$exe_name"
     cp "$love_dir"/*.dll "$package_dir"/
     cp "$love_dir/license.txt" "$package_dir"/
+    copy_kristal_windows_libraries "$stage_dir" "$package_dir"
     if [ "$variant" = "debug" ]; then
       mkdir -p "$package_dir/mods/$MOD_ID"
       cp "$stage_dir/mods/$MOD_ID/mod.json" "$package_dir/mod.json"

@@ -3,6 +3,8 @@ local UpdateCheckSplash, super = Class(Object)
 local RELEASE_API_URL = "https://api.github.com/repos/Bli-AIk/krisis_knightmare/releases"
 local RELEASE_DOWNLOAD_URL = "https://github.com/Bli-AIk/krisis_knightmare/releases"
 local CHECK_TIMEOUT = 8
+local MAX_CHECK_ATTEMPTS = 3
+local CHECK_RETRY_DELAY = 0.5
 local HOLD_TO_SKIP_TIME = 0.35
 local COPY_MESSAGE_HOLD_TIME = 0.5
 local COPY_MESSAGE_FADE_TIME = 0.5
@@ -208,6 +210,9 @@ function UpdateCheckSplash:init(done_callback)
     self.finished = false
     self.has_drawn = false
     self.request_started = false
+    self.request_id = 0
+    self.request_attempts = 0
+    self.retry_time = 0
     self.status_time = 0
     self.fade_out = false
     self.fade_time = 0
@@ -232,10 +237,14 @@ function UpdateCheckSplash:refreshFonts(force)
 end
 
 function UpdateCheckSplash:startRequest()
-    if self.request_started then
+    if self.request_started or self.status ~= "checking" then
         return
     end
     self.request_started = true
+    self.elapsed = 0
+    self.request_attempts = self.request_attempts + 1
+    self.request_id = self.request_id + 1
+    local request_id = self.request_id
 
     if not Kristal or not Kristal.fetch then
         self:setStatus("failed")
@@ -247,7 +256,7 @@ function UpdateCheckSplash:startRequest()
             ["Accept"] = "application/vnd.github+json",
         },
         callback = function(response, body)
-            self:onResponse(response, body)
+            self:onResponse(response, body, request_id)
         end,
     })
 
@@ -256,25 +265,39 @@ function UpdateCheckSplash:startRequest()
     end
 end
 
-function UpdateCheckSplash:onResponse(response, body)
-    if self.finished or self.status ~= "checking" then
+function UpdateCheckSplash:retryOrFail()
+    self.request_started = false
+    self.request_id = self.request_id + 1
+
+    if self.request_attempts < MAX_CHECK_ATTEMPTS then
+        self.elapsed = 0
+        self.retry_time = CHECK_RETRY_DELAY
         return
     end
 
+    self:setStatus("failed")
+end
+
+function UpdateCheckSplash:onResponse(response, body, request_id)
+    if self.finished or self.status ~= "checking" or request_id ~= self.request_id then
+        return
+    end
+    self.request_started = false
+
     if tonumber(response) ~= 200 or type(body) ~= "string" then
-        self:setStatus("failed")
+        self:retryOrFail()
         return
     end
 
     local ok, data = pcall(JSON.decode, body)
     if not ok then
-        self:setStatus("failed")
+        self:retryOrFail()
         return
     end
 
     local release = getNewestRelease(data)
     if not release then
-        self:setStatus("failed")
+        self:retryOrFail()
         return
     end
 
@@ -288,7 +311,7 @@ function UpdateCheckSplash:onResponse(response, body)
         if self.remote_version == current_version then
             self:setStatus("latest")
         else
-            self:setStatus("failed")
+            self:retryOrFail()
         end
     elseif comparison > 0 then
         self:setStatus("new")
@@ -364,6 +387,10 @@ function UpdateCheckSplash:update()
     self.elapsed = self.elapsed + DT
     self.status_time = self.status_time + DT
 
+    if self.retry_time > 0 then
+        self.retry_time = math.max(self.retry_time - DT, 0)
+    end
+
     if self.fade_out then
         self.fade_time = self.fade_time + DT
         self.alpha = 1 - math.min(self.fade_time / FADE_OUT_TIME, 1)
@@ -373,12 +400,12 @@ function UpdateCheckSplash:update()
         return
     end
 
-    if self.has_drawn and not self.request_started then
+    if self.has_drawn and not self.request_started and self.retry_time <= 0 then
         self:startRequest()
     end
 
-    if self.status == "checking" and self.elapsed >= CHECK_TIMEOUT then
-        self:setStatus("failed")
+    if self.status == "checking" and self.request_started and self.elapsed >= CHECK_TIMEOUT then
+        self:retryOrFail()
     end
 
     if self.status == "latest" and self.status_time >= LATEST_AUTO_DISMISS_DELAY then
