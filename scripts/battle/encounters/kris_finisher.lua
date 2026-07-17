@@ -199,6 +199,8 @@ function KrisFinisher:init()
     self.finisher_transition_fx = nil
     self.finisher_transition_shader = nil
     self.finisher_wind_background = nil
+    self.finisher_warp_background = nil
+    self.finisher_tp_reached = false
 end
 
 function KrisFinisher:createBackground()
@@ -217,6 +219,16 @@ function KrisFinisher:onBattleInit()
 
     if not battle then
         return
+    end
+
+    -- Direct finisher launches skip Kris:onBattleStart because this encounter
+    -- owns the custom opening state. Apply the command-line TP here instead.
+    local initial_tp = Game:getConfig("krisisInitialTP")
+    if initial_tp ~= nil then
+        initial_tp = tonumber(initial_tp)
+        if initial_tp then
+            Game:setTension(initial_tp)
+        end
     end
 
     -- Keep the battle in the opening until the finisher scene is ready to show.
@@ -484,9 +496,72 @@ function KrisFinisher:clearFinisherWindBackground()
     self.finisher_wind_background = nil
 end
 
+function KrisFinisher:clearFinisherWarpBackground()
+    local background = self.finisher_warp_background
+    if background then
+        background:clear()
+    end
+    self.finisher_warp_background = nil
+end
+
+function KrisFinisher:clearFinisherBulletObjects(battle)
+    if not battle then
+        return
+    end
+
+    battle:setWaves({})
+
+    for index = #battle.children, 1, -1 do
+        local child = battle.children[index]
+        if child and child.includes and child:includes(Bullet) then
+            child:remove()
+        end
+    end
+end
+
+function KrisFinisher:startFinisherWarpBackground(battle)
+    self:clearFinisherWarpBackground()
+
+    local background = KrisFinisherWarpBackground()
+    self.finisher_warp_background = background
+    battle:addChild(background)
+end
+
+function KrisFinisher:triggerFinisherTPReached()
+    if self.finisher_tp_reached then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.finisher_tp_reached = true
+    self:stopFinisherStarEmitter()
+    self:clearFinisherStars()
+    self:clearFinisherBulletObjects(battle)
+    self:stopFinisherTransition()
+    self:clearFinisherWindBackground()
+    self:startFinisherWarpBackground(battle)
+
+    battle:addChild(RechargeWhiteFlash(nil, {
+        hold_time = 0.05,
+        fade_time = 0.18,
+        layer = BATTLE_LAYERS["top"] + 2,
+    }))
+end
+
 function KrisFinisher:updateFinisherWindBackground()
+    -- A direct --tp launch starts above the threshold before the custom
+    -- opening is visible. Wait until that cover is gone so the full 60 FPS
+    -- background sequence is actually seen.
+    if self.finisher_opening then
+        return
+    end
+
     if Game:getTension() >= FINISHER_STOP_TP then
-        self:clearFinisherWindBackground()
+        self:triggerFinisherTPReached()
     end
 end
 
@@ -926,6 +1001,7 @@ end
 
 function KrisFinisher:onBattleEnd()
     self:clearFinisherWindBackground()
+    self:clearFinisherWarpBackground()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
     self:restoreVesselDamageNumbers()
