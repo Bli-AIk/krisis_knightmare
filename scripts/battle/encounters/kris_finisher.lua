@@ -12,12 +12,28 @@ local FINISHER_KRIS_MOVE_SEGMENT_TIME = 2
 local FINISHER_WARP_BACKGROUND_ALPHA = 0.15
 local FINISHER_SLIDE_HOLD_FRAME = 6
 local FINISHER_SLIDE_LOOP_START_FRAME = 3
-local FINISHER_SLIDE_LOOP_COUNT = 2
+local FINISHER_SLIDE_LOOP_COUNT = 1
 local FINISHER_SLIDE_LAST_WAIT_FRAME = 8
 local FINISHER_SLIDE_END_FRAME = 9
 local FINISHER_SLIDE_AFTERIMAGE_ALPHA = 0.5
 local FINISHER_SLIDE_AFTERIMAGE_FADE_SPEED = 0.05
 local FINISHER_SLIDE_AFTERIMAGE_SPEED = 2
+
+local FINISHER_SWORD_START_X = SCREEN_WIDTH / 2
+local FINISHER_SWORD_START_Y = SCREEN_HEIGHT * 0.35
+local FINISHER_SWORD_RISE_FADE_TIME = 0.5
+local FINISHER_SWORD_RISE_TIME = 0.8
+local FINISHER_SWORD_DIVE_TIME = 8 / 60
+local FINISHER_SWORD_POST_EXIT_PAUSE = 6 / 60
+local FINISHER_SWORD_BLUR_ALPHA = 0.22
+local FINISHER_SWORD_BLUR_FADE_SPEED = 0.12
+local FINISHER_SWORD_BLUR_DRIFT = -5
+
+local FINISHER_ELLIPSE_GROW_TIME = 0.22
+local FINISHER_ELLIPSE_CENTER_Y = SCREEN_HEIGHT * 0.90
+local FINISHER_ELLIPSE_RADIUS_X = SCREEN_WIDTH * 0.125
+local FINISHER_ELLIPSE_START_RADIUS_Y = SCREEN_HEIGHT * 0.20
+local FINISHER_ELLIPSE_TARGET_RADIUS_Y = SCREEN_HEIGHT * 1.25
 
 local FINISHER_STAR_WAVE_MAX_INTERVAL = 15 / 30
 local FINISHER_STAR_WAVE_MIN_INTERVAL = 15 / 60
@@ -43,6 +59,13 @@ local FINISHER_EXPOSURE_DURATION = 0.2
 local FINISHER_GLOW_DURATION = 0.3
 local FINISHER_RGB_OFFSET = 6.0
 local FINISHER_TRANSITION_SHADER_PRIORITY = 1000
+
+local FINISHER_INVERT_SHADER_SOURCE = [[
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec4 source = Texel(tex, uv);
+        return vec4(vec3(1.0) - source.rgb, source.a) * color;
+    }
+]]
 
 local FINISHER_TRANSITION_SHADER_SOURCE = [[
     extern vec2 texSize;
@@ -183,6 +206,178 @@ function FinisherHurtFlash:draw()
     love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 end
 
+local FinisherInversionBackdrop, inversion_backdrop_super = Class(Object)
+
+function FinisherInversionBackdrop:init()
+    inversion_backdrop_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    self.layer = BATTLE_LAYERS["bottom"]
+end
+
+function FinisherInversionBackdrop:draw()
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+
+    love.graphics.push()
+    love.graphics.origin()
+    Draw.setColor(0, 0, 0, 1)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    love.graphics.pop()
+
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
+end
+
+local FinisherEllipse, ellipse_super = Class(Object)
+
+function FinisherEllipse:init(options)
+    options = options or {}
+    ellipse_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.layer = BATTLE_LAYERS["top"] + 100
+    self.elapsed = 0
+    self.grow_finished = false
+    self.on_grow_complete = options.on_grow_complete
+    self.center_x = SCREEN_WIDTH / 2
+    self.center_y = FINISHER_ELLIPSE_CENTER_Y
+    self.radius_x = FINISHER_ELLIPSE_RADIUS_X
+    self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
+    self:setColor(0, 0, 0, 1)
+end
+
+function FinisherEllipse:update()
+    self.elapsed = self.elapsed + DT
+
+    local progress = clamp(self.elapsed / FINISHER_ELLIPSE_GROW_TIME, 0, 1)
+    local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
+    self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
+        + (FINISHER_ELLIPSE_TARGET_RADIUS_Y - FINISHER_ELLIPSE_START_RADIUS_Y) * eased
+
+    if progress >= 1 and not self.grow_finished then
+        self.grow_finished = true
+        if self.on_grow_complete then
+            self.on_grow_complete(self)
+        end
+    end
+
+    ellipse_super.update(self)
+end
+
+function FinisherEllipse:draw()
+    local r, g, b, a = self:getDrawColor()
+
+    love.graphics.push()
+    love.graphics.origin()
+    Draw.setColor(r, g, b, a)
+    love.graphics.ellipse(
+        "fill",
+        self.center_x,
+        self.center_y,
+        self.radius_x,
+        self.radius_y
+    )
+    love.graphics.pop()
+end
+
+local FinisherFlyingSword, finisher_sword_super = Class(Bullet)
+
+function FinisherFlyingSword:init(x, y, options)
+    options = options or {}
+    finisher_sword_super.init(self, x, y, "bullets/flying_sword/normal")
+
+    -- This is a visual finisher prop, so it uses the normal sword sprite but
+    -- does not participate in the regular bullet path or collision system.
+    self:setSprite("bullets/flying_sword/normal")
+    self:setScale(2.25)
+    self.rotation = math.pi
+    self.layer = BATTLE_LAYERS["top"] + 1
+    self.collidable = false
+    self.can_graze = false
+    self.destroy_on_hit = false
+    self.remove_offscreen = false
+    self.physics.speed_x = 0
+    self.physics.speed_y = 0
+
+    self.phase = "RISE"
+    self.elapsed = 0
+    self.start_x = x
+    self.start_y = y
+    self.target_x = x
+    self.target_y = self:getScaledHeight() / 2
+    self.exit_y = SCREEN_HEIGHT + self:getScaledHeight() / 2 + 8
+    self.exit_started = false
+    self.motion_blurs = {}
+    self.on_exit = options.on_exit
+
+    self:setColor(1, 1, 1, 0)
+end
+
+function FinisherFlyingSword:spawnMotionBlur()
+    if not self.parent then
+        return
+    end
+
+    for index = 1, 2 do
+        local blur = AfterImage(
+            self.sprite,
+            FINISHER_SWORD_BLUR_ALPHA / index,
+            FINISHER_SWORD_BLUR_FADE_SPEED
+        )
+        blur.physics.speed_y = FINISHER_SWORD_BLUR_DRIFT * index
+        self.parent:addChild(blur)
+        blur.layer = self.layer - index * 0.01
+        table.insert(self.motion_blurs, blur)
+    end
+end
+
+function FinisherFlyingSword:clearMotionBlur()
+    for index = #self.motion_blurs, 1, -1 do
+        local blur = self.motion_blurs[index]
+        if blur and blur.parent then
+            blur:remove()
+        end
+        self.motion_blurs[index] = nil
+    end
+end
+
+function FinisherFlyingSword:update()
+    self.elapsed = self.elapsed + DT
+
+    if self.phase == "RISE" then
+        local move_progress = clamp(self.elapsed / FINISHER_SWORD_RISE_TIME, 0, 1)
+        local move_eased = move_progress * move_progress * move_progress
+        self.x = self.start_x + (self.target_x - self.start_x) * move_eased
+        self.y = self.start_y + (self.target_y - self.start_y) * move_eased
+
+        local color_progress = move_eased
+        local alpha = clamp(self.elapsed / FINISHER_SWORD_RISE_FADE_TIME, 0, 1)
+        self:setColor(1, 1 - color_progress, 1 - color_progress, alpha)
+
+        if move_progress >= 1 then
+            self.phase = "DIVE"
+            self.elapsed = 0
+            self:setColor(1, 0, 0, 1)
+        end
+    elseif self.phase == "DIVE" then
+        local progress = clamp(self.elapsed / FINISHER_SWORD_DIVE_TIME, 0, 1)
+        local eased = progress * progress * progress
+        self.y = self.target_y + (self.exit_y - self.target_y) * eased
+        self:setColor(1, 0, 0, 1)
+        self:spawnMotionBlur()
+    end
+
+    finisher_sword_super.update(self)
+
+    if self.phase == "DIVE" and not self.exit_started then
+        local _, screen_y = self:getScreenPos()
+        local half_height = self:getScaledHeight() / 2
+        if screen_y - half_height >= SCREEN_HEIGHT then
+            self.exit_started = true
+            if self.on_exit then
+                self.on_exit(self)
+            end
+            self:remove()
+        end
+    end
+end
+
 function KrisFinisher:init()
     super.init(self)
 
@@ -210,6 +405,15 @@ function KrisFinisher:init()
     self.finisher_wind_background = nil
     self.finisher_warp_background = nil
     self.finisher_slide_afterimage = nil
+    self.finisher_tp_flash = nil
+    self.finisher_sword = nil
+    self.finisher_sword_post_exit_delay = nil
+    self.finisher_sword_post_exit_battle = nil
+    self.finisher_inversion_shader = nil
+    self.finisher_inversion_battle = nil
+    self.finisher_inversion_backdrop = nil
+    self.finisher_inversion_fx = nil
+    self.finisher_ellipse = nil
     self.finisher_tp_reached = false
 end
 
@@ -545,6 +749,163 @@ function KrisFinisher:clearFinisherSlideAfterImage()
     self.finisher_slide_afterimage = nil
 end
 
+function KrisFinisher:clearFinisherSword()
+    local sword = self.finisher_sword
+    if sword then
+        sword:clearMotionBlur()
+        if sword.parent then
+            sword:remove()
+        end
+    end
+    self.finisher_sword = nil
+    self.finisher_sword_post_exit_delay = nil
+    self.finisher_sword_post_exit_battle = nil
+end
+
+function KrisFinisher:clearFinisherEllipse()
+    local ellipse = self.finisher_ellipse
+    if ellipse and ellipse.parent then
+        ellipse:remove()
+    end
+    self.finisher_ellipse = nil
+end
+
+function KrisFinisher:clearFinisherInversion()
+    local battle = self.finisher_inversion_battle
+    if battle and self.finisher_inversion_fx then
+        battle:removeFX("kris_finisher_invert")
+    end
+    if self.finisher_inversion_backdrop and self.finisher_inversion_backdrop.parent then
+        self.finisher_inversion_backdrop:remove()
+    end
+
+    self.finisher_inversion_battle = nil
+    self.finisher_inversion_backdrop = nil
+    self.finisher_inversion_fx = nil
+end
+
+function KrisFinisher:clearFinisherHurtFlash()
+    if self.finisher_hurt_flash and self.finisher_hurt_flash.parent then
+        self.finisher_hurt_flash:remove()
+    end
+    self.finisher_hurt_flash = nil
+
+    if self.finisher_tp_flash and self.finisher_tp_flash.parent then
+        self.finisher_tp_flash:remove()
+    end
+    self.finisher_tp_flash = nil
+end
+
+function KrisFinisher:removeFinisherKrisSprite()
+    local sprite = self.finisher_kris_sprite
+    if not sprite then
+        return
+    end
+
+    sprite.active = false
+    sprite.visible = false
+    if sprite.parent then
+        sprite:remove()
+    end
+end
+
+function KrisFinisher:startFinisherInversion(battle)
+    self:clearFinisherInversion()
+
+    local backdrop = FinisherInversionBackdrop()
+    battle:addChild(backdrop)
+
+    local shader = self.finisher_inversion_shader
+    if not shader then
+        shader = love.graphics.newShader(FINISHER_INVERT_SHADER_SOURCE)
+        self.finisher_inversion_shader = shader
+    end
+
+    local fx = ShaderFX(shader, nil, false, BATTLE_LAYERS["top"] + 100)
+    battle:addFX(fx, "kris_finisher_invert")
+    self.finisher_inversion_battle = battle
+    self.finisher_inversion_backdrop = backdrop
+    self.finisher_inversion_fx = fx
+end
+
+function KrisFinisher:startFinisherEllipse()
+    self:clearFinisherEllipse()
+
+    if not Game.stage then
+        return
+    end
+
+    local ellipse = FinisherEllipse({
+        on_grow_complete = function(current_ellipse)
+            self:finishFinisherEllipseInversion(current_ellipse)
+        end,
+    })
+    Game.stage:addChild(ellipse)
+    self.finisher_ellipse = ellipse
+end
+
+function KrisFinisher:finishFinisherEllipseInversion(ellipse)
+    if self.finisher_ellipse ~= ellipse then
+        return
+    end
+
+    self:clearFinisherInversion()
+    ellipse:setColor(1, 1, 1, 1)
+end
+
+function KrisFinisher:startFinisherSword(battle)
+    self:clearFinisherSword()
+
+    local sword = FinisherFlyingSword(
+        FINISHER_SWORD_START_X,
+        FINISHER_SWORD_START_Y,
+        {
+            on_exit = function(prop)
+                self:finishFinisherSword(prop, battle)
+            end,
+        }
+    )
+    battle:addChild(sword)
+    self.finisher_sword = sword
+end
+
+function KrisFinisher:finishFinisherSword(sword, battle)
+    if self.finisher_sword ~= sword then
+        return
+    end
+
+    self:stopFinisherTransition()
+    self:clearFinisherWindBackground()
+    self:clearFinisherWarpBackground()
+    self:clearFinisherHurtFlash()
+    self:removeFinisherKrisSprite()
+
+    self.finisher_sword_post_exit_delay = FINISHER_SWORD_POST_EXIT_PAUSE
+    self.finisher_sword_post_exit_battle = battle
+end
+
+function KrisFinisher:completeFinisherSword(battle)
+    self:startFinisherInversion(battle)
+    self:startFinisherEllipse()
+end
+
+function KrisFinisher:updateFinisherSword()
+    local delay = self.finisher_sword_post_exit_delay
+    if not delay then
+        return
+    end
+
+    self.finisher_sword_post_exit_delay = delay - DT
+    if self.finisher_sword_post_exit_delay > 0 then
+        return
+    end
+
+    local battle = self.finisher_sword_post_exit_battle
+    self.finisher_sword_post_exit_delay = nil
+    self.finisher_sword_post_exit_battle = nil
+    self:completeFinisherSword(battle)
+end
+
 function KrisFinisher:startFinisherSlideAnimation(battle)
     local sprite = self.finisher_kris_sprite
     if not sprite or not sprite.parent then
@@ -560,6 +921,8 @@ function KrisFinisher:startFinisherSlideAnimation(battle)
                 anim_sprite:setFrame(frame)
                 wait(FINISHER_KRIS_ANIMATION_SPEED)
             end
+
+            self:startFinisherSword(battle)
 
             for _ = 1, FINISHER_SLIDE_LOOP_COUNT do
                 for frame = FINISHER_SLIDE_LOOP_START_FRAME, FINISHER_SLIDE_HOLD_FRAME do
@@ -614,11 +977,13 @@ function KrisFinisher:triggerFinisherTPReached()
     self:startFinisherWarpBackground(battle)
     self:startFinisherSlideAnimation(battle)
 
-    battle:addChild(RechargeWhiteFlash(nil, {
+    local tp_flash = RechargeWhiteFlash(nil, {
         hold_time = 0.05,
         fade_time = 0.18,
         layer = BATTLE_LAYERS["top"] + 2,
-    }))
+    })
+    battle:addChild(tp_flash)
+    self.finisher_tp_flash = tp_flash
 end
 
 function KrisFinisher:updateFinisherWindBackground()
@@ -1059,6 +1424,7 @@ function KrisFinisher:update()
     super.update(self)
 
     self:updateFinisherWindBackground()
+    self:updateFinisherSword()
 
     if self.finisher_opening then
         self:updateOpening()
@@ -1075,13 +1441,13 @@ function KrisFinisher:onBattleEnd()
     self:clearFinisherWindBackground()
     self:clearFinisherWarpBackground()
     self:clearFinisherSlideAfterImage()
+    self:clearFinisherSword()
+    self:clearFinisherEllipse()
+    self:clearFinisherInversion()
+    self:clearFinisherHurtFlash()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
     self:restoreVesselDamageNumbers()
-    if self.finisher_hurt_flash and self.finisher_hurt_flash.parent then
-        self.finisher_hurt_flash:remove()
-    end
-    self.finisher_hurt_flash = nil
 end
 
 return KrisFinisher
