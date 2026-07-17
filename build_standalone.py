@@ -344,6 +344,52 @@ def patch_kristal_v010_release_debug_input(args: argparse.Namespace) -> None:
     write_text(path, patched)
 
 
+def patch_kristal_startup_credit(args: argparse.Namespace) -> None:
+    stage_dir = Path(args.stage_dir)
+    path = stage_dir / "src/engine/loadstate.lua"
+    text = read_text(path)
+
+    init_needle = '    self.logo_heart = love.graphics.newImage("assets/sprites/kristal/title_logo_heart.png")\n'
+    init_replacement = init_needle + '    self.credit_font = love.graphics.newFont("assets/fonts/main.ttf", 8, "mono")\n'
+    if init_needle not in text:
+        raise SystemExit(f"Could not find Kristal logo initialization in {path}")
+    text = text.replace(init_needle, init_replacement, 1)
+
+    skip_needle = "        self:drawSprite(self.logo, 0, 0, 1)\n        love.graphics.pop()\n"
+    skip_replacement = "        self:drawSprite(self.logo, 0, 0, 1)\n        self:drawCredit(1, -self.w / 2, self.h / 2 + 4, self.w)\n        love.graphics.pop()\n"
+    if skip_needle not in text:
+        raise SystemExit(f"Could not find Kristal skip-intro draw site in {path}")
+    text = text.replace(skip_needle, skip_replacement, 1)
+
+    draw_method_needle = "function Loading:draw()\n"
+    draw_method_replacement = """function Loading:drawCredit(alpha, x, y, width)
+    local old_font = love.graphics.getFont()
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+
+    alpha = math.max(0, math.min(1, alpha or 1))
+    love.graphics.setFont(self.credit_font)
+    love.graphics.setColor(1, 1, 1, alpha)
+    love.graphics.printf(\"made with\", x, y, width, \"center\")
+
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
+    love.graphics.setFont(old_font)
+end
+
+function Loading:draw()
+"""
+    if draw_method_needle not in text:
+        raise SystemExit(f"Could not find Kristal loading draw method in {path}")
+    text = text.replace(draw_method_needle, draw_method_replacement, 1)
+
+    credit_needle = "    end\n\n    -- Reset canvas to draw to\n    Draw.popCanvas()\n"
+    credit_replacement = "    end\n\n    local credit_alpha = self.animation_phase == 0 and (1 - self.factor) or self.logo_alpha\n    self:drawCredit(credit_alpha, self.x, self.y + self.h + 4, self.w)\n\n    -- Reset canvas to draw to\n    Draw.popCanvas()\n"
+    if credit_needle not in text:
+        raise SystemExit(f"Could not find Kristal loading canvas draw site in {path}")
+    text = text.replace(credit_needle, credit_replacement, 1)
+
+    write_text(path, text)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build helper for KRISIS standalone packages.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -384,6 +430,10 @@ def build_parser() -> argparse.ArgumentParser:
     release_debug_parser = subparsers.add_parser("patch-kristal-v010-release-debug-input")
     release_debug_parser.add_argument("stage_dir")
     release_debug_parser.set_defaults(func=patch_kristal_v010_release_debug_input)
+
+    startup_credit_parser = subparsers.add_parser("patch-kristal-startup-credit")
+    startup_credit_parser.add_argument("stage_dir")
+    startup_credit_parser.set_defaults(func=patch_kristal_startup_credit)
 
     return parser
 

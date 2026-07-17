@@ -182,6 +182,12 @@ patch_kristal_release_debug_input() {
   python3 "$BUILD_HELPER" patch-kristal-v010-release-debug-input "$stage_dir"
 }
 
+patch_kristal_startup_credit() {
+  stage_dir="$1"
+
+  python3 "$BUILD_HELPER" patch-kristal-startup-credit "$stage_dir"
+}
+
 copy_overlay_if_set() {
   variant="$1"
   destination="$2"
@@ -249,6 +255,7 @@ prepare_stage() {
   fi
   patch_lua_config "$variant" "$stage_dir" "$release_mode"
   patch_default_framerate "$stage_dir"
+  patch_kristal_startup_credit "$stage_dir"
   patch_mod_manifest "$staged_mod_dir" "$mod_dev" "$object_editor_enabled"
   if [ "$variant" = "release" ]; then
     patch_kristal_release_debug_input "$stage_dir"
