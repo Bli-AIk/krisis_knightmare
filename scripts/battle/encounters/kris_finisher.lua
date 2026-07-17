@@ -10,6 +10,7 @@ local FINISHER_KRIS_SCALE = 2
 local FINISHER_KRIS_MOVE_DISTANCE = 17
 local FINISHER_KRIS_MOVE_SEGMENT_TIME = 2
 local FINISHER_WARP_BACKGROUND_ALPHA = 0.15
+local FINISHER_TP50_FULLSCREEN_FILTER_PROGRESS = 0.01
 local FINISHER_SLIDE_HOLD_FRAME = 6
 local FINISHER_SLIDE_LOOP_START_FRAME = 3
 local FINISHER_SLIDE_LOOP_COUNT = 1
@@ -23,6 +24,7 @@ local FINISHER_SWORD_START_X = SCREEN_WIDTH / 2
 local FINISHER_SWORD_START_Y = SCREEN_HEIGHT * 0.35
 local FINISHER_SWORD_RISE_FADE_TIME = 0.5
 local FINISHER_SWORD_RISE_TIME = 0.8
+local FINISHER_SWORD_TOP_HOLD_TIME = 8 / 60
 local FINISHER_SWORD_DIVE_TIME = 8 / 60
 local FINISHER_SWORD_POST_EXIT_PAUSE = 6 / 60
 local FINISHER_SWORD_BLUR_ALPHA = 0.22
@@ -342,7 +344,7 @@ function FinisherFlyingSword:update()
 
     if self.phase == "RISE" then
         local move_progress = clamp(self.elapsed / FINISHER_SWORD_RISE_TIME, 0, 1)
-        local move_eased = move_progress * move_progress * move_progress
+        local move_eased = 1 - (1 - move_progress) * (1 - move_progress) * (1 - move_progress)
         self.x = self.start_x + (self.target_x - self.start_x) * move_eased
         self.y = self.start_y + (self.target_y - self.start_y) * move_eased
 
@@ -351,9 +353,18 @@ function FinisherFlyingSword:update()
         self:setColor(1, 1 - color_progress, 1 - color_progress, alpha)
 
         if move_progress >= 1 then
-            self.phase = "DIVE"
+            self.phase = "TOP_HOLD"
             self.elapsed = 0
             self:setColor(1, 0, 0, 1)
+        end
+    elseif self.phase == "TOP_HOLD" then
+        self.x = self.target_x
+        self.y = self.target_y
+        self:setColor(1, 0, 0, 1)
+
+        if self.elapsed >= FINISHER_SWORD_TOP_HOLD_TIME then
+            self.phase = "DIVE"
+            self.elapsed = 0
         end
     elseif self.phase == "DIVE" then
         local progress = clamp(self.elapsed / FINISHER_SWORD_DIVE_TIME, 0, 1)
@@ -972,7 +983,10 @@ function KrisFinisher:triggerFinisherTPReached()
     if self.finisher_wind_background then
         self.finisher_wind_background:stopWindAnimation()
         -- Keep the red fullscreen filter from the pre-50 TP scene.
-        self.finisher_wind_background:setFullscreenFilterProgress(1)
+        -- It is intentionally weaker here so the post-50 warp stays near black.
+        self.finisher_wind_background:setFullscreenFilterProgress(
+            FINISHER_TP50_FULLSCREEN_FILTER_PROGRESS
+        )
     end
     self:startFinisherWarpBackground(battle)
     self:startFinisherSlideAnimation(battle)
