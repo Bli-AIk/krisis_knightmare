@@ -10,8 +10,9 @@ run *args:
 
     usage() {
       printf '%s\n' \
-        'usage: just run [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n] [--mercy n|-m n] [--proceed|-p]' \
+        'usage: just run [--credits|-c] [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n] [--mercy n|-m n] [--proceed|-p]' \
         '' \
+        '  --credits, -c         Start directly in the credits scene.' \
         '  --encounter, -e       Start directly in an encounter. Defaults to "kris".' \
         '  --wave, -w            Start the encounter from a specific wave number.' \
         '  --wave-force, -wf     Lock the encounter to a specific wave number.' \
@@ -22,6 +23,7 @@ run *args:
 
     kristal_args=()
     encounter_requested=0
+    credits_requested=0
     wave_requested=0
     tp_requested=0
     mercy_requested=0
@@ -45,6 +47,11 @@ run *args:
         --help|-h)
           usage
           exit 0
+          ;;
+        --credits|-c)
+          credits_requested=1
+          kristal_args+=(--credits)
+          shift
           ;;
         --encounter=*)
           encounter_requested=1
