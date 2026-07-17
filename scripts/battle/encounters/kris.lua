@@ -130,7 +130,9 @@ function MercyFinaleActionBoxMask:init(action_box)
     action_box_mask_super.init(self, 0, action_box.box.y)
 
     self.action_box = action_box
-    self.layer = 0.5
+    -- Draw after ActionBoxDisplay so the HP/name data is actually covered,
+    -- while leaving the custom border above the mask.
+    self.layer = 1.5
 end
 
 function MercyFinaleActionBoxMask:update()
@@ -1269,8 +1271,8 @@ function Kris:startMercyFinaleSoulCutscene()
         battle.battle_ui:clearEncounterText()
     end
 
-    self.mercy_finale:hideFinalBlackScreen()
-    self.mercy_finale:setEnemyAboveBlackScreen(false)
+    self.mercy_finale:showSoulCutsceneBlackScreen()
+    self.mercy_finale:setEnemyAboveBlackScreen(true)
     self.mercy_finale_ui_alpha = 1
     for _, fx in ipairs(self.mercy_finale_ui_fades or {}) do
         fx.alpha = 1
@@ -1363,7 +1365,7 @@ function Kris:spawnMercyFinaleSoulHeart()
 
     local x, y = self.mercy_finale:getEnemyOrigin()
     local heart = MercyFinaleSoulHeart(x - 22, y - 16)
-    heart.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.1
+    heart.layer = BATTLE_LAYERS["top"] + 1
     battle:addChild(heart)
     self.mercy_finale_soul_heart = heart
 end

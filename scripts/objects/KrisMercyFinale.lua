@@ -370,6 +370,24 @@ function KrisMercyFinale:hideFinalBlackScreen()
     end
 end
 
+function KrisMercyFinale:showSoulCutsceneBlackScreen()
+    self.circles = {}
+    self.flash_alpha = 0
+    self.black_screen = true
+    self.final_black_screen = false
+    self.phase = "SOUL_BLACK"
+    self.phase_time = 0
+    self.layer = self:getLayerBelowBattleUi(self.battle)
+
+    if self.player_light then
+        self.player_light.alpha = 0
+    end
+
+    if self.battle then
+        self.battle.update_child_list = true
+    end
+end
+
 function KrisMercyFinale:update()
     super.update(self)
     self:syncLayer()
