@@ -258,6 +258,7 @@ prepare_stage() {
     --exclude='/.claude/' \
     --exclude='/.helix/' \
     --exclude='/.build/' \
+    --exclude='/.worktree/' \
     --exclude='/dist/' \
     --exclude='/target/' \
     --exclude='/build_standalone.sh' \

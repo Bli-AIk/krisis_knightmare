@@ -1,11 +1,9 @@
 ---@class ChapterTitle: Object
 local ChapterTitle, super = Class(Object)
 
-local FRAME_DIR = Mod.info.path .. "/libraries/chapter_title/assets/frames/"
+local VIDEO_PATH = Mod.info.path .. "/libraries/chapter_title/assets/video/title.ogv"
 local AUDIO_PATH = Mod.info.path .. "/libraries/chapter_title/assets/audio/start.wav"
-local FPS = 30
-local TOTAL_FRAMES = 464
-local DURATION = TOTAL_FRAMES / FPS
+local DURATION = 464 / 30
 local FADE_DURATION = 0.5
 
 function ChapterTitle:init(chapter, onComplete)
@@ -13,11 +11,9 @@ function ChapterTitle:init(chapter, onComplete)
     self.chapter = chapter
     self.onComplete = onComplete
 
-    -- PNG 序列
-    self.frame = 0
-    self.cur_img = nil
-    self.cur_sx = 1
-    self.cur_sy = 1
+    self.video = love.graphics.newVideo(VIDEO_PATH, {audio = false})
+    self.video:setFilter("nearest", "nearest")
+    self.video:play()
     self.elapsed = 0
 
     -- 音频
@@ -36,40 +32,6 @@ function ChapterTitle:init(chapter, onComplete)
     self.running = true
     self.ended = false
 
-    self:_advanceFrame()
-end
-
-function ChapterTitle:_framePath(n)
-    return FRAME_DIR .. string.format("f_%03d.png", n)
-end
-
-function ChapterTitle:_loadFrame(n)
-    local path = self:_framePath(n)
-    if not love.filesystem.getInfo(path) then
-        return false
-    end
-    if self.cur_img then
-        self.cur_img:release()
-    end
-    self.cur_img = love.graphics.newImage(path)
-    self.cur_sx = SCREEN_WIDTH / self.cur_img:getWidth()
-    self.cur_sy = SCREEN_HEIGHT / self.cur_img:getHeight()
-    return true
-end
-
-function ChapterTitle:_advanceFrame()
-    self.frame = self.frame + 1
-    if self.frame > TOTAL_FRAMES then
-        return
-    end
-    self:_loadFrame(self.frame)
-end
-
-function ChapterTitle:_seekToFrame(target)
-    while self.frame < target and self.frame < TOTAL_FRAMES do
-        self.frame = self.frame + 1
-        self:_loadFrame(self.frame)
-    end
 end
 
 function ChapterTitle:_startFade()
@@ -79,10 +41,10 @@ function ChapterTitle:_startFade()
     self.running = false
     self.fading_out = true
     self.fade_timer = 0
+    self.video:pause()
 end
 
 function ChapterTitle:_reset()
-    self.frame = 0
     self.elapsed = 0
     self.fading_out = false
     self.fade_timer = 0
@@ -91,13 +53,15 @@ function ChapterTitle:_reset()
     self.audio_started = false
     self.audio:stop()
     self.audio:setVolume(2)
-    self:_advanceFrame()
+    self.video:seek(0)
+    self.video:play()
 end
 
 function ChapterTitle:_finish()
     self.running = false
     self.ended = true
     self.audio:stop()
+    self.video:pause()
     Game.world:closeMenu()
     if self.onComplete then
         self.onComplete()
@@ -149,10 +113,6 @@ function ChapterTitle:update()
         self.audio_started = true
         self.audio:play()
     end
-    local target_frame = math.floor(self.elapsed * FPS) + 1
-    if target_frame > self.frame then
-        self:_seekToFrame(target_frame)
-    end
     if self.elapsed >= DURATION then
         if self.debug_blocked then
             self.debug_subtitle_alpha = 1
@@ -172,13 +132,20 @@ function ChapterTitle:draw()
 
     if self.ended then return end
 
-    if self.cur_img then
+    if self.video then
         local alpha = 1
         if self.fading_out then
             alpha = 1 - math.min(self.fade_timer / FADE_DURATION, 1)
         end
         Draw.setColor(1, 1, 1, alpha)
-        Draw.draw(self.cur_img, 0, 0, 0, self.cur_sx, self.cur_sy)
+        love.graphics.draw(
+            self.video,
+            0,
+            0,
+            0,
+            SCREEN_WIDTH / self.video:getWidth(),
+            SCREEN_HEIGHT / self.video:getHeight()
+        )
     end
 
     if self.debug_mode and self.debug_subtitle_alpha > 0 then
