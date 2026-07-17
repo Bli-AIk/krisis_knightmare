@@ -424,6 +424,10 @@ function KrisFinisher:init()
     self.finisher_inversion_battle = nil
     self.finisher_inversion_backdrop = nil
     self.finisher_inversion_fx = nil
+    self.finisher_inversion_soul = nil
+    self.finisher_inversion_soul_state = nil
+    self.finisher_inversion_soul_sprite = nil
+    self.finisher_inversion_soul_sprite_state = nil
     self.finisher_ellipse = nil
     self.finisher_tp_reached = false
 end
@@ -790,9 +794,28 @@ function KrisFinisher:clearFinisherInversion()
         self.finisher_inversion_backdrop:remove()
     end
 
+    local soul = self.finisher_inversion_soul
+    local soul_state = self.finisher_inversion_soul_state
+    if soul and soul_state then
+        soul:setColor(
+            soul_state.color[1],
+            soul_state.color[2],
+            soul_state.color[3],
+            soul_state.alpha
+        )
+    end
+    restoreSpriteState(
+        self.finisher_inversion_soul_sprite,
+        self.finisher_inversion_soul_sprite_state
+    )
+
     self.finisher_inversion_battle = nil
     self.finisher_inversion_backdrop = nil
     self.finisher_inversion_fx = nil
+    self.finisher_inversion_soul = nil
+    self.finisher_inversion_soul_state = nil
+    self.finisher_inversion_soul_sprite = nil
+    self.finisher_inversion_soul_sprite_state = nil
 end
 
 function KrisFinisher:clearFinisherHurtFlash()
@@ -822,6 +845,22 @@ end
 
 function KrisFinisher:startFinisherInversion(battle)
     self:clearFinisherInversion()
+
+    local soul = battle and battle.soul
+    if soul then
+        self.finisher_inversion_soul = soul
+        self.finisher_inversion_soul_state = {
+            color = { soul.color[1], soul.color[2], soul.color[3] },
+            alpha = soul.alpha,
+        }
+        if soul.sprite then
+            self.finisher_inversion_soul_sprite = soul.sprite
+            self.finisher_inversion_soul_sprite_state = copySpriteState(soul.sprite)
+        end
+
+        -- The battle inversion turns white into black for the player's heart.
+        soul:setColor(1, 1, 1, soul.alpha)
+    end
 
     local backdrop = FinisherInversionBackdrop()
     battle:addChild(backdrop)
