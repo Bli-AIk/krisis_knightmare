@@ -53,6 +53,31 @@ local FINISHER_STAR_MIN_RADIUS = 0
 local FINISHER_STAR_TRAVEL_TIME = 3
 local FINISHER_STAR_ORBIT_SPEED = math.rad(12)
 local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
+
+-- These centers are measured from the 1280x960 reference composite and
+-- divided by two for the 640x480 battle coordinate space.
+local FINISHER_FOUNTAIN_FLASH_POSITIONS = {
+    { 226.4, 188.2 },
+    { 242.9, 205.6 },
+    { 264.7, 184.5 },
+    { 284.0, 174.9 },
+    { 300.6, 192.3 },
+    { 322.5, 171.4 },
+    { 355.7, 193.6 },
+    { 390.5, 176.6 },
+    { 407.0, 194.1 },
+    { 428.5, 172.9 },
+}
+local FINISHER_FOUNTAIN_FLASH_FIRST_WAVE_COUNT = 2
+
+local FINISHER_RAIN_TEXTURE_WIDTH = 22
+local FINISHER_RAIN_TEXTURE_HEIGHT = 30
+local FINISHER_RAIN_SCALE = 1
+local FINISHER_RAIN_SPAWN_Y = -(FINISHER_RAIN_TEXTURE_HEIGHT * FINISHER_RAIN_SCALE) / 2
+local FINISHER_RAIN_SPAWN_INTERVAL_MIN = 0.01
+local FINISHER_RAIN_SPAWN_INTERVAL_MAX = 0.5
+local FINISHER_RAIN_SPAWN_INTERVAL_BIAS_POWER = 4
+local FINISHER_RAIN_MAX_SPAWNS_PER_UPDATE = 32
 local FINISHER_STOP_TP = 50
 local FINISHER_PLAYER_DRIFT_SPEED = 4 / 2 * 0.75
 local FINISHER_HURT_FLASH_MAX_ALPHA = 0.5
@@ -498,6 +523,14 @@ function KrisFinisher:init()
     self.finisher_star_initial_radius = nil
     self.finisher_star_center_x = nil
     self.finisher_star_center_y = nil
+    self.finisher_fountain_flashes = {}
+    self.finisher_fountain_flash_emitting = false
+    self.finisher_fountain_flash_position = 1
+    self.finisher_fountain_flash_wave = 0
+    self.finisher_rains = {}
+    self.finisher_rain_emitting = false
+    self.finisher_rain_spawn_timer = 0
+    self.finisher_rain_battle = nil
     self.finisher_kris_move_elapsed = 0
     self.finisher_hurt_flash = nil
     self.finisher_status_message_restore = {}
@@ -981,6 +1014,7 @@ function KrisFinisher:startFinisherFountain(battle)
     local fountain = FinisherFountain({
         on_grow_complete = function(current_fountain)
             self:finishFinisherFountainInversion(current_fountain, battle)
+            self:startFinisherRainEmitter(battle)
         end,
         on_remove = function(current_fountain)
             if self.finisher_fountain == current_fountain then
@@ -1022,6 +1056,123 @@ function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
     self.finisher_inversion_stage_fx = fx
 end
 
+function KrisFinisher:getFinisherRainSpawnInterval()
+    local random_value = Mod:randomKrisis("kris_finisher_rain")
+    return FINISHER_RAIN_SPAWN_INTERVAL_MIN
+        + (FINISHER_RAIN_SPAWN_INTERVAL_MAX - FINISHER_RAIN_SPAWN_INTERVAL_MIN)
+        * (random_value ^ FINISHER_RAIN_SPAWN_INTERVAL_BIAS_POWER)
+end
+
+function KrisFinisher:clearFinisherRains()
+    for index = #self.finisher_rains, 1, -1 do
+        local rain = self.finisher_rains[index]
+        if rain and rain.parent then
+            rain:remove()
+        end
+        self.finisher_rains[index] = nil
+    end
+end
+
+function KrisFinisher:pruneFinisherRains()
+    local write_index = 1
+    for read_index = 1, #self.finisher_rains do
+        local rain = self.finisher_rains[read_index]
+        if rain and rain.parent then
+            self.finisher_rains[write_index] = rain
+            write_index = write_index + 1
+        end
+    end
+
+    for index = write_index, #self.finisher_rains do
+        self.finisher_rains[index] = nil
+    end
+end
+
+function KrisFinisher:isFinisherRainSpawnFree(x)
+    local spawn_half_width = FINISHER_RAIN_TEXTURE_WIDTH * FINISHER_RAIN_SCALE / 2
+    local spawn_half_height = FINISHER_RAIN_TEXTURE_HEIGHT * FINISHER_RAIN_SCALE / 2
+
+    -- Check the actual spawn rectangles. Once an older rain has fallen clear
+    -- of the top edge, its x lane can be reused without visual overlap.
+    for _, rain in ipairs(self.finisher_rains) do
+        if rain and rain.parent then
+            local rain_half_width = rain:getScaledWidth() / 2
+            local rain_half_height = rain:getScaledHeight() / 2
+            local overlaps_x = math.abs(x - rain.x)
+                < spawn_half_width + rain_half_width
+            local overlaps_y = math.abs(FINISHER_RAIN_SPAWN_Y - rain.y)
+                < spawn_half_height + rain_half_height
+            if overlaps_x and overlaps_y then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
+function KrisFinisher:spawnFinisherRain()
+    local battle = self.finisher_rain_battle
+    if not battle or not battle.parent then
+        return false
+    end
+
+    local half_width = FINISHER_RAIN_TEXTURE_WIDTH * FINISHER_RAIN_SCALE / 2
+    local min_x = half_width
+    local max_x = SCREEN_WIDTH - half_width
+    for _ = 1, 64 do
+        local x = min_x + (max_x - min_x) * Mod:randomKrisis("kris_finisher_rain")
+        if self:isFinisherRainSpawnFree(x) then
+            local rain = Registry.createBullet("finisher_rain", x, FINISHER_RAIN_SPAWN_Y)
+            battle:addChild(rain)
+            table.insert(self.finisher_rains, rain)
+            return true
+        end
+    end
+
+    return false
+end
+
+function KrisFinisher:startFinisherRainEmitter(battle)
+    self:stopFinisherRainEmitter()
+    self.finisher_rain_battle = battle
+    self.finisher_rain_emitting = true
+    self:spawnFinisherRain()
+    self.finisher_rain_spawn_timer = self:getFinisherRainSpawnInterval()
+end
+
+function KrisFinisher:stopFinisherRainEmitter()
+    self.finisher_rain_emitting = false
+    self.finisher_rain_spawn_timer = 0
+    self.finisher_rain_battle = nil
+    self:clearFinisherRains()
+end
+
+function KrisFinisher:updateFinisherRainEmitter()
+    if not self.finisher_rain_emitting then
+        return
+    end
+
+    local battle = self.finisher_rain_battle
+    if not battle or not battle.parent then
+        self:stopFinisherRainEmitter()
+        return
+    end
+
+    self:pruneFinisherRains()
+    self.finisher_rain_spawn_timer = self.finisher_rain_spawn_timer - DT
+
+    local spawned = 0
+    while self.finisher_rain_spawn_timer <= 0
+        and spawned < FINISHER_RAIN_MAX_SPAWNS_PER_UPDATE
+    do
+        self:spawnFinisherRain()
+        self.finisher_rain_spawn_timer = self.finisher_rain_spawn_timer
+            + self:getFinisherRainSpawnInterval()
+        spawned = spawned + 1
+    end
+end
+
 function KrisFinisher:startFinisherSword(battle, on_dive)
     self:clearFinisherSword()
 
@@ -1037,6 +1188,7 @@ function KrisFinisher:startFinisherSword(battle, on_dive)
     )
     battle:addChild(sword)
     self.finisher_sword = sword
+    self:startFinisherFountainFlashEmitter(battle)
 end
 
 function KrisFinisher:finishFinisherSword(sword, battle)
@@ -1147,6 +1299,7 @@ function KrisFinisher:triggerFinisherTPReached()
 
     self.finisher_tp_reached = true
     self:stopFinisherStarEmitter()
+    self:stopFinisherFountainFlashEmitter()
     self:clearFinisherStars()
     self:clearFinisherBulletObjects(battle)
     self:stopFinisherTransition()
@@ -1426,6 +1579,83 @@ function KrisFinisher:getFinisherStarWaveInterval(elapsed)
         + (FINISHER_STAR_WAVE_MIN_INTERVAL - FINISHER_STAR_WAVE_MAX_INTERVAL) * progress
 end
 
+function KrisFinisher:startFinisherFountainFlashEmitter(battle)
+    self.finisher_fountain_flash_battle = battle
+    self.finisher_fountain_flash_emitting = true
+    self.finisher_fountain_flash_position = 1
+    self.finisher_fountain_flash_wave = 0
+
+    self:spawnFinisherFountainFlashWave()
+end
+
+function KrisFinisher:spawnFinisherFountainFlashWave()
+    if not self.finisher_fountain_flash_emitting then
+        return
+    end
+
+    local battle = self.finisher_fountain_flash_battle
+    if not battle or not battle.parent then
+        return
+    end
+
+    local position_index = self.finisher_fountain_flash_position
+    if position_index > #FINISHER_FOUNTAIN_FLASH_POSITIONS then
+        return
+    end
+
+    local count = self.finisher_fountain_flash_wave == 0
+        and FINISHER_FOUNTAIN_FLASH_FIRST_WAVE_COUNT
+        or 1
+    count = math.min(count, #FINISHER_FOUNTAIN_FLASH_POSITIONS - position_index + 1)
+
+    local wave = {
+        flash_one_count = 0,
+        triggered = false,
+    }
+    local wave_index = self.finisher_fountain_flash_wave
+    self.finisher_fountain_flash_wave = wave_index + 1
+    self.finisher_fountain_flash_position = position_index + count
+
+    local function onFlashOne()
+        if not self.finisher_fountain_flash_emitting or wave.triggered then
+            return
+        end
+
+        wave.flash_one_count = wave.flash_one_count + 1
+        if wave.flash_one_count < count then
+            return
+        end
+
+        wave.triggered = true
+        self:spawnFinisherFountainFlashWave()
+    end
+
+    for index = position_index, position_index + count - 1 do
+        local position = FINISHER_FOUNTAIN_FLASH_POSITIONS[index]
+        local flash = FinisherFountainFlash(position[1], position[2], {
+            on_flash_one = onFlashOne,
+        })
+        battle:addChild(flash)
+        table.insert(self.finisher_fountain_flashes, flash)
+    end
+end
+
+function KrisFinisher:clearFinisherFountainFlashes()
+    for index = #self.finisher_fountain_flashes, 1, -1 do
+        local flash = self.finisher_fountain_flashes[index]
+        if flash and flash.parent then
+            flash:remove()
+        end
+        self.finisher_fountain_flashes[index] = nil
+    end
+end
+
+function KrisFinisher:stopFinisherFountainFlashEmitter()
+    self.finisher_fountain_flash_emitting = false
+    self:clearFinisherFountainFlashes()
+    self.finisher_fountain_flash_battle = nil
+end
+
 function KrisFinisher:startFinisherStarEmitter(battle)
     self.finisher_star_battle = battle
     self.finisher_star_emitting = true
@@ -1618,6 +1848,7 @@ function KrisFinisher:update()
     self:updateFinisherTransition()
     self:updateFinisherKris()
     self:updateFinisherStarEmitter()
+    self:updateFinisherRainEmitter()
     self:updatePlayerDrift()
 end
 
@@ -1631,6 +1862,8 @@ function KrisFinisher:onBattleEnd()
     self:clearFinisherHurtFlash()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
+    self:stopFinisherFountainFlashEmitter()
+    self:stopFinisherRainEmitter()
     self:restoreVesselDamageNumbers()
 end
 
