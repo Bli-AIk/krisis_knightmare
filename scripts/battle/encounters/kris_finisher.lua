@@ -1837,6 +1837,19 @@ function KrisFinisher:drawOpeningObject(object)
     end
 end
 
+function KrisFinisher:drawFinisherSoulOverlay()
+    local soul = self.finisher_soul
+    if not soul or not soul.parent or not soul.visible or not soul:isFullyActive() then
+        return
+    end
+
+    love.graphics.push("all")
+    love.graphics.origin()
+    love.graphics.applyTransform(soul.parent:getFullTransform())
+    soul:fullDraw()
+    love.graphics.pop()
+end
+
 function KrisFinisher:draw(fade)
     super.draw(self, fade)
 
@@ -1864,6 +1877,7 @@ function KrisFinisher:draw(fade)
         self.finisher_wind_background:drawFullscreenFilter()
     end
 
+    self:drawFinisherSoulOverlay()
 end
 
 function KrisFinisher:drawFinisherHurtFlash()
@@ -1948,8 +1962,12 @@ function KrisFinisher:createFinisherKris(battle)
         FINISHER_KRIS_SOUL_Y
     )
     kris:addChild(kris_soul)
+    kris.draw = function(object)
+        object:drawChildren(nil, kris_soul.layer)
+    end
 
     battle:addChild(kris)
+
     self.finisher_kris = kris
     self.finisher_kris_sprite = sprite
     self.finisher_soul = kris_soul
