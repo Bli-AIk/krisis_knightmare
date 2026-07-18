@@ -181,6 +181,7 @@ local FINISHER_TP100 = {
     soul_shine_texture = "kris_finisher/soul_shine/frame_",
     final_white_hold_time = 1,
     final_black_fade_time = 0.6,
+    final_black_hold_time = 1,
     final_shake_x = 8,
 }
 local FINISHER_PLAYER_DRIFT_SPEED = 4 / 2 * 0.75
@@ -534,7 +535,7 @@ end
 
 local FinisherFinalScreenOverlay, final_screen_overlay_super = Class(Object)
 
-function FinisherFinalScreenOverlay:init()
+function FinisherFinalScreenOverlay:init(on_finished)
     final_screen_overlay_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
     self.layer = BATTLE_LAYERS["top"] + 2
@@ -542,6 +543,7 @@ function FinisherFinalScreenOverlay:init()
     self.elapsed = 0
     self.white_alpha = 1
     self.black_alpha = 0
+    self.on_finished = on_finished
 end
 
 function FinisherFinalScreenOverlay:update()
@@ -562,6 +564,14 @@ function FinisherFinalScreenOverlay:update()
             0,
             1
         )
+        if self.elapsed >= FINISHER_TP100.final_black_fade_time
+            + FINISHER_TP100.final_black_hold_time
+            and self.on_finished
+        then
+            local callback = self.on_finished
+            self.on_finished = nil
+            callback(self)
+        end
     end
 
     final_screen_overlay_super.update(self)
@@ -1474,6 +1484,7 @@ function KrisFinisher:init()
     self.finisher_tp_player_burst = nil
     self.finisher_tp_player_bursts = {}
     self.finisher_tp_echo_second_started = false
+    self.finisher_tp_credits_started = false
     self.finisher_tp_sequence = nil
     self.finisher_tp_final_overlay = nil
 end
@@ -1888,7 +1899,9 @@ function KrisFinisher:startFinisherSoulShineSequence(battle)
     self:clearFinisherSoulShineSequence()
 
     local sequence = FinisherSoulShineSequence(battle, function()
-        self.finisher_tp_final_overlay = FinisherFinalScreenOverlay()
+        self.finisher_tp_final_overlay = FinisherFinalScreenOverlay(function()
+            self:finishFinisherTPFinaleToCredits(battle)
+        end)
         battle:addChild(self.finisher_tp_final_overlay)
     end)
     if not sequence.frames or #sequence.frames == 0 then
@@ -1919,6 +1932,25 @@ function KrisFinisher:clearFinisherFinalScreenOverlay()
         self.finisher_tp_final_overlay:remove()
     end
     self.finisher_tp_final_overlay = nil
+end
+
+function KrisFinisher:finishFinisherTPFinaleToCredits(battle)
+    if self.finisher_tp_credits_started then
+        return
+    end
+
+    local world = Game.world
+    if not world or not CreditsScene then
+        return
+    end
+
+    self.finisher_tp_credits_started = true
+    world:addChild(CreditsScene())
+    self:onBattleEnd()
+
+    if battle and battle.parent then
+        battle:returnToWorld()
+    end
 end
 
 function KrisFinisher:removeFinisherKrisSprite()
@@ -3529,6 +3561,7 @@ function KrisFinisher:onBattleEnd()
     self.finisher_tp_finale_active = false
     self.finisher_tp_finale_phase = nil
     self.finisher_tp_echo_second_started = false
+    self.finisher_tp_credits_started = false
     if Game.battle and Game.battle.soul and self.finisher_tp_player_can_move ~= nil then
         Game.battle.soul.can_move = self.finisher_tp_player_can_move
     end
