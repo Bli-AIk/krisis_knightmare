@@ -54,6 +54,24 @@ local FINISHER_STAR_TRAVEL_TIME = 3
 local FINISHER_STAR_ORBIT_SPEED = math.rad(12)
 local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
 
+local FINISHER_SOUL_LIGHT_GROW_TIME = 20 / 30
+local FINISHER_SOUL_LIGHT_FADE_TIME = 5 / 30
+local FINISHER_SOUL_ATTACK_RING_SMALL = 18
+local FINISHER_SOUL_ATTACK_RING_MEDIUM = 32
+local FINISHER_SOUL_ATTACK_RING_LARGE = 48
+local FINISHER_SOUL_ATTACK_WAVE_INTERVAL = 3 / 30
+local FINISHER_SOUL_ATTACK_PURE_FADE_TIME = 8 / 30
+local FINISHER_SOUL_OUTWARD_STAR_TIME = 0.9
+local FINISHER_SOUL_OUTWARD_STAR_START_SCALE = 1
+local FINISHER_SOUL_OUTWARD_STAR_SCALE_AMPLITUDE = 0.35
+local FINISHER_SOUL_OUTWARD_STAR_INITIAL_SPEED_RATIO = 0.25
+local FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_INTERVAL = 0.05
+local FINISHER_SOUL_ATTACK_MOVE_DELAY = FINISHER_SOUL_OUTWARD_STAR_TIME + 4 / 30
+local FINISHER_SOUL_ATTACK_MOVE_TIME = 0.5
+local FINISHER_SOUL_ATTACK_MIN_PLAYER_DISTANCE = 104
+local FINISHER_SOUL_ATTACK_POSITION_MARGIN = 72
+local FINISHER_SOUL_ATTACK_ANGLE_OFFSET = math.rad(15)
+
 -- These centers are measured from the 1280x960 reference composite and
 -- divided by two for the 640x480 battle coordinate space.
 local FINISHER_FOUNTAIN_FLASH_POSITIONS = {
@@ -198,6 +216,14 @@ end
 
 local function easeInOutSine(progress)
     return -(math.cos(math.pi * progress) - 1) / 2
+end
+
+local function easeInOutCubic(progress)
+    if progress < 0.5 then
+        return 4 * progress * progress * progress
+    end
+
+    return 1 - ((-2 * progress + 2) ^ 3) / 2
 end
 
 local function copySpriteState(sprite)
@@ -403,7 +429,7 @@ function FinisherFlyingSword:init(x, y, options)
     self:setScale(2.25)
     self.rotation = math.pi
     self.layer = BATTLE_LAYERS["top"] + 1
-    self.damage = 100
+    self.damage = 42
     self:setHitbox(25, 4, 10, 54)
     self.collidable = true
     self.can_graze = true
@@ -508,6 +534,153 @@ function FinisherFlyingSword:update()
     end
 end
 
+local FinisherSoulLight, soul_light_super = Class(Sprite)
+
+function FinisherSoulLight:init(on_bright, on_finished)
+    soul_light_super.init(self, "bullets/soul/light")
+
+    self:setOrigin(0.5, 0.5)
+    self:setScale(1)
+    self:setColor(1, 1, 1, 0)
+    self.layer = -1
+    self.elapsed = 0
+    self.phase = "GROW"
+    self.on_bright = on_bright
+    self.on_finished = on_finished
+end
+
+function FinisherSoulLight:update()
+    self.elapsed = self.elapsed + DT
+
+    if self.phase == "GROW" then
+        local progress = clamp(self.elapsed / FINISHER_SOUL_LIGHT_GROW_TIME, 0, 1)
+        local eased = progress * progress * progress
+        self.alpha = eased
+
+        if progress >= 1 then
+            self.phase = "FADE"
+            self.elapsed = 0
+            if self.on_bright then
+                self.on_bright(self)
+            end
+        end
+    else
+        local progress = clamp(self.elapsed / FINISHER_SOUL_LIGHT_FADE_TIME, 0, 1)
+        self.alpha = 1 - progress
+        if progress >= 1 then
+            local on_finished = self.on_finished
+            self.on_finished = nil
+            self:remove()
+            if on_finished then
+                on_finished(self)
+            end
+            return
+        end
+    end
+
+    soul_light_super.update(self)
+end
+
+local FinisherSoulPureStar, soul_pure_star_super = Class(Bullet)
+
+function FinisherSoulPureStar:init(x, y, scale)
+    soul_pure_star_super.init(self, x, y, "bullets/star_pure")
+
+    self.layer = BATTLE_LAYERS["bullets"] - 0.5
+    self.damage = 42
+    self.can_graze = false
+    self.destroy_on_hit = false
+    self.remove_offscreen = false
+    self:setScale(scale or 1)
+    self:setColor(1, 1, 1, 1)
+    self.elapsed = 0
+    self.collidable = true
+end
+
+function FinisherSoulPureStar:update()
+    self.elapsed = self.elapsed + DT
+    local progress = clamp(self.elapsed / FINISHER_SOUL_ATTACK_PURE_FADE_TIME, 0, 1)
+    self.alpha = 1 - progress
+    self.collidable = progress < 1
+
+    if progress >= 1 then
+        self:remove()
+        return
+    end
+
+    soul_pure_star_super.update(self)
+end
+
+local FinisherSoulOutwardStar, outward_star_super = Class(Bullet)
+
+function FinisherSoulOutwardStar:init(x, y, angle, center_x, center_y)
+    outward_star_super.init(self, x, y, "bullets/star")
+
+    self.layer = BATTLE_LAYERS["bullets"] - 0.75
+    self.damage = 42
+    self.can_graze = false
+    self.destroy_on_hit = false
+    self.remove_offscreen = false
+    self:setColor(1, 1, 1, 1)
+    self:setScale(FINISHER_SOUL_OUTWARD_STAR_START_SCALE)
+    self.rotation = 0
+
+    self.angle = angle
+    self.center_x = center_x
+    self.center_y = center_y
+    self.start_radius = FINISHER_SOUL_ATTACK_RING_LARGE
+    self.end_radius = math.max(SCREEN_WIDTH, SCREEN_HEIGHT) * 0.9
+    self.elapsed = 0
+    self.afterimage_elapsed = 0
+
+    self.sprite.alpha = 0.78
+    self.ghost = Sprite("bullets/star", 0, 0)
+    self.ghost:setColor(1, 1, 1, 0.28)
+    self.ghost.layer = -0.001
+    self:addChild(self.ghost)
+end
+
+function FinisherSoulOutwardStar:spawnAfterImage()
+    if not self.ghost or not self.ghost.parent then
+        return
+    end
+
+    self.ghost:addChild(LightAfterImage(self.ghost, 0.4, 0.08))
+end
+
+function FinisherSoulOutwardStar:update()
+    self.elapsed = self.elapsed + DT
+    local progress = clamp(self.elapsed / FINISHER_SOUL_OUTWARD_STAR_TIME, 0, 1)
+    local cubic_movement = progress * progress * progress
+    local movement = FINISHER_SOUL_OUTWARD_STAR_INITIAL_SPEED_RATIO * progress
+        + (1 - FINISHER_SOUL_OUTWARD_STAR_INITIAL_SPEED_RATIO) * cubic_movement
+    local radius = self.start_radius + (self.end_radius - self.start_radius) * movement
+
+    self.x = self.center_x + math.cos(self.angle) * radius
+    self.y = self.center_y + math.sin(self.angle) * radius
+    self.rotation = 0
+
+    local pulse = 0.5 + 0.5 * math.sin(self.elapsed * math.pi * 2 * 3.5)
+    self:setScale(
+        FINISHER_SOUL_OUTWARD_STAR_START_SCALE
+            + FINISHER_SOUL_OUTWARD_STAR_SCALE_AMPLITUDE * pulse
+    )
+
+    self.afterimage_elapsed = self.afterimage_elapsed + DT
+    while self.afterimage_elapsed >= FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_INTERVAL do
+        self.afterimage_elapsed = self.afterimage_elapsed
+            - FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_INTERVAL
+        self:spawnAfterImage()
+    end
+
+    if progress >= 1 then
+        self:remove()
+        return
+    end
+
+    outward_star_super.update(self)
+end
+
 function KrisFinisher:init()
     super.init(self)
 
@@ -524,6 +697,15 @@ function KrisFinisher:init()
     self.finisher_star_initial_radius = nil
     self.finisher_star_center_x = nil
     self.finisher_star_center_y = nil
+    self.finisher_soul_attack_battle = nil
+    self.finisher_soul_attack_emitting = false
+    self.finisher_soul_attack_phase = nil
+    self.finisher_soul_attack_timer = 0
+    self.finisher_soul_attack_center_x = nil
+    self.finisher_soul_attack_center_y = nil
+    self.finisher_soul_attack_move = nil
+    self.finisher_soul_light = nil
+    self.finisher_soul_attack_objects = {}
     self.finisher_fountain_flashes = {}
     self.finisher_fountain_flash_emitting = false
     self.finisher_fountain_flash_position = 1
@@ -1016,6 +1198,7 @@ function KrisFinisher:startFinisherFountain(battle)
         on_grow_complete = function(current_fountain)
             self:finishFinisherFountainInversion(current_fountain, battle)
             self:startFinisherRainEmitter(battle)
+            self:startFinisherSoulAttackEmitter(battle)
         end,
         on_remove = function(current_fountain)
             if self.finisher_fountain == current_fountain then
@@ -1584,6 +1767,298 @@ function KrisFinisher:getFinisherSoulPosition(battle)
     end
 end
 
+function KrisFinisher:getFinisherSoulAttackCenter(battle)
+    if self.finisher_soul and self.finisher_soul.parent then
+        return self.finisher_soul:getRelativePos(
+            self.finisher_soul.width / 2,
+            self.finisher_soul.height / 2,
+            battle
+        )
+    end
+end
+
+function KrisFinisher:getFinisherPlayerPosition(battle)
+    if battle and battle.soul and battle.soul.parent then
+        return battle.soul:getRelativePos(0, 0, battle)
+    end
+end
+
+function KrisFinisher:getFinisherSoulAttackDestination(battle, from_x, from_y)
+    local player_x, player_y = self:getFinisherPlayerPosition(battle)
+    if not player_x then
+        player_x, player_y = SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
+    end
+
+    local margin = FINISHER_SOUL_ATTACK_POSITION_MARGIN
+    local min_x, max_x = margin, SCREEN_WIDTH - margin
+    local min_y, max_y = margin, SCREEN_HEIGHT - margin
+    local min_distance = FINISHER_SOUL_ATTACK_MIN_PLAYER_DISTANCE
+    local best_x, best_y, best_distance = nil, nil, -math.huge
+
+    for _ = 1, 64 do
+        local x = min_x + (max_x - min_x)
+            * Mod:randomKrisis("kris_finisher_soul_attack")
+        local y = min_y + (max_y - min_y)
+            * Mod:randomKrisis("kris_finisher_soul_attack")
+        local dx = x - player_x
+        local dy = y - player_y
+        local distance = math.sqrt(dx * dx + dy * dy)
+
+        if distance > best_distance then
+            best_x, best_y, best_distance = x, y, distance
+        end
+        if distance >= min_distance then
+            return x, y
+        end
+    end
+
+    return best_x or from_x, best_y or from_y
+end
+
+function KrisFinisher:setFinisherSoulAttackCenter(x, y)
+    if self.finisher_soul and self.finisher_soul.parent then
+        self.finisher_soul:setScreenPos(x, y)
+    end
+end
+
+function KrisFinisher:trackFinisherSoulAttackObject(object, battle)
+    battle:addChild(object)
+    table.insert(self.finisher_soul_attack_objects, object)
+    return object
+end
+
+function KrisFinisher:pruneFinisherSoulAttackObjects()
+    local write_index = 1
+    for read_index = 1, #self.finisher_soul_attack_objects do
+        local object = self.finisher_soul_attack_objects[read_index]
+        if object and object.parent then
+            self.finisher_soul_attack_objects[write_index] = object
+            write_index = write_index + 1
+        end
+    end
+
+    for index = write_index, #self.finisher_soul_attack_objects do
+        self.finisher_soul_attack_objects[index] = nil
+    end
+end
+
+function KrisFinisher:spawnFinisherSoulAttackRing(battle, center_x, center_y, radius, scale)
+    for index = 0, 11 do
+        local angle = FINISHER_SOUL_ATTACK_ANGLE_OFFSET
+            + index * (math.pi * 2 / 12)
+        local star = FinisherSoulPureStar(
+            center_x + math.cos(angle) * radius,
+            center_y + math.sin(angle) * radius,
+            scale
+        )
+        self:trackFinisherSoulAttackObject(star, battle)
+    end
+end
+
+function KrisFinisher:spawnFinisherSoulOutwardStars(battle, center_x, center_y)
+    for index = 0, 11 do
+        local angle = FINISHER_SOUL_ATTACK_ANGLE_OFFSET
+            + index * (math.pi * 2 / 12)
+        local star = FinisherSoulOutwardStar(
+            center_x + math.cos(angle) * FINISHER_SOUL_ATTACK_RING_LARGE,
+            center_y + math.sin(angle) * FINISHER_SOUL_ATTACK_RING_LARGE,
+            angle,
+            center_x,
+            center_y
+        )
+        self:trackFinisherSoulAttackObject(star, battle)
+    end
+end
+
+function KrisFinisher:spawnFinisherSoulAttackBurst()
+    local battle = self.finisher_soul_attack_battle
+    if not battle or not battle.parent then
+        return
+    end
+
+    local center_x, center_y = self:getFinisherSoulAttackCenter(battle)
+    if not center_x then
+        center_x = self.finisher_soul_attack_center_x
+        center_y = self.finisher_soul_attack_center_y
+    end
+    if not center_x then
+        return
+    end
+
+    self.finisher_soul_attack_center_x = center_x
+    self.finisher_soul_attack_center_y = center_y
+    self:spawnFinisherSoulAttackRing(
+        battle,
+        center_x,
+        center_y,
+        FINISHER_SOUL_ATTACK_RING_SMALL,
+        1
+    )
+
+    --todo
+
+    self.finisher_soul_attack_phase = "WAVE_MEDIUM"
+    self.finisher_soul_attack_timer = FINISHER_SOUL_ATTACK_WAVE_INTERVAL
+end
+
+function KrisFinisher:beginFinisherSoulAttackCycle()
+    local battle = self.finisher_soul_attack_battle
+    local soul = self.finisher_soul
+    if not self.finisher_soul_attack_emitting or not battle
+        or not battle.parent or not soul or not soul.parent
+    then
+        return
+    end
+
+    self.finisher_soul_attack_phase = "LIGHT"
+    self.finisher_soul_attack_timer = 0
+
+    local light
+    light = FinisherSoulLight(
+        function()
+            if self.finisher_soul_light ~= light
+                or not self.finisher_soul_attack_emitting
+            then
+                return
+            end
+            self:spawnFinisherSoulAttackBurst()
+        end,
+        function()
+            if self.finisher_soul_light == light then
+                self.finisher_soul_light = nil
+            end
+        end
+    )
+    light:setPosition(soul.width / 2, soul.height / 2)
+    soul:addChild(light)
+    self.finisher_soul_light = light
+end
+
+function KrisFinisher:beginFinisherSoulAttackMove()
+    local battle = self.finisher_soul_attack_battle
+    local from_x, from_y = self:getFinisherSoulAttackCenter(battle)
+    if not battle or not from_x then
+        return
+    end
+
+    local target_x, target_y = self:getFinisherSoulAttackDestination(
+        battle,
+        from_x,
+        from_y
+    )
+    self.finisher_soul_attack_move = {
+        elapsed = 0,
+        from_x = from_x,
+        from_y = from_y,
+        target_x = target_x,
+        target_y = target_y,
+    }
+    self.finisher_soul_attack_phase = "MOVE"
+end
+
+function KrisFinisher:updateFinisherSoulAttackEmitter()
+    if not self.finisher_soul_attack_emitting then
+        return
+    end
+
+    local battle = self.finisher_soul_attack_battle
+    if not battle or not battle.parent
+        or not self.finisher_soul or not self.finisher_soul.parent
+    then
+        self:stopFinisherSoulAttackEmitter()
+        return
+    end
+
+    self:pruneFinisherSoulAttackObjects()
+
+    if self.finisher_soul_attack_phase == "WAVE_MEDIUM"
+        or self.finisher_soul_attack_phase == "WAVE_LARGE"
+    then
+        self.finisher_soul_attack_timer = self.finisher_soul_attack_timer - DT
+        if self.finisher_soul_attack_timer <= 0 then
+            if self.finisher_soul_attack_phase == "WAVE_MEDIUM" then
+                self:spawnFinisherSoulAttackRing(
+                    battle,
+                    self.finisher_soul_attack_center_x,
+                    self.finisher_soul_attack_center_y,
+                    FINISHER_SOUL_ATTACK_RING_MEDIUM,
+                    1
+                )
+                self.finisher_soul_attack_phase = "WAVE_LARGE"
+            else
+                self:spawnFinisherSoulOutwardStars(
+                    battle,
+                    self.finisher_soul_attack_center_x,
+                    self.finisher_soul_attack_center_y
+                )
+                self.finisher_soul_attack_phase = "WAIT_MOVE"
+            end
+            self.finisher_soul_attack_timer = FINISHER_SOUL_ATTACK_WAVE_INTERVAL
+            if self.finisher_soul_attack_phase == "WAIT_MOVE" then
+                self.finisher_soul_attack_timer = FINISHER_SOUL_ATTACK_MOVE_DELAY
+            end
+        end
+    elseif self.finisher_soul_attack_phase == "WAIT_MOVE" then
+        self.finisher_soul_attack_timer = self.finisher_soul_attack_timer - DT
+        if self.finisher_soul_attack_timer <= 0 then
+            self:beginFinisherSoulAttackMove()
+        end
+    elseif self.finisher_soul_attack_phase == "MOVE" then
+        local move = self.finisher_soul_attack_move
+        if not move then
+            self:beginFinisherSoulAttackCycle()
+            return
+        end
+
+        move.elapsed = move.elapsed + DT
+        local progress = clamp(move.elapsed / FINISHER_SOUL_ATTACK_MOVE_TIME, 0, 1)
+        local eased = easeInOutCubic(progress)
+        self:setFinisherSoulAttackCenter(
+            move.from_x + (move.target_x - move.from_x) * eased,
+            move.from_y + (move.target_y - move.from_y) * eased
+        )
+
+        if progress >= 1 then
+            self.finisher_soul_attack_move = nil
+            self:beginFinisherSoulAttackCycle()
+        end
+    end
+end
+
+function KrisFinisher:startFinisherSoulAttackEmitter(battle)
+    if self.finisher_soul_attack_emitting then
+        return
+    end
+
+    self.finisher_soul_attack_battle = battle
+    self.finisher_soul_attack_emitting = true
+    self.finisher_soul_attack_move = nil
+    self:beginFinisherSoulAttackCycle()
+end
+
+function KrisFinisher:clearFinisherSoulAttackObjects()
+    for index = #self.finisher_soul_attack_objects, 1, -1 do
+        local object = self.finisher_soul_attack_objects[index]
+        if object and object.parent then
+            object:remove()
+        end
+        self.finisher_soul_attack_objects[index] = nil
+    end
+end
+
+function KrisFinisher:stopFinisherSoulAttackEmitter()
+    self.finisher_soul_attack_emitting = false
+    self.finisher_soul_attack_phase = nil
+    self.finisher_soul_attack_timer = 0
+    self.finisher_soul_attack_move = nil
+    self.finisher_soul_attack_battle = nil
+    if self.finisher_soul_light and self.finisher_soul_light.parent then
+        self.finisher_soul_light:remove()
+    end
+    self.finisher_soul_light = nil
+    self:clearFinisherSoulAttackObjects()
+end
+
 function KrisFinisher:getFinisherStarWaveInterval(elapsed)
     elapsed = elapsed or self.finisher_star_elapsed
 
@@ -1864,6 +2339,7 @@ function KrisFinisher:update()
     self:updateFinisherTransition()
     self:updateFinisherKris()
     self:updateFinisherStarEmitter()
+    self:updateFinisherSoulAttackEmitter()
     self:updateFinisherRainEmitter()
     self:updatePlayerDrift()
 end
@@ -1878,6 +2354,7 @@ function KrisFinisher:onBattleEnd()
     self:clearFinisherHurtFlash()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
+    self:stopFinisherSoulAttackEmitter()
     self:stopFinisherFountainFlashEmitter()
     self:stopFinisherRainEmitter()
     self:restoreVesselDamageNumbers()

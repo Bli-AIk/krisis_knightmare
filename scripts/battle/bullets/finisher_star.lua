@@ -32,7 +32,7 @@ function FinisherStar:init(x, y, center, angle, radius, min_radius, travel_time,
     self.orbit_speed = orbit_speed or DEFAULT_ORBIT_SPEED
 
     self.layer = BATTLE_LAYERS["bullets"] - 1
-    self.damage = 50
+    self.damage = 42
     self.destroy_on_hit = false
     self.remove_offscreen = false
     self:setScale(1, 1)

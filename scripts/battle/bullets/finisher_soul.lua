@@ -9,7 +9,7 @@ function FinisherSoul:init(x, y)
     self.collider = CircleCollider(self, self.width / 2, self.height / 2, 8)
 
     -- This is the soul carried by Kris, not the player's controllable soul.
-    self.damage = 50
+    self.damage = 42
     self.can_graze = false
     self.destroy_on_hit = false
     self.remove_offscreen = false

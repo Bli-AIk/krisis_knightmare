@@ -14,7 +14,7 @@ function FinisherRain:init(x, y)
     self:setHitbox(4, 4, self.width - 8, self.height - 8)
     self.physics.speed_x = 0
     self.physics.speed_y = RAIN_SPEED
-    self.damage = 50
+    self.damage = 42
     self.destroy_on_hit = false
     self.remove_offscreen = true
 end
