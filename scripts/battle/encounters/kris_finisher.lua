@@ -159,7 +159,15 @@ local FINISHER_RAIN_SPAWN_INTERVAL_MIN = 0.01
 local FINISHER_RAIN_SPAWN_INTERVAL_MAX = 0.5
 local FINISHER_RAIN_SPAWN_INTERVAL_BIAS_POWER = 4
 local FINISHER_RAIN_MAX_SPAWNS_PER_UPDATE = 32
+-- 50 TP starts the existing finisher sequence. 100 TP is the final quiet
+-- scene layered on top of the fountain that sequence creates.
 local FINISHER_STOP_TP = 50
+local FINISHER_FINAL_TP = 100
+local FINISHER_FINAL_RED_DELAY = 2
+local FINISHER_FINAL_CENTER_DELAY = 1
+local FINISHER_FINAL_PLAYER_MOVE_TIME = 1
+local FINISHER_FINAL_PLAYER_BURST_TIME = 0.2
+local FINISHER_FINAL_PLAYER_BURST_LAYER = BATTLE_LAYERS["ui"] - 3.5
 local FINISHER_PLAYER_DRIFT_SPEED = 4 / 2 * 0.75
 local FINISHER_HURT_FLASH_MAX_ALPHA = 0.5
 local FINISHER_HURT_FLASH_RISE_TIME = 0.08
@@ -393,6 +401,38 @@ function FinisherHurtFlash:draw()
     love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 end
 
+-- A short red echo of the player's heart. It is deliberately a normal
+-- sprite, so the TP100 scene does not depend on any post-processing stage.
+local FinisherPlayerBurst, player_burst_super = Class(Sprite)
+
+function FinisherPlayerBurst:init(x, y, base_scale)
+    player_burst_super.init(self, "player/heart_dodge", x, y)
+
+    self:setOrigin(0.5, 0.5)
+    self.layer = FINISHER_FINAL_PLAYER_BURST_LAYER
+    self.base_scale = base_scale or 1
+    self.elapsed = 0
+    self:setScale(self.base_scale, self.base_scale)
+    self:setColor(1, 0, 0, 1)
+end
+
+function FinisherPlayerBurst:update()
+    self.elapsed = self.elapsed + DT
+    local progress = clamp(self.elapsed / FINISHER_FINAL_PLAYER_BURST_TIME, 0, 1)
+    self:setScale(
+        self.base_scale * (1 + progress),
+        self.base_scale * (1 + progress)
+    )
+    self.alpha = 1 - progress
+
+    if progress >= 1 then
+        self:remove()
+        return
+    end
+
+    player_burst_super.update(self)
+end
+
 local FinisherInversionBackdrop, inversion_backdrop_super = Class(Object)
 
 function FinisherInversionBackdrop:init()
@@ -429,8 +469,12 @@ function FinisherFountain:init(options)
     self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
     self.mask_canvas = love.graphics.newCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
     self.mask_canvas:setFilter("nearest", "nearest")
+    self.ordinary_draw = false
+    self.ordinary_color = { 1, 1, 1, 1 }
     self:setColor(0, 0, 0, 1)
-    self:updateMaskCanvas()
+    if not self.ordinary_draw then
+        self:updateMaskCanvas()
+    end
 end
 
 function FinisherFountain:update()
@@ -454,7 +498,9 @@ function FinisherFountain:update()
             + (FINISHER_ELLIPSE_TARGET_RADIUS_Y - FINISHER_ELLIPSE_START_RADIUS_Y) * eased
     end
 
-    self:updateMaskCanvas()
+    if not self.ordinary_draw then
+        self:updateMaskCanvas()
+    end
 
     if progress >= 1 and not self.grow_finished then
         self.grow_finished = true
@@ -518,7 +564,38 @@ function FinisherFountain:onRemove()
     self:releaseMaskCanvas()
 end
 
-function FinisherFountain:draw() end
+function FinisherFountain:setOrdinaryDraw(enabled, r, g, b, a)
+    self.ordinary_draw = enabled and true or false
+    if r then
+        self.ordinary_color = { r, g, b, a or 1 }
+    end
+    if self.ordinary_draw then
+        self:releaseMaskCanvas()
+    end
+end
+
+function FinisherFountain:setOrdinaryColor(r, g, b, a)
+    self.ordinary_color = { r, g, b, a or self.ordinary_color[4] or 1 }
+end
+
+function FinisherFountain:draw()
+    if not self.ordinary_draw then
+        return
+    end
+
+    -- The fountain is authored in screen coordinates, matching its mask. Draw
+    -- the same hard-pixel ellipse directly when the final scene disables FX.
+    love.graphics.push("all")
+    love.graphics.origin()
+    Draw.setColor(
+        self.ordinary_color[1],
+        self.ordinary_color[2],
+        self.ordinary_color[3],
+        self.ordinary_color[4]
+    )
+    self:drawPixelatedShape()
+    love.graphics.pop()
+end
 
 local FinisherFlyingSword, finisher_sword_super = Class(Bullet)
 
@@ -1237,6 +1314,14 @@ function KrisFinisher:init()
     self.finisher_fountain_inversion_shader = nil
     self.finisher_fountain = nil
     self.finisher_tp_reached = false
+    self.finisher_tp_finale_active = false
+    self.finisher_tp_finale_phase = nil
+    self.finisher_tp_finale_timer = 0
+    self.finisher_tp_player_start = nil
+    self.finisher_tp_finale_timer = 0
+    self.finisher_tp_player_start = nil
+    self.finisher_tp_player_can_move = nil
+    self.finisher_tp_player_burst = nil
 end
 
 function KrisFinisher:createBackground()
@@ -1634,6 +1719,14 @@ function KrisFinisher:clearFinisherHurtFlash()
     self.finisher_tp_flash = nil
 end
 
+function KrisFinisher:clearFinisherPlayerBurst()
+    local burst = self.finisher_tp_player_burst
+    if burst and burst.parent then
+        burst:remove()
+    end
+    self.finisher_tp_player_burst = nil
+end
+
 function KrisFinisher:removeFinisherKrisSprite()
     local sprite = self.finisher_kris_sprite
     if not sprite then
@@ -1694,6 +1787,10 @@ function KrisFinisher:startFinisherFountain(battle)
 
     local fountain = FinisherFountain({
         on_grow_complete = function(current_fountain)
+            if self.finisher_tp_finale_active then
+                current_fountain:setOrdinaryDraw(true, 1, 1, 1, 1)
+                return
+            end
             self:finishFinisherFountainInversion(current_fountain, battle)
             self:startFinisherWaveCircles(battle)
             self:startFinisherRainEmitter(battle)
@@ -1716,6 +1813,10 @@ function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
     end
 
     self:clearFinisherInversion()
+    if self.finisher_tp_finale_active then
+        fountain:setOrdinaryDraw(true, 1, 1, 1, 1)
+        return
+    end
     fountain:setColor(1, 1, 1, 1)
 
     local stage = Game.stage
@@ -2049,6 +2150,159 @@ function KrisFinisher:triggerFinisherTPReached()
     self.finisher_tp_flash = tp_flash
 end
 
+function KrisFinisher:spawnFinisherPlayerBurst(battle)
+    self:clearFinisherPlayerBurst()
+
+    local x, y = self:getFinisherPlayerPosition(battle)
+    if not x then
+        return
+    end
+
+    local base_scale = 1
+    if battle.soul and battle.soul.sprite then
+        base_scale = battle.soul.sprite.scale_x or 1
+    end
+
+    local burst = FinisherPlayerBurst(x, y, base_scale)
+    battle:addChild(burst)
+    self.finisher_tp_player_burst = burst
+end
+
+function KrisFinisher:triggerFinisherTP100Reached()
+    if self.finisher_tp_finale_active then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.finisher_tp_finale_active = true
+    self.finisher_tp_reached = true
+    self.finisher_tp_finale_phase = "WAIT_RED"
+    self.finisher_tp_finale_timer = 0
+    self.finisher_tp_player_start = nil
+
+    -- This is the final clear: keep the arena soul, enemy soul proxy, fountain
+    -- and TP bar, while removing every active bullet or auxiliary emitter.
+    self:stopFinisherStarEmitter()
+    self:stopFinisherWaveCircles()
+    self:stopFinisherSoulAttackEmitter()
+    self:stopFinisherRainEmitter()
+    self:stopFinisherFountainFlashEmitter()
+    self:clearFinisherStars()
+    self:clearFinisherBulletObjects(battle)
+    self:clearFinisherSword()
+    self:clearFinisherSlideAfterImage()
+    self:clearFinisherWarpBackground()
+    self:stopFinisherTransition()
+    self:clearFinisherWindBackground()
+    self:clearFinisherInversion()
+    self:removeFinisherKrisSprite()
+
+    if battle.soul then
+        self.finisher_tp_player_can_move = battle.soul.can_move
+        battle.soul.can_move = false
+        battle.soul.transitioning = false
+        if battle.soul.physics then
+            battle.soul.physics.move_target = nil
+            battle.soul.physics.move_path = nil
+        end
+    end
+
+    -- Direct TP100 launches may reach this branch before the normal sword has
+    -- created a fountain. Create one in ordinary mode so the final scene is
+    -- still complete and its grow callback cannot restart attacks.
+    if not self.finisher_fountain or not self.finisher_fountain.parent then
+        self:startFinisherFountain(battle)
+    end
+    if self.finisher_fountain then
+        self.finisher_fountain:setOrdinaryDraw(true, 1, 1, 1, 1)
+    end
+
+    self:clearFinisherHurtFlash()
+    local tp_flash = RechargeWhiteFlash(nil, {
+        hold_time = 0.05,
+        fade_time = 0.18,
+        layer = BATTLE_LAYERS["top"] + 2,
+    })
+    battle:addChild(tp_flash)
+    self.finisher_tp_flash = tp_flash
+end
+
+function KrisFinisher:updateFinisherTPFinale()
+    if not self.finisher_tp_finale_active then
+        return
+    end
+
+    local battle = Game.battle
+    if not battle then
+        return
+    end
+
+    self.finisher_tp_finale_timer = self.finisher_tp_finale_timer + DT
+
+    if self.finisher_tp_finale_phase == "WAIT_RED" then
+        if self.finisher_tp_finale_timer < FINISHER_FINAL_RED_DELAY then
+            return
+        end
+
+        local soul = battle.soul
+        if soul and soul.parent then
+            soul:setColor(1, 0, 0, soul.alpha)
+            self:spawnFinisherPlayerBurst(battle)
+        end
+        self.finisher_tp_finale_phase = "WAIT_CENTER"
+        self.finisher_tp_finale_timer = 0
+        return
+    end
+
+    if self.finisher_tp_finale_phase == "WAIT_CENTER" then
+        if self.finisher_tp_finale_timer < FINISHER_FINAL_CENTER_DELAY then
+            return
+        end
+
+        if self.finisher_fountain then
+            self.finisher_fountain:setOrdinaryColor(0.5, 0.5, 0.5, 1)
+        end
+
+        local x, y = self:getFinisherPlayerPosition(battle)
+        if x then
+            self.finisher_tp_player_start = { x, y }
+        end
+        self.finisher_tp_finale_phase = "MOVE_PLAYER"
+        self.finisher_tp_finale_timer = 0
+        return
+    end
+
+    if self.finisher_tp_finale_phase == "MOVE_PLAYER" then
+        local progress = clamp(
+            self.finisher_tp_finale_timer / FINISHER_FINAL_PLAYER_MOVE_TIME,
+            0,
+            1
+        )
+        local eased = easeInOutCubic(progress)
+        local start = self.finisher_tp_player_start
+        local soul = battle.soul
+        if start and soul and soul.parent then
+            local x = start[1] + (SCREEN_WIDTH / 2 - start[1]) * eased
+            local y = start[2] + (SCREEN_HEIGHT / 2 - start[2]) * eased
+            if soul.setExactPosition then
+                soul:setExactPosition(x, y)
+            else
+                soul:setPosition(x, y)
+            end
+            soul.moving_x = 0
+            soul.moving_y = 0
+        end
+
+        if progress >= 1 then
+            self.finisher_tp_finale_phase = "DONE"
+        end
+    end
+end
+
 function KrisFinisher:updateFinisherWindBackground()
     -- A direct --tp launch starts above the threshold before the custom
     -- opening is visible. Wait until that cover is gone so the full 60 FPS
@@ -2057,7 +2311,9 @@ function KrisFinisher:updateFinisherWindBackground()
         return
     end
 
-    if Game:getTension() >= FINISHER_STOP_TP then
+    if Game:getTension() >= FINISHER_FINAL_TP then
+        self:triggerFinisherTP100Reached()
+    elseif Game:getTension() >= FINISHER_STOP_TP then
         self:triggerFinisherTPReached()
     end
 end
@@ -3002,6 +3258,7 @@ function KrisFinisher:update()
     self:updateFinisherStarEmitter()
     self:updateFinisherSoulAttackEmitter()
     self:updateFinisherRainEmitter()
+    self:updateFinisherTPFinale()
     self:updatePlayerDrift()
 end
 
@@ -3019,6 +3276,13 @@ function KrisFinisher:onBattleEnd()
     self:stopFinisherFountainFlashEmitter()
     self:stopFinisherRainEmitter()
     self:stopFinisherWaveCircles()
+    self:clearFinisherPlayerBurst()
+    self.finisher_tp_finale_active = false
+    self.finisher_tp_finale_phase = nil
+    if Game.battle and Game.battle.soul and self.finisher_tp_player_can_move ~= nil then
+        Game.battle.soul.can_move = self.finisher_tp_player_can_move
+    end
+    self.finisher_tp_player_can_move = nil
     self:restoreVesselDamageNumbers()
     if self.finisher_wave_circle_empty_mask then
         self.finisher_wave_circle_empty_mask:release()
