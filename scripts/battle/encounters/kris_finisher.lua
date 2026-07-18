@@ -86,6 +86,7 @@ local FINISHER_SOUL_ATTACK_BEAM_OVERHANG = 48
 local FINISHER_SOUL_ATTACK_BEAM_MIN_LENGTH = math.sqrt(
     SCREEN_WIDTH * SCREEN_WIDTH + SCREEN_HEIGHT * SCREEN_HEIGHT
 ) + FINISHER_SOUL_ATTACK_BEAM_OVERHANG
+local FINISHER_SOUL_ATTACK_BEAM_LENGTH_MULTIPLIER = 2
 local FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY = 4 / 60
 local FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME = 15 / 60
 local FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME = 0.35
@@ -161,64 +162,6 @@ local FINISHER_FOUNTAIN_INVERT_SHADER_SOURCE = [[
         vec3 result = mix(source.rgb, inverted, amount);
         float alpha = max(source.a, amount);
         return vec4(result, alpha) * color;
-    }
-]]
-
-local FINISHER_SOUL_ATTACK_ELLIPSE_DISTORT_SHADER_SOURCE = [[
-    extern float phase;
-    extern float yspace;
-    extern float xspace;
-    extern float yamp;
-    extern float xamp;
-    extern vec2 texSize;
-
-    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
-        vec2 st = uv * texSize;
-        vec2 offs = vec2(
-            sin((st.y + phase) / yspace) * yamp,
-            sin((st.x + phase) / xspace) * xamp
-        );
-        return Texel(tex, uv + offs / texSize) * color;
-    }
-]]
-
-local FINISHER_SOUL_ATTACK_ELLIPSE_HBLUR_SHADER_SOURCE = [[
-    extern vec2 texSize;
-    extern float radius;
-
-    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
-        vec2 d = vec2(radius / texSize.x, 0.0);
-        float w0 = 0.227, w1 = 0.194, w2 = 0.121, w3 = 0.054, w4 = 0.016;
-        vec4 c = Texel(tex, uv) * w0;
-        c += Texel(tex, uv - d) * w1;
-        c += Texel(tex, uv + d) * w1;
-        c += Texel(tex, uv - d * 2.0) * w2;
-        c += Texel(tex, uv + d * 2.0) * w2;
-        c += Texel(tex, uv - d * 3.0) * w3;
-        c += Texel(tex, uv + d * 3.0) * w3;
-        c += Texel(tex, uv - d * 4.0) * w4;
-        c += Texel(tex, uv + d * 4.0) * w4;
-        return c * color;
-    }
-]]
-
-local FINISHER_SOUL_ATTACK_ELLIPSE_VBLUR_SHADER_SOURCE = [[
-    extern vec2 texSize;
-    extern float radius;
-
-    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
-        vec2 d = vec2(0.0, radius / texSize.y);
-        float w0 = 0.227, w1 = 0.194, w2 = 0.121, w3 = 0.054, w4 = 0.016;
-        vec4 c = Texel(tex, uv) * w0;
-        c += Texel(tex, uv - d) * w1;
-        c += Texel(tex, uv + d) * w1;
-        c += Texel(tex, uv - d * 2.0) * w2;
-        c += Texel(tex, uv + d * 2.0) * w2;
-        c += Texel(tex, uv - d * 3.0) * w3;
-        c += Texel(tex, uv + d * 3.0) * w3;
-        c += Texel(tex, uv - d * 4.0) * w4;
-        c += Texel(tex, uv + d * 4.0) * w4;
-        return c * color;
     }
 ]]
 
@@ -788,7 +731,7 @@ end
 
 local FinisherSoulAttackEllipse, soul_attack_ellipse_super = Class(Sprite)
 
-function FinisherSoulAttackEllipse:init(x, y, texture, assets, rotation, beam_length, visible_start, visible_end)
+function FinisherSoulAttackEllipse:init(x, y, texture, rotation, beam_length, visible_start, visible_end)
     soul_attack_ellipse_super.init(self, texture, x, y)
 
     self:setOrigin(0.5, 0.5)
@@ -802,29 +745,6 @@ function FinisherSoulAttackEllipse:init(x, y, texture, assets, rotation, beam_le
     self.elapsed = 0
     self.visible_start = visible_start or 0
     self.visible_end = visible_end
-
-    self:addFX(ShaderFX(assets.distort_shader, {
-        phase = -5.5,
-        yspace = 20.0,
-        yamp = -3.0 * 0.08,
-        xspace = 20.0,
-        xamp = -10.0,
-        texSize = { FINISHER_SOUL_ATTACK_ELLIPSE_SIZE, FINISHER_SOUL_ATTACK_ELLIPSE_SIZE },
-    }, true, 0))
-    self:addFX(ShaderFX(assets.hblur_shader, {
-        texSize = function()
-            local width, height = love.graphics.getDimensions()
-            return { width, height }
-        end,
-        radius = 1.0,
-    }, true, 1))
-    self:addFX(ShaderFX(assets.vblur_shader, {
-        texSize = function()
-            local width, height = love.graphics.getDimensions()
-            return { width, height }
-        end,
-        radius = 1.0,
-    }, true, 2))
 end
 
 function FinisherSoulAttackEllipse:update()
@@ -2073,15 +1993,6 @@ function KrisFinisher:setupFinisherSoulAttackEllipseAssets()
             FINISHER_SOUL_ATTACK_ELLIPSE_TEXTURE_SCALE,
             FINISHER_SOUL_ATTACK_ELLIPSE_INNER_RADIUS
         ),
-        distort_shader = love.graphics.newShader(
-            FINISHER_SOUL_ATTACK_ELLIPSE_DISTORT_SHADER_SOURCE
-        ),
-        hblur_shader = love.graphics.newShader(
-            FINISHER_SOUL_ATTACK_ELLIPSE_HBLUR_SHADER_SOURCE
-        ),
-        vblur_shader = love.graphics.newShader(
-            FINISHER_SOUL_ATTACK_ELLIPSE_VBLUR_SHADER_SOURCE
-        ),
     }
     self.finisher_soul_attack_ellipse_assets = assets
     return assets
@@ -2099,13 +2010,12 @@ function KrisFinisher:spawnFinisherSoulAttackEllipse(battle, center_x, center_y)
     local beam_length = math.max(
         FINISHER_SOUL_ATTACK_BEAM_MIN_LENGTH,
         (target_distance + FINISHER_SOUL_ATTACK_BEAM_OVERHANG) * 2
-    )
+    ) * FINISHER_SOUL_ATTACK_BEAM_LENGTH_MULTIPLIER
     local assets = self:setupFinisherSoulAttackEllipseAssets()
     self:trackFinisherSoulAttackObject(FinisherSoulAttackEllipse(
         center_x,
         center_y,
         assets.solid,
-        assets,
         visual_rotation,
         beam_length,
         0,
@@ -2115,7 +2025,6 @@ function KrisFinisher:spawnFinisherSoulAttackEllipse(battle, center_x, center_y)
         center_x,
         center_y,
         assets.donut,
-        assets,
         visual_rotation,
         beam_length,
         FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY
