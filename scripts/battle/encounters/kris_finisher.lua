@@ -74,6 +74,31 @@ local FINISHER_INVERT_SHADER_SOURCE = [[
     }
 ]]
 
+local FINISHER_FOUNTAIN_COVER_SHADER_SOURCE = [[
+    extern Image fountainMask;
+
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec4 source = Texel(tex, uv);
+        float amount = Texel(fountainMask, uv).a;
+        vec3 result = mix(source.rgb, vec3(0.0), amount);
+        float alpha = max(source.a, amount);
+        return vec4(result, alpha) * color;
+    }
+]]
+
+local FINISHER_FOUNTAIN_INVERT_SHADER_SOURCE = [[
+    extern Image fountainMask;
+
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec4 source = Texel(tex, uv);
+        float amount = Texel(fountainMask, uv).a;
+        vec3 inverted = vec3(1.0) - source.rgb;
+        vec3 result = mix(source.rgb, inverted, amount);
+        float alpha = max(source.a, amount);
+        return vec4(result, alpha) * color;
+    }
+]]
+
 local FINISHER_TRANSITION_SHADER_SOURCE = [[
     extern vec2 texSize;
     extern float exposure;
@@ -232,13 +257,13 @@ function FinisherInversionBackdrop:draw()
     love.graphics.setColor(old_r, old_g, old_b, old_a)
 end
 
-local FinisherEllipse, ellipse_super = Class(Object)
+local FinisherFountain, fountain_super = Class(Object)
 
-function FinisherEllipse:init(options)
+function FinisherFountain:init(options)
     options = options or {}
-    ellipse_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    fountain_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
-    self.layer = BATTLE_LAYERS["top"] + 100
+    self.layer = BATTLE_LAYERS["background"] - 1
     self.elapsed = 0
     self.grow_finished = false
     self.on_grow_complete = options.on_grow_complete
@@ -246,10 +271,13 @@ function FinisherEllipse:init(options)
     self.center_y = FINISHER_ELLIPSE_START_CENTER_Y
     self.radius_x = FINISHER_ELLIPSE_RADIUS_X
     self.radius_y = FINISHER_ELLIPSE_START_RADIUS_Y
+    self.mask_canvas = love.graphics.newCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
+    self.mask_canvas:setFilter("nearest", "nearest")
     self:setColor(0, 0, 0, 1)
+    self:updateMaskCanvas()
 end
 
-function FinisherEllipse:update()
+function FinisherFountain:update()
     self.elapsed = self.elapsed + DT
 
     local progress = clamp(self.elapsed / FINISHER_ELLIPSE_GROW_TIME, 0, 1)
@@ -270,6 +298,8 @@ function FinisherEllipse:update()
             + (FINISHER_ELLIPSE_TARGET_RADIUS_Y - FINISHER_ELLIPSE_START_RADIUS_Y) * eased
     end
 
+    self:updateMaskCanvas()
+
     if progress >= 1 and not self.grow_finished then
         self.grow_finished = true
         if self.on_grow_complete then
@@ -277,16 +307,10 @@ function FinisherEllipse:update()
         end
     end
 
-    ellipse_super.update(self)
+    fountain_super.update(self)
 end
 
-function FinisherEllipse:draw()
-    local r, g, b, a = self:getDrawColor()
-
-    love.graphics.push()
-    love.graphics.origin()
-    Draw.setColor(r, g, b, a)
-
+function FinisherFountain:drawPixelatedShape()
     -- Fill the ellipse in snapped scanlines so its boundary keeps a chunky,
     -- deliberately pixelated staircase instead of a smooth vector edge.
     local step = FINISHER_ELLIPSE_PIXEL_STEP
@@ -303,9 +327,35 @@ function FinisherEllipse:draw()
             love.graphics.rectangle("fill", left, y, right - left, step)
         end
     end
-
-    love.graphics.pop()
 end
+
+function FinisherFountain:updateMaskCanvas()
+    if not self.mask_canvas then
+        return
+    end
+
+    local old_shader = love.graphics.getShader()
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+
+    Draw.pushCanvas(self.mask_canvas)
+    love.graphics.setShader()
+    love.graphics.clear(0, 0, 0, 0)
+    Draw.setColor(1, 1, 1, 1)
+    self:drawPixelatedShape()
+    Draw.popCanvas()
+
+    love.graphics.setShader(old_shader)
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
+end
+
+function FinisherFountain:onRemove()
+    if self.mask_canvas then
+        self.mask_canvas:release()
+        self.mask_canvas = nil
+    end
+end
+
+function FinisherFountain:draw() end
 
 local FinisherFlyingSword, finisher_sword_super = Class(Bullet)
 
@@ -453,11 +503,11 @@ function KrisFinisher:init()
     self.finisher_inversion_battle = nil
     self.finisher_inversion_backdrop = nil
     self.finisher_inversion_fx = nil
-    self.finisher_inversion_soul = nil
-    self.finisher_inversion_soul_state = nil
-    self.finisher_inversion_soul_sprite = nil
-    self.finisher_inversion_soul_sprite_state = nil
-    self.finisher_ellipse = nil
+    self.finisher_inversion_stage = nil
+    self.finisher_inversion_stage_fx = nil
+    self.finisher_fountain_cover_shader = nil
+    self.finisher_fountain_inversion_shader = nil
+    self.finisher_fountain = nil
     self.finisher_tp_reached = false
 end
 
@@ -806,12 +856,12 @@ function KrisFinisher:clearFinisherSword()
     self.finisher_sword_post_exit_battle = nil
 end
 
-function KrisFinisher:clearFinisherEllipse()
-    local ellipse = self.finisher_ellipse
-    if ellipse and ellipse.parent then
-        ellipse:remove()
+function KrisFinisher:clearFinisherFountain()
+    local fountain = self.finisher_fountain
+    if fountain and fountain.parent then
+        fountain:remove()
     end
-    self.finisher_ellipse = nil
+    self.finisher_fountain = nil
 end
 
 function KrisFinisher:clearFinisherInversion()
@@ -819,32 +869,20 @@ function KrisFinisher:clearFinisherInversion()
     if battle and self.finisher_inversion_fx then
         battle:removeFX("kris_finisher_invert")
     end
+    local stage = self.finisher_inversion_stage
+    if stage and self.finisher_inversion_stage_fx then
+        stage:removeFX("kris_finisher_fountain_cover")
+        stage:removeFX("kris_finisher_fountain_invert")
+    end
     if self.finisher_inversion_backdrop and self.finisher_inversion_backdrop.parent then
         self.finisher_inversion_backdrop:remove()
     end
 
-    local soul = self.finisher_inversion_soul
-    local soul_state = self.finisher_inversion_soul_state
-    if soul and soul_state then
-        soul:setColor(
-            soul_state.color[1],
-            soul_state.color[2],
-            soul_state.color[3],
-            soul_state.alpha
-        )
-    end
-    restoreSpriteState(
-        self.finisher_inversion_soul_sprite,
-        self.finisher_inversion_soul_sprite_state
-    )
-
     self.finisher_inversion_battle = nil
     self.finisher_inversion_backdrop = nil
     self.finisher_inversion_fx = nil
-    self.finisher_inversion_soul = nil
-    self.finisher_inversion_soul_state = nil
-    self.finisher_inversion_soul_sprite = nil
-    self.finisher_inversion_soul_sprite_state = nil
+    self.finisher_inversion_stage = nil
+    self.finisher_inversion_stage_fx = nil
 end
 
 function KrisFinisher:clearFinisherHurtFlash()
@@ -875,22 +913,6 @@ end
 function KrisFinisher:startFinisherInversion(battle)
     self:clearFinisherInversion()
 
-    local soul = battle and battle.soul
-    if soul then
-        self.finisher_inversion_soul = soul
-        self.finisher_inversion_soul_state = {
-            color = { soul.color[1], soul.color[2], soul.color[3] },
-            alpha = soul.alpha,
-        }
-        if soul.sprite then
-            self.finisher_inversion_soul_sprite = soul.sprite
-            self.finisher_inversion_soul_sprite_state = copySpriteState(soul.sprite)
-        end
-
-        -- The battle inversion turns white into black for the player's heart.
-        soul:setColor(1, 1, 1, soul.alpha)
-    end
-
     local backdrop = FinisherInversionBackdrop()
     battle:addChild(backdrop)
 
@@ -905,31 +927,70 @@ function KrisFinisher:startFinisherInversion(battle)
     self.finisher_inversion_battle = battle
     self.finisher_inversion_backdrop = backdrop
     self.finisher_inversion_fx = fx
+
+    local stage = Game.stage
+    local fountain = self.finisher_fountain
+    if stage and fountain and fountain.mask_canvas then
+        local cover_shader = self.finisher_fountain_cover_shader
+        if not cover_shader then
+            cover_shader = love.graphics.newShader(FINISHER_FOUNTAIN_COVER_SHADER_SOURCE)
+            self.finisher_fountain_cover_shader = cover_shader
+        end
+
+        local cover_fx = ShaderFX(cover_shader, {
+            fountainMask = function()
+                return fountain.mask_canvas
+            end,
+        }, false, BATTLE_LAYERS["top"] + 100)
+        stage:addFX(cover_fx, "kris_finisher_fountain_cover")
+        self.finisher_inversion_stage = stage
+        self.finisher_inversion_stage_fx = cover_fx
+    end
 end
 
-function KrisFinisher:startFinisherEllipse()
-    self:clearFinisherEllipse()
+function KrisFinisher:startFinisherFountain(battle)
+    self:clearFinisherFountain()
 
     if not Game.stage then
         return
     end
 
-    local ellipse = FinisherEllipse({
-        on_grow_complete = function(current_ellipse)
-            self:finishFinisherEllipseInversion(current_ellipse)
+    local fountain = FinisherFountain({
+        on_grow_complete = function(current_fountain)
+            self:finishFinisherFountainInversion(current_fountain, battle)
         end,
     })
-    Game.stage:addChild(ellipse)
-    self.finisher_ellipse = ellipse
+    Game.stage:addChild(fountain)
+    self.finisher_fountain = fountain
 end
 
-function KrisFinisher:finishFinisherEllipseInversion(ellipse)
-    if self.finisher_ellipse ~= ellipse then
+function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
+    if self.finisher_fountain ~= fountain then
         return
     end
 
     self:clearFinisherInversion()
-    ellipse:setColor(1, 1, 1, 1)
+    fountain:setColor(1, 1, 1, 1)
+
+    local stage = Game.stage
+    if not stage or not fountain.mask_canvas then
+        return
+    end
+
+    local shader = self.finisher_fountain_inversion_shader
+    if not shader then
+        shader = love.graphics.newShader(FINISHER_FOUNTAIN_INVERT_SHADER_SOURCE)
+        self.finisher_fountain_inversion_shader = shader
+    end
+
+    local fx = ShaderFX(shader, {
+        fountainMask = function()
+            return fountain.mask_canvas
+        end,
+    }, false, BATTLE_LAYERS["top"] + 100)
+    stage:addFX(fx, "kris_finisher_fountain_invert")
+    self.finisher_inversion_stage = stage
+    self.finisher_inversion_stage_fx = fx
 end
 
 function KrisFinisher:startFinisherSword(battle)
@@ -964,8 +1025,12 @@ function KrisFinisher:finishFinisherSword(sword, battle)
 end
 
 function KrisFinisher:completeFinisherSword(battle)
+    if battle and battle.soul then
+        -- The shared fountain post-process will invert this white source to black.
+        battle.soul:setColor(1, 1, 1, battle.soul.alpha)
+    end
+    self:startFinisherFountain(battle)
     self:startFinisherInversion(battle)
-    self:startFinisherEllipse()
 end
 
 function KrisFinisher:updateFinisherSword()
@@ -1524,7 +1589,7 @@ function KrisFinisher:onBattleEnd()
     self:clearFinisherWarpBackground()
     self:clearFinisherSlideAfterImage()
     self:clearFinisherSword()
-    self:clearFinisherEllipse()
+    self:clearFinisherFountain()
     self:clearFinisherInversion()
     self:clearFinisherHurtFlash()
     self:stopFinisherTransition()
