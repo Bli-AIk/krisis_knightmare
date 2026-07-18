@@ -267,6 +267,7 @@ function FinisherFountain:init(options)
     self.elapsed = 0
     self.grow_finished = false
     self.on_grow_complete = options.on_grow_complete
+    self.on_remove_callback = options.on_remove
     self.center_x = SCREEN_WIDTH / 2
     self.center_y = FINISHER_ELLIPSE_START_CENTER_Y
     self.radius_x = FINISHER_ELLIPSE_RADIUS_X
@@ -348,11 +349,18 @@ function FinisherFountain:updateMaskCanvas()
     love.graphics.setColor(old_r, old_g, old_b, old_a)
 end
 
-function FinisherFountain:onRemove()
+function FinisherFountain:releaseMaskCanvas()
     if self.mask_canvas then
         self.mask_canvas:release()
         self.mask_canvas = nil
     end
+end
+
+function FinisherFountain:onRemove()
+    if self.on_remove_callback then
+        self.on_remove_callback(self)
+    end
+    self:releaseMaskCanvas()
 end
 
 function FinisherFountain:draw() end
@@ -861,9 +869,16 @@ function KrisFinisher:clearFinisherSword()
 end
 
 function KrisFinisher:clearFinisherFountain()
+    if self.finisher_inversion_stage and self.finisher_inversion_stage_fx then
+        self:clearFinisherInversion()
+    end
+
     local fountain = self.finisher_fountain
     if fountain and fountain.parent then
         fountain:remove()
+    end
+    if fountain then
+        fountain:releaseMaskCanvas()
     end
     self.finisher_fountain = nil
 end
@@ -871,10 +886,12 @@ end
 function KrisFinisher:clearFinisherInversion()
     local battle = self.finisher_inversion_battle
     if battle and self.finisher_inversion_fx then
+        self.finisher_inversion_fx.active = false
         battle:removeFX("kris_finisher_invert")
     end
     local stage = self.finisher_inversion_stage
     if stage and self.finisher_inversion_stage_fx then
+        self.finisher_inversion_stage_fx.active = false
         stage:removeFX("kris_finisher_fountain_cover")
         stage:removeFX("kris_finisher_fountain_invert")
     end
@@ -962,6 +979,12 @@ function KrisFinisher:startFinisherFountain(battle)
     local fountain = FinisherFountain({
         on_grow_complete = function(current_fountain)
             self:finishFinisherFountainInversion(current_fountain, battle)
+        end,
+        on_remove = function(current_fountain)
+            if self.finisher_fountain == current_fountain then
+                self:clearFinisherInversion()
+                self.finisher_fountain = nil
+            end
         end,
     })
     Game.stage:addChild(fountain)
@@ -1601,8 +1624,8 @@ function KrisFinisher:onBattleEnd()
     self:clearFinisherWarpBackground()
     self:clearFinisherSlideAfterImage()
     self:clearFinisherSword()
-    self:clearFinisherFountain()
     self:clearFinisherInversion()
+    self:clearFinisherFountain()
     self:clearFinisherHurtFlash()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
