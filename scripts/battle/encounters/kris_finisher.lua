@@ -174,14 +174,14 @@ local FINISHER_TP100 = {
     echo_duration = 20 / 30,
     echo_second_offset = (20 / 30) / 2,
     echo_to_sequence_delay = 0.5,
-    soul_shine_frame_time = 3 / 30,
+    soul_shine_frame_time = 4 / 30,
     soul_shine_frame_count = 11,
     soul_shine_shake_frame = 8,
     soul_shine_layer = BATTLE_LAYERS["ui"] - 1.5,
     soul_shine_texture = "kris_finisher/soul_shine/frame_",
     final_white_hold_time = 1,
     final_black_fade_time = 0.6,
-    final_black_hold_time = 1,
+    final_black_hold_time = 5,
     final_shake_x = 8,
 }
 local FINISHER_PLAYER_DRIFT_SPEED = 4 / 2 * 0.75
@@ -1945,7 +1945,20 @@ function KrisFinisher:finishFinisherTPFinaleToCredits(battle)
     end
 
     self.finisher_tp_credits_started = true
-    world:addChild(CreditsScene())
+    world:addChild(CreditsScene(function()
+        if Game.world and Game.world.mapTransition then
+            Game.world:mapTransition(
+                "chapter_select",
+                "spawn",
+                "down",
+                function()
+                    if Game.world and ChapterSelect then
+                        Game.world:openMenu(ChapterSelect())
+                    end
+                end
+            )
+        end
+    end))
     self:onBattleEnd()
 
     if battle and battle.parent then
