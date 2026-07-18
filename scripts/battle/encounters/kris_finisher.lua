@@ -56,7 +56,7 @@ local FINISHER_STAR_TRAVEL_TIME = 3
 local FINISHER_STAR_ORBIT_SPEED = math.rad(12)
 local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
 
-local FINISHER_SOUL_LIGHT_GROW_TIME = 20 / 30
+local FINISHER_SOUL_LIGHT_GROW_TIME = 18 / 30
 local FINISHER_SOUL_LIGHT_FADE_TIME = 5 / 30
 local FINISHER_SOUL_LIGHT_MAX_ALPHA = 0.5
 local FINISHER_SOUL_ATTACK_RING_SMALL = 18
@@ -90,8 +90,9 @@ local FINISHER_SOUL_ATTACK_BEAM_LENGTH_MULTIPLIER = 2
 local FINISHER_SOUL_ATTACK_WINDUP_LINE_TRAVEL_TIME = 20 / 60
 local FINISHER_SOUL_ATTACK_WINDUP_LINE_WIDTH = 4
 local FINISHER_SOUL_ATTACK_WINDUP_LINE_EXIT_MARGIN = 8
+local FINISHER_SOUL_ATTACK_WINDUP_LINE_DELAY = 0.18
 local FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY = FINISHER_SOUL_ATTACK_WINDUP_LINE_TRAVEL_TIME
-    + 0.2
+    + FINISHER_SOUL_ATTACK_WINDUP_LINE_DELAY
 local FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME = 4 / 60
 local FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY = FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME
 local FINISHER_SOUL_ATTACK_ELLIPSE_HOLD_TIME = 2 / 60
@@ -2291,6 +2292,7 @@ function KrisFinisher:beginFinisherSoulAttackMove()
         from_y = from_y,
         target_x = target_x,
         target_y = target_y,
+        prepared = false,
     }
     self.finisher_soul_attack_phase = "MOVE"
 end
@@ -2309,6 +2311,29 @@ function KrisFinisher:updateFinisherSoulAttackEmitter()
     end
 
     self:pruneFinisherSoulAttackObjects()
+
+    local move = self.finisher_soul_attack_move
+    if move then
+        move.elapsed = move.elapsed + DT
+        local progress = clamp(move.elapsed / FINISHER_SOUL_ATTACK_MOVE_TIME, 0, 1)
+        local eased = easeInOutCubic(progress)
+        self:setFinisherSoulAttackCenter(
+            move.from_x + (move.target_x - move.from_x) * eased,
+            move.from_y + (move.target_y - move.from_y) * eased
+        )
+
+        if not move.prepared and progress >= 0.5 then
+            move.prepared = true
+            self:beginFinisherSoulAttackCycle()
+        end
+
+        if progress >= 1 then
+            self.finisher_soul_attack_move = nil
+            if not move.prepared then
+                self:beginFinisherSoulAttackCycle()
+            end
+        end
+    end
 
     if self.finisher_soul_attack_phase == "WAVE_MEDIUM"
         or self.finisher_soul_attack_phase == "WAVE_LARGE"
@@ -2341,25 +2366,6 @@ function KrisFinisher:updateFinisherSoulAttackEmitter()
         self.finisher_soul_attack_timer = self.finisher_soul_attack_timer - DT
         if self.finisher_soul_attack_timer <= 0 then
             self:beginFinisherSoulAttackMove()
-        end
-    elseif self.finisher_soul_attack_phase == "MOVE" then
-        local move = self.finisher_soul_attack_move
-        if not move then
-            self:beginFinisherSoulAttackCycle()
-            return
-        end
-
-        move.elapsed = move.elapsed + DT
-        local progress = clamp(move.elapsed / FINISHER_SOUL_ATTACK_MOVE_TIME, 0, 1)
-        local eased = easeInOutCubic(progress)
-        self:setFinisherSoulAttackCenter(
-            move.from_x + (move.target_x - move.from_x) * eased,
-            move.from_y + (move.target_y - move.from_y) * eased
-        )
-
-        if progress >= 1 then
-            self.finisher_soul_attack_move = nil
-            self:beginFinisherSoulAttackCycle()
         end
     end
 end
