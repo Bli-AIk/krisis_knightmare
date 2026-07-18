@@ -56,6 +56,7 @@ local FINISHER_STAR_WAVE_ROTATION_STEP = math.rad(7.5)
 
 local FINISHER_SOUL_LIGHT_GROW_TIME = 20 / 30
 local FINISHER_SOUL_LIGHT_FADE_TIME = 5 / 30
+local FINISHER_SOUL_LIGHT_MAX_ALPHA = 0.5
 local FINISHER_SOUL_ATTACK_RING_SMALL = 18
 local FINISHER_SOUL_ATTACK_RING_MEDIUM = 32
 local FINISHER_SOUL_ATTACK_RING_LARGE = 48
@@ -72,6 +73,8 @@ local FINISHER_SOUL_ATTACK_MOVE_DELAY = FINISHER_SOUL_OUTWARD_STAR_TIME + 4 / 30
 local FINISHER_SOUL_ATTACK_MOVE_TIME = 0.5
 local FINISHER_SOUL_ATTACK_MIN_PLAYER_DISTANCE = 104
 local FINISHER_SOUL_ATTACK_POSITION_MARGIN = 72
+local FINISHER_SOUL_ATTACK_FOUNTAIN_CLEARANCE = 96
+local FINISHER_SOUL_ATTACK_SIDE_SWITCH_CHANCE = 0.85
 local FINISHER_SOUL_ATTACK_ANGLE_OFFSET = math.rad(15)
 
 -- These centers are measured from the 1280x960 reference composite and
@@ -557,7 +560,7 @@ function FinisherSoulLight:update()
     if self.phase == "GROW" then
         local progress = clamp(self.elapsed / FINISHER_SOUL_LIGHT_GROW_TIME, 0, 1)
         local eased = progress * progress * progress
-        self.alpha = eased
+        self.alpha = FINISHER_SOUL_LIGHT_MAX_ALPHA * eased
 
         if progress >= 1 then
             self.phase = "FADE"
@@ -568,7 +571,7 @@ function FinisherSoulLight:update()
         end
     else
         local progress = clamp(self.elapsed / FINISHER_SOUL_LIGHT_FADE_TIME, 0, 1)
-        self.alpha = 1 - progress
+        self.alpha = FINISHER_SOUL_LIGHT_MAX_ALPHA * (1 - progress)
         if progress >= 1 then
             local on_finished = self.on_finished
             self.on_finished = nil
@@ -710,6 +713,7 @@ function KrisFinisher:init()
     self.finisher_soul_attack_center_x = nil
     self.finisher_soul_attack_center_y = nil
     self.finisher_soul_attack_move = nil
+    self.finisher_soul_attack_last_side = nil
     self.finisher_soul_light = nil
     self.finisher_soul_attack_objects = {}
     self.finisher_fountain_flashes = {}
@@ -1796,7 +1800,28 @@ function KrisFinisher:getFinisherSoulAttackDestination(battle, from_x, from_y)
     end
 
     local margin = FINISHER_SOUL_ATTACK_POSITION_MARGIN
-    local min_x, max_x = margin, SCREEN_WIDTH - margin
+    local fountain_center_x = SCREEN_WIDTH / 2
+    local side
+    if self.finisher_soul_attack_last_side then
+        side = self.finisher_soul_attack_last_side
+        if Mod:randomKrisis("kris_finisher_soul_attack")
+            < FINISHER_SOUL_ATTACK_SIDE_SWITCH_CHANCE
+        then
+            side = -side
+        end
+    else
+        local current_side = from_x < fountain_center_x and -1 or 1
+        side = -current_side
+    end
+
+    local min_x, max_x
+    if side < 0 then
+        min_x = margin
+        max_x = fountain_center_x - FINISHER_SOUL_ATTACK_FOUNTAIN_CLEARANCE
+    else
+        min_x = fountain_center_x + FINISHER_SOUL_ATTACK_FOUNTAIN_CLEARANCE
+        max_x = SCREEN_WIDTH - margin
+    end
     local min_y, max_y = margin, SCREEN_HEIGHT - margin
     local min_distance = FINISHER_SOUL_ATTACK_MIN_PLAYER_DISTANCE
     local best_x, best_y, best_distance = nil, nil, -math.huge
@@ -1814,10 +1839,12 @@ function KrisFinisher:getFinisherSoulAttackDestination(battle, from_x, from_y)
             best_x, best_y, best_distance = x, y, distance
         end
         if distance >= min_distance then
+            self.finisher_soul_attack_last_side = side
             return x, y
         end
     end
 
+    self.finisher_soul_attack_last_side = side
     return best_x or from_x, best_y or from_y
 end
 
