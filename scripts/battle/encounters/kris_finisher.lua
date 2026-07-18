@@ -102,7 +102,10 @@ local FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME = FINISHER_SOUL_ATTACK_ELLIPSE_EXPAN
     + FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME
 local FINISHER_SOUL_ATTACK_WINDUP_LINE_LIFETIME = FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
     + FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME
-local FINISHER_SOUL_ATTACK_ELLIPSE_LAYER = BATTLE_LAYERS["bullets"] - 1
+-- Keep the finisher effects below the TP bar while preserving Soul-over-effect order.
+local FINISHER_SOUL_ATTACK_STAR_LAYER = BATTLE_LAYERS["ui"] - 4
+local FINISHER_SOUL_ATTACK_ELLIPSE_LAYER = BATTLE_LAYERS["ui"] - 3
+local FINISHER_SOUL_OVERLAY_LAYER = BATTLE_LAYERS["ui"] - 2
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE = 42
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY = FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_TIME = 1 / 60
@@ -654,12 +657,44 @@ function FinisherSoulLight:update()
     soul_light_super.update(self)
 end
 
+local FinisherSoulOverlay, soul_overlay_super = Class(Sprite)
+
+function FinisherSoulOverlay:init(source)
+    soul_overlay_super.init(self, "bullets/soul/soul_0")
+
+    self:setOrigin(0.5, 0.5)
+    self.layer = FINISHER_SOUL_OVERLAY_LAYER
+    self.source = source
+    self.visible = false
+end
+
+function FinisherSoulOverlay:update()
+    local source = self.source
+    if not source or not source.parent or not self.parent then
+        self:remove()
+        return
+    end
+
+    local x, y = source:getRelativePos(
+        source.width / 2,
+        source.height / 2,
+        self.parent
+    )
+    self:setPosition(x, y)
+    self:setScale(source.scale_x, source.scale_y)
+    self.rotation = source.rotation
+    self:setColor(source.color[1], source.color[2], source.color[3], source.alpha)
+    self.visible = source:isFullyActive() and source.visible and source.parent.visible
+
+    soul_overlay_super.update(self)
+end
+
 local FinisherSoulPureStar, soul_pure_star_super = Class(Bullet)
 
 function FinisherSoulPureStar:init(x, y, scale)
     soul_pure_star_super.init(self, x, y, "bullets/star_pure")
 
-    self.layer = BATTLE_LAYERS["bullets"] - 0.5
+    self.layer = FINISHER_SOUL_ATTACK_STAR_LAYER
     self.damage = 42
     self.can_graze = false
     self.destroy_on_hit = false
@@ -689,7 +724,7 @@ local FinisherSoulOutwardStar, outward_star_super = Class(Bullet)
 function FinisherSoulOutwardStar:init(x, y, angle, center_x, center_y)
     outward_star_super.init(self, x, y, "bullets/star")
 
-    self.layer = BATTLE_LAYERS["bullets"] - 0.75
+    self.layer = FINISHER_SOUL_ATTACK_STAR_LAYER - 0.25
     self.damage = 42
     self.can_graze = false
     self.destroy_on_hit = false
@@ -937,6 +972,7 @@ function KrisFinisher:init()
     self.finisher_soul_attack_move = nil
     self.finisher_soul_attack_last_side = nil
     self.finisher_soul_light = nil
+    self.finisher_soul_overlay = nil
     self.finisher_soul_attack_objects = {}
     self.finisher_soul_attack_ellipse_assets = nil
     self.finisher_fountain_flashes = {}
@@ -1541,6 +1577,7 @@ function KrisFinisher:spawnFinisherRain()
         local x = min_x + (max_x - min_x) * Mod:randomKrisis("kris_finisher_rain")
         if self:isFinisherRainSpawnFree(x) then
             local rain = Registry.createBullet("finisher_rain", x, FINISHER_RAIN_SPAWN_Y)
+            rain.layer = FINISHER_SOUL_ATTACK_STAR_LAYER
             battle:addChild(rain)
             table.insert(self.finisher_rains, rain)
             return true
@@ -1838,19 +1875,6 @@ function KrisFinisher:drawOpeningObject(object)
     end
 end
 
-function KrisFinisher:drawFinisherSoulOverlay()
-    local soul = self.finisher_soul
-    if not soul or not soul.parent or not soul.visible or not soul:isFullyActive() then
-        return
-    end
-
-    love.graphics.push("all")
-    love.graphics.origin()
-    love.graphics.applyTransform(soul.parent:getFullTransform())
-    soul:fullDraw()
-    love.graphics.pop()
-end
-
 function KrisFinisher:draw(fade)
     super.draw(self, fade)
 
@@ -1872,13 +1896,12 @@ function KrisFinisher:draw(fade)
         Draw.setColor(1, 1, 1, 1)
     end
 
-    -- Encounter drawing happens after Battle's children, so this covers
-    -- bullets, battlers, and Battle UI as one final full-screen layer.
+    -- Keep the wind post-process separate from the Battle-layered finisher
+    -- objects, which must remain underneath the TP bar.
     if self.finisher_wind_background then
         self.finisher_wind_background:drawFullscreenFilter()
     end
 
-    self:drawFinisherSoulOverlay()
 end
 
 function KrisFinisher:drawFinisherHurtFlash()
@@ -1963,15 +1986,18 @@ function KrisFinisher:createFinisherKris(battle)
         FINISHER_KRIS_SOUL_Y
     )
     kris:addChild(kris_soul)
-    kris.draw = function(object)
-        object:drawChildren(nil, kris_soul.layer)
-    end
+    -- The source soul keeps its local light children, while its sprite is
+    -- rendered by a Battle-level proxy so it can sit below the TP bar.
+    kris_soul.sprite.visible = false
+    local soul_overlay = FinisherSoulOverlay(kris_soul)
 
     battle:addChild(kris)
+    battle:addChild(soul_overlay)
 
     self.finisher_kris = kris
     self.finisher_kris_sprite = sprite
     self.finisher_soul = kris_soul
+    self.finisher_soul_overlay = soul_overlay
 end
 
 function KrisFinisher:updateFinisherKris()
@@ -2559,6 +2585,7 @@ function KrisFinisher:spawnFinisherStarWave()
             center_x,
             center_y
         )
+        star.layer = FINISHER_SOUL_ATTACK_STAR_LAYER
         battle:addChild(star)
         table.insert(self.finisher_stars, star)
     end
@@ -2665,6 +2692,9 @@ function KrisFinisher:createWindowArena(battle)
     battle:addChild(arena)
 
     battle:spawnSoul(OPENING_PLAYER_POSITION.x, OPENING_PLAYER_POSITION.y)
+    -- Keep the controllable soul above the finisher effects, but below the
+    -- HP/TP UI layers.
+    battle.soul.layer = FINISHER_SOUL_OVERLAY_LAYER
     battle.soul.transitioning = false
     battle.soul.alpha = battle.soul.target_alpha or 1
     battle.soul:setPosition(OPENING_PLAYER_POSITION.x, OPENING_PLAYER_POSITION.y)
