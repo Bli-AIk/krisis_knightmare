@@ -371,14 +371,16 @@ function FinisherFlyingSword:init(x, y, options)
     options = options or {}
     finisher_sword_super.init(self, x, y, "bullets/flying_sword/normal")
 
-    -- This is a visual finisher prop, so it uses the normal sword sprite but
-    -- does not participate in the regular bullet path or collision system.
+    -- Keep the finisher sword's damage and hitbox aligned with the normal
+    -- round-5 flying sword.
     self:setSprite("bullets/flying_sword/normal")
     self:setScale(2.25)
     self.rotation = math.pi
     self.layer = BATTLE_LAYERS["top"] + 1
-    self.collidable = false
-    self.can_graze = false
+    self.damage = 100
+    self:setHitbox(25, 4, 10, 54)
+    self.collidable = true
+    self.can_graze = true
     self.destroy_on_hit = false
     self.remove_offscreen = false
     self.physics.speed_x = 0
