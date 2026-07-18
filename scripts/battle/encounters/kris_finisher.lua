@@ -163,11 +163,26 @@ local FINISHER_RAIN_MAX_SPAWNS_PER_UPDATE = 32
 -- scene layered on top of the fountain that sequence creates.
 local FINISHER_STOP_TP = 50
 local FINISHER_FINAL_TP = 100
-local FINISHER_FINAL_RED_DELAY = 2
-local FINISHER_FINAL_CENTER_DELAY = 1
-local FINISHER_FINAL_PLAYER_MOVE_TIME = 1
-local FINISHER_FINAL_PLAYER_BURST_TIME = 0.2
-local FINISHER_FINAL_PLAYER_BURST_LAYER = BATTLE_LAYERS["ui"] - 3.5
+local FINISHER_TP100 = {
+    post_tp_bullet_tp = 2,
+    red_delay = 2,
+    center_delay = 1,
+    player_move_time = 1,
+    player_burst_time = 0.2,
+    player_burst_layer = BATTLE_LAYERS["ui"] - 3.5,
+    echo_delay = 1,
+    echo_duration = 20 / 30,
+    echo_second_offset = (20 / 30) / 2,
+    echo_to_sequence_delay = 0.5,
+    soul_shine_frame_time = 3 / 30,
+    soul_shine_frame_count = 11,
+    soul_shine_shake_frame = 8,
+    soul_shine_layer = BATTLE_LAYERS["ui"] - 1.5,
+    soul_shine_texture = "kris_finisher/soul_shine/frame_",
+    final_white_hold_time = 1,
+    final_black_fade_time = 0.6,
+    final_shake_x = 8,
+}
 local FINISHER_PLAYER_DRIFT_SPEED = 4 / 2 * 0.75
 local FINISHER_HURT_FLASH_MAX_ALPHA = 0.5
 local FINISHER_HURT_FLASH_RISE_TIME = 0.08
@@ -405,12 +420,13 @@ end
 -- sprite, so the TP100 scene does not depend on any post-processing stage.
 local FinisherPlayerBurst, player_burst_super = Class(Sprite)
 
-function FinisherPlayerBurst:init(x, y, base_scale)
+function FinisherPlayerBurst:init(x, y, base_scale, duration)
     player_burst_super.init(self, "player/heart_dodge", x, y)
 
     self:setOrigin(0.5, 0.5)
-    self.layer = FINISHER_FINAL_PLAYER_BURST_LAYER
+    self.layer = FINISHER_TP100.player_burst_layer
     self.base_scale = base_scale or 1
+    self.duration = duration or FINISHER_TP100.player_burst_time
     self.elapsed = 0
     self:setScale(self.base_scale, self.base_scale)
     self:setColor(1, 0, 0, 1)
@@ -418,7 +434,7 @@ end
 
 function FinisherPlayerBurst:update()
     self.elapsed = self.elapsed + DT
-    local progress = clamp(self.elapsed / FINISHER_FINAL_PLAYER_BURST_TIME, 0, 1)
+    local progress = clamp(self.elapsed / self.duration, 0, 1)
     self:setScale(
         self.base_scale * (1 + progress),
         self.base_scale * (1 + progress)
@@ -431,6 +447,136 @@ function FinisherPlayerBurst:update()
     end
 
     player_burst_super.update(self)
+end
+
+local FinisherSoulShineSequence, soul_shine_sequence_super = Class(Sprite)
+
+function FinisherSoulShineSequence:init(battle, on_finished)
+    local frames = {}
+    for index = 1, FINISHER_TP100.soul_shine_frame_count do
+        local texture = Assets.getTexture(string.format(
+            "%s%02d",
+            FINISHER_TP100.soul_shine_texture,
+            index
+        ))
+        if not texture then
+            break
+        end
+        texture:setFilter("nearest", "nearest")
+        table.insert(frames, texture)
+    end
+
+    local first_frame = frames[1]
+    if not first_frame then
+        return
+    end
+
+    soul_shine_sequence_super.init(
+        self,
+        first_frame,
+        SCREEN_WIDTH / 2,
+        SCREEN_HEIGHT / 2
+    )
+    self:setFrames(frames)
+    self:setFrame(1)
+    self:setOrigin(0.5, 0.5)
+    self:setScale(
+        SCREEN_WIDTH / first_frame:getWidth(),
+        SCREEN_HEIGHT / first_frame:getHeight()
+    )
+    self.layer = FINISHER_TP100.soul_shine_layer
+    self.battle = battle
+    self.on_finished = on_finished
+    self.elapsed = 0
+    self.shake_started = false
+    self.finished = false
+end
+
+function FinisherSoulShineSequence:update()
+    self.elapsed = self.elapsed + DT
+
+    while self.elapsed >= FINISHER_TP100.soul_shine_frame_time
+        and not self.finished
+    do
+        self.elapsed = self.elapsed - FINISHER_TP100.soul_shine_frame_time
+        local next_frame = math.min(self.frame + 1, #self.frames)
+        self:setFrame(next_frame)
+
+        if next_frame >= FINISHER_TP100.soul_shine_shake_frame
+            and not self.shake_started
+        then
+            self.shake_started = true
+            if self.battle and self.battle.shakeCamera then
+                self.battle:shakeCamera(FINISHER_TP100.final_shake_x, 0, 0)
+            end
+        end
+
+        if next_frame >= #self.frames then
+            self.finished = true
+            self.elapsed = 0
+            if self.on_finished then
+                local callback = self.on_finished
+                self.on_finished = nil
+                callback(self)
+            end
+        end
+    end
+
+    soul_shine_sequence_super.update(self)
+end
+
+function FinisherSoulShineSequence:onRemove(parent)
+    if self.battle and self.battle.camera and self.battle.camera.stopShake then
+        self.battle.camera:stopShake()
+    end
+    soul_shine_sequence_super.onRemove(self, parent)
+end
+
+local FinisherFinalScreenOverlay, final_screen_overlay_super = Class(Object)
+
+function FinisherFinalScreenOverlay:init()
+    final_screen_overlay_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.layer = BATTLE_LAYERS["top"] + 2
+    self.phase = "WHITE"
+    self.elapsed = 0
+    self.white_alpha = 1
+    self.black_alpha = 0
+end
+
+function FinisherFinalScreenOverlay:update()
+    self.elapsed = self.elapsed + DT
+
+    if self.phase == "WHITE" then
+        self.white_alpha = 1
+        self.black_alpha = 0
+        if self.elapsed >= FINISHER_TP100.final_white_hold_time then
+            self.phase = "BLACK"
+            self.elapsed = 0
+        end
+    elseif self.phase == "BLACK" then
+        -- Keep the white layer underneath while black fades over it.
+        self.white_alpha = 1
+        self.black_alpha = clamp(
+            self.elapsed / FINISHER_TP100.final_black_fade_time,
+            0,
+            1
+        )
+    end
+
+    final_screen_overlay_super.update(self)
+end
+
+function FinisherFinalScreenOverlay:draw()
+    love.graphics.push("all")
+    love.graphics.origin()
+    Draw.setColor(1, 1, 1, self.white_alpha)
+    love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    if self.black_alpha > 0 then
+        Draw.setColor(0, 0, 0, self.black_alpha)
+        love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    end
+    love.graphics.pop()
 end
 
 local FinisherInversionBackdrop, inversion_backdrop_super = Class(Object)
@@ -610,6 +756,7 @@ function FinisherFlyingSword:init(x, y, options)
     self.rotation = math.pi
     self.layer = BATTLE_LAYERS["top"] + 1
     self.damage = 42
+    self.tp = FINISHER_TP100.post_tp_bullet_tp
     self:setHitbox(25, 4, 10, 54)
     self.collidable = true
     self.can_graze = true
@@ -999,6 +1146,7 @@ function FinisherSoulPureStar:init(x, y, scale)
 
     self.layer = FINISHER_SOUL_ATTACK_STAR_LAYER
     self.damage = 42
+    self.tp = FINISHER_TP100.post_tp_bullet_tp
     self.can_graze = false
     self.destroy_on_hit = false
     self.remove_offscreen = false
@@ -1029,7 +1177,8 @@ function FinisherSoulOutwardStar:init(x, y, angle, center_x, center_y)
 
     self.layer = FINISHER_SOUL_ATTACK_STAR_LAYER - 0.25
     self.damage = 42
-    self.can_graze = false
+    self.tp = FINISHER_TP100.post_tp_bullet_tp
+    self.can_graze = true
     self.destroy_on_hit = false
     self.remove_offscreen = false
     self:setColor(1, 1, 1, 1)
@@ -1227,7 +1376,8 @@ function FinisherSoulAttackBeam:init(x, y, direction, length)
     self.layer = FINISHER_SOUL_ATTACK_ELLIPSE_LAYER
     self.collider = LineCollider(self, -length / 2, 0, length / 2, 0)
     self.damage = FINISHER_SOUL_ATTACK_BEAM_DAMAGE
-    self.can_graze = false
+    self.tp = FINISHER_TP100.post_tp_bullet_tp
+    self.can_graze = true
     self.destroy_on_hit = false
     self.remove_offscreen = false
     self.collidable = false
@@ -1322,6 +1472,10 @@ function KrisFinisher:init()
     self.finisher_tp_player_start = nil
     self.finisher_tp_player_can_move = nil
     self.finisher_tp_player_burst = nil
+    self.finisher_tp_player_bursts = {}
+    self.finisher_tp_echo_second_started = false
+    self.finisher_tp_sequence = nil
+    self.finisher_tp_final_overlay = nil
 end
 
 function KrisFinisher:createBackground()
@@ -1720,11 +1874,51 @@ function KrisFinisher:clearFinisherHurtFlash()
 end
 
 function KrisFinisher:clearFinisherPlayerBurst()
-    local burst = self.finisher_tp_player_burst
-    if burst and burst.parent then
-        burst:remove()
+    local bursts = self.finisher_tp_player_bursts or {}
+    for _, burst in ipairs(bursts) do
+        if burst and burst.parent then
+            burst:remove()
+        end
     end
+    self.finisher_tp_player_bursts = {}
     self.finisher_tp_player_burst = nil
+end
+
+function KrisFinisher:startFinisherSoulShineSequence(battle)
+    self:clearFinisherSoulShineSequence()
+
+    local sequence = FinisherSoulShineSequence(battle, function()
+        self.finisher_tp_final_overlay = FinisherFinalScreenOverlay()
+        battle:addChild(self.finisher_tp_final_overlay)
+    end)
+    if not sequence.frames or #sequence.frames == 0 then
+        return false
+    end
+
+    battle:addChild(sequence)
+    self.finisher_tp_sequence = sequence
+    return true
+end
+
+function KrisFinisher:clearFinisherSoulShineSequence()
+    if self.finisher_tp_sequence and self.finisher_tp_sequence.parent then
+        self.finisher_tp_sequence:remove()
+    end
+    self.finisher_tp_sequence = nil
+
+    local battle = Game.battle
+    if battle and battle.camera and battle.camera.stopShake then
+        battle.camera:stopShake()
+    end
+end
+
+function KrisFinisher:clearFinisherFinalScreenOverlay()
+    if self.finisher_tp_final_overlay
+        and self.finisher_tp_final_overlay.parent
+    then
+        self.finisher_tp_final_overlay:remove()
+    end
+    self.finisher_tp_final_overlay = nil
 end
 
 function KrisFinisher:removeFinisherKrisSprite()
@@ -1950,6 +2144,7 @@ function KrisFinisher:spawnFinisherRain()
         if self:isFinisherRainSpawnFree(x) then
             local rain = Registry.createBullet("finisher_rain", x, FINISHER_RAIN_SPAWN_Y)
             rain.layer = FINISHER_SOUL_ATTACK_STAR_LAYER
+            rain.tp = FINISHER_TP100.post_tp_bullet_tp
             battle:addChild(rain)
             table.insert(self.finisher_rains, rain)
             return true
@@ -2151,11 +2346,9 @@ function KrisFinisher:triggerFinisherTPReached()
 end
 
 function KrisFinisher:spawnFinisherPlayerBurst(battle)
-    self:clearFinisherPlayerBurst()
-
     local x, y = self:getFinisherPlayerPosition(battle)
     if not x then
-        return
+        return nil
     end
 
     local base_scale = 1
@@ -2163,9 +2356,17 @@ function KrisFinisher:spawnFinisherPlayerBurst(battle)
         base_scale = battle.soul.sprite.scale_x or 1
     end
 
-    local burst = FinisherPlayerBurst(x, y, base_scale)
+    local burst = FinisherPlayerBurst(
+        x,
+        y,
+        base_scale,
+        FINISHER_TP100.echo_duration
+    )
     battle:addChild(burst)
     self.finisher_tp_player_burst = burst
+    self.finisher_tp_player_bursts = self.finisher_tp_player_bursts or {}
+    table.insert(self.finisher_tp_player_bursts, burst)
+    return burst
 end
 
 function KrisFinisher:triggerFinisherTP100Reached()
@@ -2183,6 +2384,14 @@ function KrisFinisher:triggerFinisherTP100Reached()
     self.finisher_tp_finale_phase = "WAIT_RED"
     self.finisher_tp_finale_timer = 0
     self.finisher_tp_player_start = nil
+    self.finisher_tp_echo_second_started = false
+    self:clearFinisherPlayerBurst()
+    self:clearFinisherSoulShineSequence()
+    self:clearFinisherFinalScreenOverlay()
+
+    if battle.music then
+        battle.music:stop()
+    end
 
     -- This is the final clear: keep the arena soul, enemy soul proxy, fountain
     -- and TP bar, while removing every active bullet or auxiliary emitter.
@@ -2244,14 +2453,13 @@ function KrisFinisher:updateFinisherTPFinale()
     self.finisher_tp_finale_timer = self.finisher_tp_finale_timer + DT
 
     if self.finisher_tp_finale_phase == "WAIT_RED" then
-        if self.finisher_tp_finale_timer < FINISHER_FINAL_RED_DELAY then
+        if self.finisher_tp_finale_timer < FINISHER_TP100.red_delay then
             return
         end
 
         local soul = battle.soul
         if soul and soul.parent then
             soul:setColor(1, 0, 0, soul.alpha)
-            self:spawnFinisherPlayerBurst(battle)
         end
         self.finisher_tp_finale_phase = "WAIT_CENTER"
         self.finisher_tp_finale_timer = 0
@@ -2259,7 +2467,7 @@ function KrisFinisher:updateFinisherTPFinale()
     end
 
     if self.finisher_tp_finale_phase == "WAIT_CENTER" then
-        if self.finisher_tp_finale_timer < FINISHER_FINAL_CENTER_DELAY then
+        if self.finisher_tp_finale_timer < FINISHER_TP100.center_delay then
             return
         end
 
@@ -2278,7 +2486,7 @@ function KrisFinisher:updateFinisherTPFinale()
 
     if self.finisher_tp_finale_phase == "MOVE_PLAYER" then
         local progress = clamp(
-            self.finisher_tp_finale_timer / FINISHER_FINAL_PLAYER_MOVE_TIME,
+            self.finisher_tp_finale_timer / FINISHER_TP100.player_move_time,
             0,
             1
         )
@@ -2298,7 +2506,43 @@ function KrisFinisher:updateFinisherTPFinale()
         end
 
         if progress >= 1 then
-            self.finisher_tp_finale_phase = "DONE"
+            self.finisher_tp_finale_phase = "WAIT_ECHO"
+            self.finisher_tp_finale_timer = 0
+        end
+        return
+    end
+
+    if self.finisher_tp_finale_phase == "WAIT_ECHO" then
+        if self.finisher_tp_finale_timer < FINISHER_TP100.echo_delay then
+            return
+        end
+
+        self:spawnFinisherPlayerBurst(battle)
+        self.finisher_tp_echo_second_started = false
+        self.finisher_tp_finale_phase = "ECHOES"
+        self.finisher_tp_finale_timer = 0
+        return
+    end
+
+    if self.finisher_tp_finale_phase == "ECHOES" then
+        if not self.finisher_tp_echo_second_started
+            and self.finisher_tp_finale_timer
+                >= FINISHER_TP100.echo_second_offset
+        then
+            self:spawnFinisherPlayerBurst(battle)
+            self.finisher_tp_echo_second_started = true
+        end
+
+        if self.finisher_tp_finale_timer
+            >= FINISHER_TP100.echo_duration
+                + FINISHER_TP100.echo_to_sequence_delay
+        then
+            if self:startFinisherSoulShineSequence(battle) then
+                self.finisher_tp_finale_phase = "SOUL_SHINE"
+            else
+                self.finisher_tp_finale_phase = "DONE"
+            end
+            self.finisher_tp_finale_timer = 0
         end
     end
 end
@@ -3128,6 +3372,9 @@ function KrisFinisher:spawnFinisherStarWave()
             center_y
         )
         star.layer = FINISHER_SOUL_ATTACK_STAR_LAYER
+        if Game:getTension() >= FINISHER_STOP_TP then
+            star.tp = FINISHER_TP100.post_tp_bullet_tp
+        end
         battle:addChild(star)
         table.insert(self.finisher_stars, star)
     end
@@ -3276,9 +3523,12 @@ function KrisFinisher:onBattleEnd()
     self:stopFinisherFountainFlashEmitter()
     self:stopFinisherRainEmitter()
     self:stopFinisherWaveCircles()
+    self:clearFinisherFinalScreenOverlay()
+    self:clearFinisherSoulShineSequence()
     self:clearFinisherPlayerBurst()
     self.finisher_tp_finale_active = false
     self.finisher_tp_finale_phase = nil
+    self.finisher_tp_echo_second_started = false
     if Game.battle and Game.battle.soul and self.finisher_tp_player_can_move ~= nil then
         Game.battle.soul.can_move = self.finisher_tp_player_can_move
     end

@@ -10,7 +10,7 @@ function FinisherSoul:init(x, y)
 
     -- This is the soul carried by Kris, not the player's controllable soul.
     self.damage = 42
-    self.can_graze = false
+    self.can_graze = true
     self.destroy_on_hit = false
     self.remove_offscreen = false
 end
