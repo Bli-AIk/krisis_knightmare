@@ -1084,6 +1084,12 @@ function Mod:postDraw()
     if self.finisher_profiler then
         self.finisher_profiler:postDraw()
     end
+
+    local battle = Game.battle
+    local encounter = battle and battle.encounter
+    if encounter and encounter.drawFinisherHurtFlash then
+        encounter:drawFinisherHurtFlash()
+    end
 end
 
 function Mod:onKeyPressed(key, is_repeat)

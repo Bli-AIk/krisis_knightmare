@@ -227,13 +227,14 @@ function FinisherHurtFlash:init()
     self.layer = BATTLE_LAYERS["top"] + 1
     self.time = 0
     self.alpha = 0
+    self.visible = false
 end
 
 function FinisherHurtFlash:restart()
     self.time = 0
     self.alpha = 0
     self.active = true
-    self.visible = true
+    self.visible = false
 end
 
 function FinisherHurtFlash:update()
@@ -1447,6 +1448,21 @@ function KrisFinisher:draw(fade)
     if self.finisher_wind_background then
         self.finisher_wind_background:drawFullscreenFilter()
     end
+
+end
+
+function KrisFinisher:drawFinisherHurtFlash()
+    local flash = self.finisher_hurt_flash
+    if not flash or not flash.parent then
+        return
+    end
+
+    -- This is called from Mod:postDraw, after Battle and Stage post-processes.
+    love.graphics.push("all")
+    love.graphics.origin()
+    love.graphics.setShader()
+    flash:draw()
+    love.graphics.pop()
 end
 
 function KrisFinisher:triggerHurtFlash()
