@@ -1,4 +1,6 @@
 local KrisFinisher, super = Class(Encounter)
+local LineCollider = require("src.engine.colliders.linecollider")
+local ShaderFX = require("src.engine.drawfx.shaderfx")
 
 local FINISHER_KRIS_X = 50
 local FINISHER_KRIS_Y = 100
@@ -76,6 +78,21 @@ local FINISHER_SOUL_ATTACK_POSITION_MARGIN = 72
 local FINISHER_SOUL_ATTACK_FOUNTAIN_CLEARANCE = 96
 local FINISHER_SOUL_ATTACK_SIDE_SWITCH_CHANCE = 0.85
 local FINISHER_SOUL_ATTACK_ANGLE_OFFSET = math.rad(15)
+local FINISHER_SOUL_ATTACK_ELLIPSE_SIZE = 200
+local FINISHER_SOUL_ATTACK_ELLIPSE_TEXTURE_SCALE = { 0.05, 1 }
+local FINISHER_SOUL_ATTACK_ELLIPSE_INNER_RADIUS = 40
+local FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X = 3
+local FINISHER_SOUL_ATTACK_BEAM_OVERHANG = 48
+local FINISHER_SOUL_ATTACK_BEAM_MIN_LENGTH = math.sqrt(
+    SCREEN_WIDTH * SCREEN_WIDTH + SCREEN_HEIGHT * SCREEN_HEIGHT
+) + FINISHER_SOUL_ATTACK_BEAM_OVERHANG
+local FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY = 4 / 60
+local FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME = 15 / 60
+local FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME = 0.35
+local FINISHER_SOUL_ATTACK_ELLIPSE_LAYER = BATTLE_LAYERS["bullets"] - 1
+local FINISHER_SOUL_ATTACK_BEAM_DAMAGE = 42
+local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY = 8 / 60
+local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_TIME = 1 / 60
 
 -- These centers are measured from the 1280x960 reference composite and
 -- divided by two for the 640x480 battle coordinate space.
@@ -144,6 +161,64 @@ local FINISHER_FOUNTAIN_INVERT_SHADER_SOURCE = [[
         vec3 result = mix(source.rgb, inverted, amount);
         float alpha = max(source.a, amount);
         return vec4(result, alpha) * color;
+    }
+]]
+
+local FINISHER_SOUL_ATTACK_ELLIPSE_DISTORT_SHADER_SOURCE = [[
+    extern float phase;
+    extern float yspace;
+    extern float xspace;
+    extern float yamp;
+    extern float xamp;
+    extern vec2 texSize;
+
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec2 st = uv * texSize;
+        vec2 offs = vec2(
+            sin((st.y + phase) / yspace) * yamp,
+            sin((st.x + phase) / xspace) * xamp
+        );
+        return Texel(tex, uv + offs / texSize) * color;
+    }
+]]
+
+local FINISHER_SOUL_ATTACK_ELLIPSE_HBLUR_SHADER_SOURCE = [[
+    extern vec2 texSize;
+    extern float radius;
+
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec2 d = vec2(radius / texSize.x, 0.0);
+        float w0 = 0.227, w1 = 0.194, w2 = 0.121, w3 = 0.054, w4 = 0.016;
+        vec4 c = Texel(tex, uv) * w0;
+        c += Texel(tex, uv - d) * w1;
+        c += Texel(tex, uv + d) * w1;
+        c += Texel(tex, uv - d * 2.0) * w2;
+        c += Texel(tex, uv + d * 2.0) * w2;
+        c += Texel(tex, uv - d * 3.0) * w3;
+        c += Texel(tex, uv + d * 3.0) * w3;
+        c += Texel(tex, uv - d * 4.0) * w4;
+        c += Texel(tex, uv + d * 4.0) * w4;
+        return c * color;
+    }
+]]
+
+local FINISHER_SOUL_ATTACK_ELLIPSE_VBLUR_SHADER_SOURCE = [[
+    extern vec2 texSize;
+    extern float radius;
+
+    vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+        vec2 d = vec2(0.0, radius / texSize.y);
+        float w0 = 0.227, w1 = 0.194, w2 = 0.121, w3 = 0.054, w4 = 0.016;
+        vec4 c = Texel(tex, uv) * w0;
+        c += Texel(tex, uv - d) * w1;
+        c += Texel(tex, uv + d) * w1;
+        c += Texel(tex, uv - d * 2.0) * w2;
+        c += Texel(tex, uv + d * 2.0) * w2;
+        c += Texel(tex, uv - d * 3.0) * w3;
+        c += Texel(tex, uv + d * 3.0) * w3;
+        c += Texel(tex, uv - d * 4.0) * w4;
+        c += Texel(tex, uv + d * 4.0) * w4;
+        return c * color;
     }
 ]]
 
@@ -229,6 +304,27 @@ local function easeInOutCubic(progress)
     end
 
     return 1 - ((-2 * progress + 2) ^ 3) / 2
+end
+
+local function makeHardEllipse(size, scale, inner_radius)
+    local scale_x, scale_y = scale[1], scale[2]
+    local image_data = love.image.newImageData(size, size)
+    local center_x, center_y = (size - 1) / 2, (size - 1) / 2
+    local radius = center_x
+
+    for y = 0, size - 1 do
+        for x = 0, size - 1 do
+            local dx = (x - center_x) / scale_x
+            local dy = (y - center_y) / scale_y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            local alpha = distance > inner_radius and distance <= radius and 1 or 0
+            image_data:setPixel(x, y, 1, 1, 1, alpha)
+        end
+    end
+
+    local image = love.graphics.newImage(image_data)
+    image:setFilter("nearest", "nearest")
+    return image
 end
 
 local function copySpriteState(sprite)
@@ -690,6 +786,105 @@ function FinisherSoulOutwardStar:update()
     outward_star_super.update(self)
 end
 
+local FinisherSoulAttackEllipse, soul_attack_ellipse_super = Class(Sprite)
+
+function FinisherSoulAttackEllipse:init(x, y, texture, assets, rotation, beam_length, visible_start, visible_end)
+    soul_attack_ellipse_super.init(self, texture, x, y)
+
+    self:setOrigin(0.5, 0.5)
+    self:setScale(
+        FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X,
+        beam_length / FINISHER_SOUL_ATTACK_ELLIPSE_SIZE
+    )
+    self:setColor(1, 1, 1, visible_start == 0 and 1 or 0)
+    self.layer = FINISHER_SOUL_ATTACK_ELLIPSE_LAYER
+    self.rotation = rotation
+    self.elapsed = 0
+    self.visible_start = visible_start or 0
+    self.visible_end = visible_end
+
+    self:addFX(ShaderFX(assets.distort_shader, {
+        phase = -5.5,
+        yspace = 20.0,
+        yamp = -3.0 * 0.08,
+        xspace = 20.0,
+        xamp = -10.0,
+        texSize = { FINISHER_SOUL_ATTACK_ELLIPSE_SIZE, FINISHER_SOUL_ATTACK_ELLIPSE_SIZE },
+    }, true, 0))
+    self:addFX(ShaderFX(assets.hblur_shader, {
+        texSize = function()
+            local width, height = love.graphics.getDimensions()
+            return { width, height }
+        end,
+        radius = 1.0,
+    }, true, 1))
+    self:addFX(ShaderFX(assets.vblur_shader, {
+        texSize = function()
+            local width, height = love.graphics.getDimensions()
+            return { width, height }
+        end,
+        radius = 1.0,
+    }, true, 2))
+end
+
+function FinisherSoulAttackEllipse:update()
+    self.elapsed = self.elapsed + DT
+
+    local shrink_progress = clamp(
+        self.elapsed / FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME,
+        0,
+        1
+    )
+    self.scale_x = FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X * (1 - shrink_progress)
+    self.alpha = self.elapsed >= self.visible_start
+        and (not self.visible_end or self.elapsed < self.visible_end)
+        and 1
+        or 0
+
+    if self.elapsed >= FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME then
+        self:remove()
+        return
+    end
+
+    soul_attack_ellipse_super.update(self)
+end
+
+local FinisherSoulAttackBeam, soul_attack_beam_super = Class(Bullet)
+
+function FinisherSoulAttackBeam:init(x, y, direction, length)
+    soul_attack_beam_super.init(self, x, y)
+
+    self.width = length
+    self.height = 1
+    self:setOrigin(0, 0)
+    self:setScale(1, 1)
+    self.rotation = direction
+    self.layer = FINISHER_SOUL_ATTACK_ELLIPSE_LAYER
+    self.collider = LineCollider(self, -length / 2, 0, length / 2, 0)
+    self.damage = FINISHER_SOUL_ATTACK_BEAM_DAMAGE
+    self.can_graze = false
+    self.destroy_on_hit = false
+    self.remove_offscreen = false
+    self.collidable = false
+    self.elapsed = 0
+end
+
+function FinisherSoulAttackBeam:update()
+    self.elapsed = self.elapsed + DT
+    if self.elapsed < FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY then
+        self.collidable = false
+    elseif self.elapsed < FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY
+        + FINISHER_SOUL_ATTACK_BEAM_DAMAGE_TIME
+    then
+        self.collidable = true
+    else
+        self:remove()
+        return
+    end
+
+    soul_attack_beam_super.update(self)
+end
+
 function KrisFinisher:init()
     super.init(self)
 
@@ -716,6 +911,7 @@ function KrisFinisher:init()
     self.finisher_soul_attack_last_side = nil
     self.finisher_soul_light = nil
     self.finisher_soul_attack_objects = {}
+    self.finisher_soul_attack_ellipse_assets = nil
     self.finisher_fountain_flashes = {}
     self.finisher_fountain_flash_emitting = false
     self.finisher_fountain_flash_position = 1
@@ -1860,6 +2056,78 @@ function KrisFinisher:trackFinisherSoulAttackObject(object, battle)
     return object
 end
 
+function KrisFinisher:setupFinisherSoulAttackEllipseAssets()
+    if self.finisher_soul_attack_ellipse_assets then
+        return self.finisher_soul_attack_ellipse_assets
+    end
+
+    -- This is kept finisher-local so the round-2 slash visuals stay untouched.
+    local assets = {
+        solid = makeHardEllipse(
+            FINISHER_SOUL_ATTACK_ELLIPSE_SIZE,
+            FINISHER_SOUL_ATTACK_ELLIPSE_TEXTURE_SCALE,
+            0
+        ),
+        donut = makeHardEllipse(
+            FINISHER_SOUL_ATTACK_ELLIPSE_SIZE,
+            FINISHER_SOUL_ATTACK_ELLIPSE_TEXTURE_SCALE,
+            FINISHER_SOUL_ATTACK_ELLIPSE_INNER_RADIUS
+        ),
+        distort_shader = love.graphics.newShader(
+            FINISHER_SOUL_ATTACK_ELLIPSE_DISTORT_SHADER_SOURCE
+        ),
+        hblur_shader = love.graphics.newShader(
+            FINISHER_SOUL_ATTACK_ELLIPSE_HBLUR_SHADER_SOURCE
+        ),
+        vblur_shader = love.graphics.newShader(
+            FINISHER_SOUL_ATTACK_ELLIPSE_VBLUR_SHADER_SOURCE
+        ),
+    }
+    self.finisher_soul_attack_ellipse_assets = assets
+    return assets
+end
+
+function KrisFinisher:spawnFinisherSoulAttackEllipse(battle, center_x, center_y)
+    local target_x, target_y = self:getFinisherPlayerPosition(battle)
+    if not target_x then
+        target_x, target_y = center_x + 1, center_y
+    end
+
+    local direction = MathUtils.angle(center_x, center_y, target_x, target_y)
+    local visual_rotation = direction - math.pi / 2
+    local target_distance = MathUtils.dist(center_x, center_y, target_x, target_y)
+    local beam_length = math.max(
+        FINISHER_SOUL_ATTACK_BEAM_MIN_LENGTH,
+        (target_distance + FINISHER_SOUL_ATTACK_BEAM_OVERHANG) * 2
+    )
+    local assets = self:setupFinisherSoulAttackEllipseAssets()
+    self:trackFinisherSoulAttackObject(FinisherSoulAttackEllipse(
+        center_x,
+        center_y,
+        assets.solid,
+        assets,
+        visual_rotation,
+        beam_length,
+        0,
+        FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY
+    ), battle)
+    self:trackFinisherSoulAttackObject(FinisherSoulAttackEllipse(
+        center_x,
+        center_y,
+        assets.donut,
+        assets,
+        visual_rotation,
+        beam_length,
+        FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY
+    ), battle)
+    return self:trackFinisherSoulAttackObject(FinisherSoulAttackBeam(
+        center_x,
+        center_y,
+        direction,
+        beam_length
+    ), battle)
+end
+
 function KrisFinisher:pruneFinisherSoulAttackObjects()
     local write_index = 1
     for read_index = 1, #self.finisher_soul_attack_objects do
@@ -1927,8 +2195,7 @@ function KrisFinisher:spawnFinisherSoulAttackBurst()
         FINISHER_SOUL_ATTACK_RING_SMALL,
         1
     )
-
-    --todo
+    self:spawnFinisherSoulAttackEllipse(battle, center_x, center_y)
 
     self.finisher_soul_attack_phase = "WAVE_MEDIUM"
     self.finisher_soul_attack_timer = FINISHER_SOUL_ATTACK_WAVE_INTERVAL
