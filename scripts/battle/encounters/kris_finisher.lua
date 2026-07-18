@@ -103,12 +103,37 @@ local FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME = FINISHER_SOUL_ATTACK_ELLIPSE_EXPAN
 local FINISHER_SOUL_ATTACK_WINDUP_LINE_LIFETIME = FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
     + FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME
 -- Keep the finisher effects below the TP bar while preserving Soul-over-effect order.
-local FINISHER_SOUL_ATTACK_STAR_LAYER = BATTLE_LAYERS["ui"] - 4
-local FINISHER_SOUL_ATTACK_ELLIPSE_LAYER = BATTLE_LAYERS["ui"] - 3
+local FINISHER_SOUL_ATTACK_STAR_LAYER = BATTLE_LAYERS["ui"] - 5
+local FINISHER_SOUL_ATTACK_ELLIPSE_LAYER = BATTLE_LAYERS["ui"] - 4
+local FINISHER_SOUL_ATTACK_CIRCLE_LAYER = BATTLE_LAYERS["ui"] - 3
+local FINISHER_SOUL_LIGHT_OVERLAY_LAYER = BATTLE_LAYERS["ui"] - 2.5
 local FINISHER_SOUL_OVERLAY_LAYER = BATTLE_LAYERS["ui"] - 2
+local FINISHER_PLAYER_SOUL_LAYER = FINISHER_SOUL_ATTACK_ELLIPSE_LAYER
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE = 42
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY = FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_TIME = 1 / 60
+
+local FINISHER_WAVE_CIRCLE_BASE_Y = 60
+local FINISHER_WAVE_CIRCLE_RADIUS = 56
+local FINISHER_WAVE_CIRCLE_BORDER_WIDTH = 4
+local FINISHER_WAVE_CIRCLE_SPACING = 92
+local FINISHER_WAVE_CIRCLE_SPEED = 84
+local FINISHER_WAVE_CIRCLE_BOB_AMPLITUDE = 1.75
+local FINISHER_WAVE_CIRCLE_BOB_SPEED = 2.4
+local FINISHER_WAVE_CIRCLE_PATTERN = { 16, 4, -10, 4, 16 }
+local FINISHER_WAVE_CIRCLE_CURTAIN_RAISE = 20
+local FINISHER_WAVE_CIRCLE_FALL_TIME = 5
+local FINISHER_WAVE_CIRCLE_PATTERN_MAX = 16
+local FINISHER_WAVE_CIRCLE_START_HEIGHT = -(
+    FINISHER_WAVE_CIRCLE_BASE_Y
+        + FINISHER_WAVE_CIRCLE_RADIUS
+        + FINISHER_WAVE_CIRCLE_BORDER_WIDTH
+        + FINISHER_WAVE_CIRCLE_PATTERN_MAX
+        + 4
+)
+-- Move down by one full base-height after entering from above the screen.
+local FINISHER_WAVE_CIRCLE_TARGET_HEIGHT = FINISHER_WAVE_CIRCLE_BASE_Y
+local FINISHER_WAVE_CIRCLE_COUNT = math.ceil(SCREEN_WIDTH / FINISHER_WAVE_CIRCLE_SPACING) + 4
 
 -- These centers are measured from the 1280x960 reference composite and
 -- divided by two for the 640x480 battle coordinate space.
@@ -169,10 +194,12 @@ local FINISHER_FOUNTAIN_COVER_SHADER_SOURCE = [[
 
 local FINISHER_FOUNTAIN_INVERT_SHADER_SOURCE = [[
     extern Image fountainMask;
+    extern Image circleMask;
 
     vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
         vec4 source = Texel(tex, uv);
         float amount = Texel(fountainMask, uv).a;
+        amount *= 1.0 - Texel(circleMask, uv).a;
         vec3 inverted = vec3(1.0) - source.rgb;
         vec3 result = mix(source.rgb, inverted, amount);
         float alpha = max(source.a, amount);
@@ -657,6 +684,205 @@ function FinisherSoulLight:update()
     soul_light_super.update(self)
 end
 
+-- The source light stays attached to the enemy soul for positioning, but its
+-- pixels are drawn by a Battle-level proxy so it can sit above the wave.
+function FinisherSoulLight:draw() end
+
+local FinisherSoulLightOverlay, soul_light_overlay_super = Class(Sprite)
+
+function FinisherSoulLightOverlay:init()
+    soul_light_overlay_super.init(self, "bullets/soul/light")
+
+    self:setOrigin(0.5, 0.5)
+    self.layer = FINISHER_SOUL_LIGHT_OVERLAY_LAYER
+    self.source = nil
+    self.visible = false
+end
+
+function FinisherSoulLightOverlay:update()
+    local source = self.source
+    if source and source.parent and self.parent then
+        local x, y = source:getRelativePos(
+            source.width / 2,
+            source.height / 2,
+            self.parent
+        )
+        self:setPosition(x, y)
+        self:setScale(source.scale_x, source.scale_y)
+        self.rotation = source.rotation
+        self:setColor(source.color[1], source.color[2], source.color[3], source.alpha)
+        self.visible = source:isFullyActive()
+            and source.visible
+            and source.parent.visible
+    else
+        self.visible = false
+    end
+
+    soul_light_overlay_super.update(self)
+end
+
+local FinisherWaveCircles, wave_circles_super = Class(Object)
+
+function FinisherWaveCircles:init()
+    wave_circles_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.layer = FINISHER_SOUL_ATTACK_CIRCLE_LAYER
+    self.elapsed = 0
+    self.wave_height = FINISHER_WAVE_CIRCLE_START_HEIGHT
+    self.next_circle_index = FINISHER_WAVE_CIRCLE_COUNT + 1
+    self.circles = {}
+
+    for index = 1, FINISHER_WAVE_CIRCLE_COUNT do
+        table.insert(self.circles, {
+            x = (index - 2) * FINISHER_WAVE_CIRCLE_SPACING,
+            index = index,
+        })
+    end
+
+    self.mask_canvas = love.graphics.newCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
+    self.mask_canvas:setFilter("nearest", "nearest")
+    self:updateMaskCanvas()
+end
+
+function FinisherWaveCircles:update()
+    self.elapsed = self.elapsed + DT
+    local fall_progress = clamp(self.elapsed / FINISHER_WAVE_CIRCLE_FALL_TIME, 0, 1)
+    local fall_eased = 1 - (1 - fall_progress) * (1 - fall_progress) * (1 - fall_progress)
+    self.wave_height = FINISHER_WAVE_CIRCLE_START_HEIGHT
+        + (FINISHER_WAVE_CIRCLE_TARGET_HEIGHT - FINISHER_WAVE_CIRCLE_START_HEIGHT)
+        * fall_eased
+    local shift = FINISHER_WAVE_CIRCLE_SPEED * DT
+
+    for _, circle in ipairs(self.circles) do
+        circle.x = circle.x - shift
+    end
+
+    local left_limit = -FINISHER_WAVE_CIRCLE_RADIUS - FINISHER_WAVE_CIRCLE_BORDER_WIDTH
+    while self.circles[1] and self.circles[1].x < left_limit do
+        local first = table.remove(self.circles, 1)
+        local last = self.circles[#self.circles]
+        first.x = last.x + FINISHER_WAVE_CIRCLE_SPACING
+        first.index = self.next_circle_index
+        self.next_circle_index = self.next_circle_index + 1
+        table.insert(self.circles, first)
+    end
+
+    self:updateMaskCanvas()
+    wave_circles_super.update(self)
+end
+
+function FinisherWaveCircles:getCircleY(circle)
+    local pattern_index = ((circle.index - 1) % #FINISHER_WAVE_CIRCLE_PATTERN) + 1
+    local bob = math.sin(
+        self.elapsed * FINISHER_WAVE_CIRCLE_BOB_SPEED + circle.index * 0.55
+    ) * FINISHER_WAVE_CIRCLE_BOB_AMPLITUDE
+    return FINISHER_WAVE_CIRCLE_BASE_Y
+        + self.wave_height
+        + FINISHER_WAVE_CIRCLE_PATTERN[pattern_index]
+        + bob
+end
+
+function FinisherWaveCircles:getCoverBottom()
+    return FINISHER_WAVE_CIRCLE_BASE_Y
+        + self.wave_height
+        + FINISHER_WAVE_CIRCLE_RADIUS
+        + FINISHER_WAVE_CIRCLE_PATTERN[3]
+        - FINISHER_WAVE_CIRCLE_CURTAIN_RAISE
+end
+
+function FinisherWaveCircles:drawBlackCurtain()
+    local cover_bottom = math.max(0, self:getCoverBottom())
+    if cover_bottom <= 0 then
+        return
+    end
+    love.graphics.rectangle(
+        "fill",
+        0,
+        0,
+        SCREEN_WIDTH,
+        cover_bottom
+    )
+end
+
+function FinisherWaveCircles:drawOuterCircles()
+    for _, circle in ipairs(self.circles) do
+        love.graphics.circle(
+            "fill",
+            circle.x,
+            self:getCircleY(circle),
+            FINISHER_WAVE_CIRCLE_RADIUS + FINISHER_WAVE_CIRCLE_BORDER_WIDTH,
+            48
+        )
+    end
+end
+
+function FinisherWaveCircles:updateMaskCanvas()
+    if not self.mask_canvas then
+        return
+    end
+
+    local old_shader = love.graphics.getShader()
+    local old_r, old_g, old_b, old_a = love.graphics.getColor()
+
+    love.graphics.push("all")
+    love.graphics.origin()
+    Draw.pushCanvas(self.mask_canvas)
+    love.graphics.setShader()
+    love.graphics.clear(0, 0, 0, 0)
+    love.graphics.setColor(1, 1, 1, 1)
+    self:drawBlackCurtain()
+    self:drawOuterCircles()
+    Draw.popCanvas()
+    love.graphics.pop()
+
+    love.graphics.setShader(old_shader)
+    love.graphics.setColor(old_r, old_g, old_b, old_a)
+end
+
+function FinisherWaveCircles:onRemove()
+    if self.mask_canvas then
+        self.mask_canvas:release()
+        self.mask_canvas = nil
+    end
+end
+
+function FinisherWaveCircles:draw()
+    love.graphics.push("all")
+    love.graphics.origin()
+
+    local old_blend, old_alpha_mode = love.graphics.getBlendMode()
+    love.graphics.setBlendMode("alpha")
+
+    -- The area above the wave is a solid black curtain. The circle bottoms
+    -- remain visible below it as the moving wave edge.
+    love.graphics.setColor(0, 0, 0, 1)
+    self:drawBlackCurtain()
+
+    -- Draw all expanded white silhouettes first, then black interiors. This
+    -- removes the borders between overlapping circles while keeping the outer
+    -- outline connected across the entire wave.
+    love.graphics.setColor(1, 1, 1, 1)
+    self:drawOuterCircles()
+
+    love.graphics.setColor(0, 0, 0, 1)
+    for _, circle in ipairs(self.circles) do
+        love.graphics.circle(
+            "fill",
+            circle.x,
+            self:getCircleY(circle),
+            FINISHER_WAVE_CIRCLE_RADIUS,
+            48
+        )
+    end
+
+    -- Hide the upper circle outlines so only the lower wave edge remains.
+    love.graphics.setColor(0, 0, 0, 1)
+    self:drawBlackCurtain()
+
+    love.graphics.setBlendMode(old_blend, old_alpha_mode)
+    love.graphics.pop()
+end
+
 local FinisherSoulOverlay, soul_overlay_super = Class(Sprite)
 
 function FinisherSoulOverlay:init(source)
@@ -972,9 +1198,12 @@ function KrisFinisher:init()
     self.finisher_soul_attack_move = nil
     self.finisher_soul_attack_last_side = nil
     self.finisher_soul_light = nil
+    self.finisher_soul_light_overlay = nil
     self.finisher_soul_overlay = nil
     self.finisher_soul_attack_objects = {}
     self.finisher_soul_attack_ellipse_assets = nil
+    self.finisher_wave_circles = nil
+    self.finisher_wave_circle_empty_mask = nil
     self.finisher_fountain_flashes = {}
     self.finisher_fountain_flash_emitting = false
     self.finisher_fountain_flash_position = 1
@@ -1466,6 +1695,7 @@ function KrisFinisher:startFinisherFountain(battle)
     local fountain = FinisherFountain({
         on_grow_complete = function(current_fountain)
             self:finishFinisherFountainInversion(current_fountain, battle)
+            self:startFinisherWaveCircles(battle)
             self:startFinisherRainEmitter(battle)
             self:startFinisherSoulAttackEmitter(battle)
         end,
@@ -1503,6 +1733,9 @@ function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
         fountainMask = function()
             return fountain.mask_canvas
         end,
+        circleMask = function()
+            return self:getFinisherWaveCircleMask()
+        end,
     }, false, BATTLE_LAYERS["top"] + 100)
     stage:addFX(fx, "kris_finisher_fountain_invert")
     self.finisher_inversion_stage = stage
@@ -1514,6 +1747,44 @@ function KrisFinisher:getFinisherRainSpawnInterval()
     return FINISHER_RAIN_SPAWN_INTERVAL_MIN
         + (FINISHER_RAIN_SPAWN_INTERVAL_MAX - FINISHER_RAIN_SPAWN_INTERVAL_MIN)
         * (random_value ^ FINISHER_RAIN_SPAWN_INTERVAL_BIAS_POWER)
+end
+
+function KrisFinisher:startFinisherWaveCircles(battle)
+    self:stopFinisherWaveCircles()
+    if not battle or not battle.parent then
+        return
+    end
+
+    local circles = FinisherWaveCircles()
+    battle:addChild(circles)
+    self.finisher_wave_circles = circles
+end
+
+function KrisFinisher:stopFinisherWaveCircles()
+    if self.finisher_wave_circles and self.finisher_wave_circles.parent then
+        self.finisher_wave_circles:remove()
+    end
+    self.finisher_wave_circles = nil
+end
+
+function KrisFinisher:getFinisherWaveCircleMask()
+    if self.finisher_wave_circles and self.finisher_wave_circles.mask_canvas then
+        return self.finisher_wave_circles.mask_canvas
+    end
+
+    if not self.finisher_wave_circle_empty_mask then
+        local mask = love.graphics.newCanvas(SCREEN_WIDTH, SCREEN_HEIGHT)
+        mask:setFilter("nearest", "nearest")
+        local old_shader = love.graphics.getShader()
+        Draw.pushCanvas(mask)
+        love.graphics.setShader()
+        love.graphics.clear(0, 0, 0, 0)
+        Draw.popCanvas()
+        love.graphics.setShader(old_shader)
+        self.finisher_wave_circle_empty_mask = mask
+    end
+
+    return self.finisher_wave_circle_empty_mask
 end
 
 function KrisFinisher:clearFinisherRains()
@@ -1753,6 +2024,7 @@ function KrisFinisher:triggerFinisherTPReached()
 
     self.finisher_tp_reached = true
     self:stopFinisherStarEmitter()
+    self:stopFinisherWaveCircles()
     self:stopFinisherFountainFlashEmitter()
     self:clearFinisherStars()
     self:clearFinisherBulletObjects(battle)
@@ -1989,14 +2261,17 @@ function KrisFinisher:createFinisherKris(battle)
     -- The source soul keeps its local light children, while its sprite is
     -- rendered by a Battle-level proxy so it can sit below the TP bar.
     kris_soul.sprite.visible = false
+    local soul_light_overlay = FinisherSoulLightOverlay()
     local soul_overlay = FinisherSoulOverlay(kris_soul)
 
     battle:addChild(kris)
+    battle:addChild(soul_light_overlay)
     battle:addChild(soul_overlay)
 
     self.finisher_kris = kris
     self.finisher_kris_sprite = sprite
     self.finisher_soul = kris_soul
+    self.finisher_soul_light_overlay = soul_light_overlay
     self.finisher_soul_overlay = soul_overlay
 end
 
@@ -2293,11 +2568,19 @@ function KrisFinisher:beginFinisherSoulAttackCycle()
             if self.finisher_soul_light == light then
                 self.finisher_soul_light = nil
             end
+            if self.finisher_soul_light_overlay
+                and self.finisher_soul_light_overlay.source == light
+            then
+                self.finisher_soul_light_overlay.source = nil
+            end
         end
     )
     light:setPosition(soul.width / 2, soul.height / 2)
     soul:addChild(light)
     self.finisher_soul_light = light
+    if self.finisher_soul_light_overlay then
+        self.finisher_soul_light_overlay.source = light
+    end
 end
 
 function KrisFinisher:beginFinisherSoulAttackMove()
@@ -2427,6 +2710,9 @@ function KrisFinisher:stopFinisherSoulAttackEmitter()
         self.finisher_soul_light:remove()
     end
     self.finisher_soul_light = nil
+    if self.finisher_soul_light_overlay then
+        self.finisher_soul_light_overlay.source = nil
+    end
     self:clearFinisherSoulAttackObjects()
 end
 
@@ -2694,7 +2980,7 @@ function KrisFinisher:createWindowArena(battle)
     battle:spawnSoul(OPENING_PLAYER_POSITION.x, OPENING_PLAYER_POSITION.y)
     -- Keep the controllable soul above the finisher effects, but below the
     -- HP/TP UI layers.
-    battle.soul.layer = FINISHER_SOUL_OVERLAY_LAYER
+    battle.soul.layer = FINISHER_PLAYER_SOUL_LAYER
     battle.soul.transitioning = false
     battle.soul.alpha = battle.soul.target_alpha or 1
     battle.soul:setPosition(OPENING_PLAYER_POSITION.x, OPENING_PLAYER_POSITION.y)
@@ -2732,7 +3018,12 @@ function KrisFinisher:onBattleEnd()
     self:stopFinisherSoulAttackEmitter()
     self:stopFinisherFountainFlashEmitter()
     self:stopFinisherRainEmitter()
+    self:stopFinisherWaveCircles()
     self:restoreVesselDamageNumbers()
+    if self.finisher_wave_circle_empty_mask then
+        self.finisher_wave_circle_empty_mask:release()
+        self.finisher_wave_circle_empty_mask = nil
+    end
 end
 
 return KrisFinisher
