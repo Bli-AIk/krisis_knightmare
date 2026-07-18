@@ -65,7 +65,9 @@ local FINISHER_SOUL_OUTWARD_STAR_TIME = 0.9
 local FINISHER_SOUL_OUTWARD_STAR_START_SCALE = 1
 local FINISHER_SOUL_OUTWARD_STAR_SCALE_AMPLITUDE = 0.35
 local FINISHER_SOUL_OUTWARD_STAR_INITIAL_SPEED_RATIO = 0.25
-local FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_INTERVAL = 0.05
+local FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_INTERVAL = 0.03
+local FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_ALPHA = 0.65
+local FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_FADE_TIME = 0.18
 local FINISHER_SOUL_ATTACK_MOVE_DELAY = FINISHER_SOUL_OUTWARD_STAR_TIME + 4 / 30
 local FINISHER_SOUL_ATTACK_MOVE_TIME = 0.5
 local FINISHER_SOUL_ATTACK_MIN_PLAYER_DISTANCE = 104
@@ -633,9 +635,9 @@ function FinisherSoulOutwardStar:init(x, y, angle, center_x, center_y)
     self.elapsed = 0
     self.afterimage_elapsed = 0
 
-    self.sprite.alpha = 0.78
+    self.sprite.alpha = 1
     self.ghost = Sprite("bullets/star", 0, 0)
-    self.ghost:setColor(1, 1, 1, 0.28)
+    self.ghost:setColor(1, 1, 1, 1)
     self.ghost.layer = -0.001
     self:addChild(self.ghost)
 end
@@ -645,7 +647,11 @@ function FinisherSoulOutwardStar:spawnAfterImage()
         return
     end
 
-    self.ghost:addChild(LightAfterImage(self.ghost, 0.4, 0.08))
+    self.ghost:addChild(LightAfterImage(
+        self.ghost,
+        FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_ALPHA,
+        FINISHER_SOUL_OUTWARD_STAR_AFTERIMAGE_FADE_TIME
+    ))
 end
 
 function FinisherSoulOutwardStar:update()
