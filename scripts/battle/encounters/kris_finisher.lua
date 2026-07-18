@@ -87,12 +87,23 @@ local FINISHER_SOUL_ATTACK_BEAM_MIN_LENGTH = math.sqrt(
     SCREEN_WIDTH * SCREEN_WIDTH + SCREEN_HEIGHT * SCREEN_HEIGHT
 ) + FINISHER_SOUL_ATTACK_BEAM_OVERHANG
 local FINISHER_SOUL_ATTACK_BEAM_LENGTH_MULTIPLIER = 2
-local FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY = 4 / 60
+local FINISHER_SOUL_ATTACK_WINDUP_LINE_TRAVEL_TIME = 20 / 60
+local FINISHER_SOUL_ATTACK_WINDUP_LINE_WIDTH = 4
+local FINISHER_SOUL_ATTACK_WINDUP_LINE_EXIT_MARGIN = 8
+local FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY = FINISHER_SOUL_ATTACK_WINDUP_LINE_TRAVEL_TIME
+    + 0.2
+local FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME = 4 / 60
+local FINISHER_SOUL_ATTACK_ELLIPSE_HOLLOW_DELAY = FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME
+local FINISHER_SOUL_ATTACK_ELLIPSE_HOLD_TIME = 2 / 60
 local FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME = 15 / 60
-local FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME = 0.35
+local FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME = FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME
+    + FINISHER_SOUL_ATTACK_ELLIPSE_HOLD_TIME
+    + FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME
+local FINISHER_SOUL_ATTACK_WINDUP_LINE_LIFETIME = FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
+    + FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME
 local FINISHER_SOUL_ATTACK_ELLIPSE_LAYER = BATTLE_LAYERS["bullets"] - 1
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE = 42
-local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY = 8 / 60
+local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_DELAY = FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
 local FINISHER_SOUL_ATTACK_BEAM_DAMAGE_TIME = 1 / 60
 
 -- These centers are measured from the 1280x960 reference composite and
@@ -268,6 +279,23 @@ local function makeHardEllipse(size, scale, inner_radius)
     local image = love.graphics.newImage(image_data)
     image:setFilter("nearest", "nearest")
     return image
+end
+
+local function distanceToScreenEdge(x, y, direction_x, direction_y)
+    local distance = math.huge
+
+    if direction_x > 0 then
+        distance = math.min(distance, (SCREEN_WIDTH - x) / direction_x)
+    elseif direction_x < 0 then
+        distance = math.min(distance, -x / direction_x)
+    end
+    if direction_y > 0 then
+        distance = math.min(distance, (SCREEN_HEIGHT - y) / direction_y)
+    elseif direction_y < 0 then
+        distance = math.min(distance, -y / direction_y)
+    end
+
+    return math.max(distance, 0)
 end
 
 local function copySpriteState(sprite)
@@ -736,10 +764,10 @@ function FinisherSoulAttackEllipse:init(x, y, texture, rotation, beam_length, vi
 
     self:setOrigin(0.5, 0.5)
     self:setScale(
-        FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X,
+        0,
         beam_length / FINISHER_SOUL_ATTACK_ELLIPSE_SIZE
     )
-    self:setColor(1, 1, 1, visible_start == 0 and 1 or 0)
+    self:setColor(1, 1, 1, 0)
     self.layer = FINISHER_SOUL_ATTACK_ELLIPSE_LAYER
     self.rotation = rotation
     self.elapsed = 0
@@ -750,23 +778,101 @@ end
 function FinisherSoulAttackEllipse:update()
     self.elapsed = self.elapsed + DT
 
-    local shrink_progress = clamp(
-        self.elapsed / FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME,
-        0,
-        1
-    )
-    self.scale_x = FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X * (1 - shrink_progress)
-    self.alpha = self.elapsed >= self.visible_start
-        and (not self.visible_end or self.elapsed < self.visible_end)
-        and 1
-        or 0
+    local active_elapsed = self.elapsed - FINISHER_SOUL_ATTACK_ELLIPSE_START_DELAY
+    if active_elapsed < 0 then
+        self.scale_x = 0
+        self.alpha = 0
+    else
+        if active_elapsed < FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME then
+            local expand_progress = clamp(
+                active_elapsed / FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME,
+                0,
+                1
+            )
+            self.scale_x = FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X * expand_progress
+        elseif active_elapsed < FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME
+            + FINISHER_SOUL_ATTACK_ELLIPSE_HOLD_TIME
+        then
+            self.scale_x = FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X
+        else
+            local shrink_progress = clamp(
+                (active_elapsed - FINISHER_SOUL_ATTACK_ELLIPSE_EXPAND_TIME
+                    - FINISHER_SOUL_ATTACK_ELLIPSE_HOLD_TIME)
+                    / FINISHER_SOUL_ATTACK_ELLIPSE_SHRINK_TIME,
+                0,
+                1
+            )
+            self.scale_x = FINISHER_SOUL_ATTACK_ELLIPSE_SCALE_X * (1 - shrink_progress)
+        end
+        self.alpha = active_elapsed >= self.visible_start
+            and (not self.visible_end or active_elapsed < self.visible_end)
+            and 1
+            or 0
+    end
 
-    if self.elapsed >= FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME then
+    if active_elapsed >= FINISHER_SOUL_ATTACK_ELLIPSE_LIFETIME then
         self:remove()
         return
     end
 
     soul_attack_ellipse_super.update(self)
+end
+
+local FinisherSoulAttackWindupLine, windup_line_super = Class(Object)
+
+function FinisherSoulAttackWindupLine:init(center_x, center_y, direction, length)
+    local direction_x = math.cos(direction)
+    local direction_y = math.sin(direction)
+    local exit_padding = length / 2
+        + FINISHER_SOUL_ATTACK_WINDUP_LINE_EXIT_MARGIN
+    local start_distance = distanceToScreenEdge(
+        center_x,
+        center_y,
+        -direction_x,
+        -direction_y
+    ) + exit_padding
+    local start_x = center_x - direction_x * start_distance
+    local start_y = center_y - direction_y * start_distance
+    windup_line_super.init(
+        self,
+        start_x,
+        start_y,
+        length,
+        FINISHER_SOUL_ATTACK_WINDUP_LINE_WIDTH
+    )
+
+    self:setOrigin(0.5, 0.5)
+    self:setColor(1, 1, 1, 1)
+    self.rotation = direction
+    self.layer = FINISHER_SOUL_ATTACK_ELLIPSE_LAYER
+    self.collidable = false
+    self.start_x = start_x
+    self.start_y = start_y
+    self.center_x = center_x
+    self.center_y = center_y
+    self.elapsed = 0
+end
+
+function FinisherSoulAttackWindupLine:update()
+    self.elapsed = self.elapsed + DT
+    local progress = clamp(
+        self.elapsed / FINISHER_SOUL_ATTACK_WINDUP_LINE_TRAVEL_TIME,
+        0,
+        1
+    )
+    self.x = self.start_x + (self.center_x - self.start_x) * progress
+    self.y = self.start_y + (self.center_y - self.start_y) * progress
+
+    if self.elapsed >= FINISHER_SOUL_ATTACK_WINDUP_LINE_LIFETIME then
+        self:remove()
+        return
+    end
+
+    windup_line_super.update(self)
+end
+
+function FinisherSoulAttackWindupLine:draw()
+    love.graphics.rectangle("fill", 0, 0, self.width, self.height)
 end
 
 local FinisherSoulAttackBeam, soul_attack_beam_super = Class(Bullet)
@@ -2012,6 +2118,12 @@ function KrisFinisher:spawnFinisherSoulAttackEllipse(battle, center_x, center_y)
         (target_distance + FINISHER_SOUL_ATTACK_BEAM_OVERHANG) * 2
     ) * FINISHER_SOUL_ATTACK_BEAM_LENGTH_MULTIPLIER
     local assets = self:setupFinisherSoulAttackEllipseAssets()
+    self:trackFinisherSoulAttackObject(FinisherSoulAttackWindupLine(
+        center_x,
+        center_y,
+        direction,
+        beam_length
+    ), battle)
     self:trackFinisherSoulAttackObject(FinisherSoulAttackEllipse(
         center_x,
         center_y,
