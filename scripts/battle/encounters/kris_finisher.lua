@@ -13,7 +13,7 @@ local FINISHER_WARP_BACKGROUND_ALPHA = 0.15
 local FINISHER_TP50_FULLSCREEN_FILTER_PROGRESS = 0.01
 local FINISHER_SLIDE_HOLD_FRAME = 6
 local FINISHER_SLIDE_LOOP_START_FRAME = 3
-local FINISHER_SLIDE_LOOP_COUNT = 1
+local FINISHER_SLIDE_LOOP_COUNT = 0
 local FINISHER_SLIDE_LAST_WAIT_FRAME = 8
 local FINISHER_SLIDE_END_FRAME = 9
 local FINISHER_SLIDE_AFTERIMAGE_ALPHA = 0.5
@@ -386,6 +386,7 @@ function FinisherFlyingSword:init(x, y, options)
     self.exit_started = false
     self.motion_blurs = {}
     self.on_exit = options.on_exit
+    self.on_dive = options.on_dive
 
     self:setColor(1, 1, 1, 0)
 end
@@ -444,6 +445,9 @@ function FinisherFlyingSword:update()
         if self.elapsed >= FINISHER_SWORD_TOP_HOLD_TIME then
             self.phase = "DIVE"
             self.elapsed = 0
+            if self.on_dive then
+                self.on_dive(self)
+            end
         end
     elseif self.phase == "DIVE" then
         local progress = clamp(self.elapsed / FINISHER_SWORD_DIVE_TIME, 0, 1)
@@ -993,7 +997,7 @@ function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
     self.finisher_inversion_stage_fx = fx
 end
 
-function KrisFinisher:startFinisherSword(battle)
+function KrisFinisher:startFinisherSword(battle, on_dive)
     self:clearFinisherSword()
 
     local sword = FinisherFlyingSword(
@@ -1003,6 +1007,7 @@ function KrisFinisher:startFinisherSword(battle)
             on_exit = function(prop)
                 self:finishFinisherSword(prop, battle)
             end,
+            on_dive = on_dive,
         }
     )
     battle:addChild(sword)
@@ -1058,6 +1063,8 @@ function KrisFinisher:startFinisherSlideAnimation(battle)
 
     self:clearFinisherSlideAfterImage()
 
+    local sword_dive_started = false
+
     sprite:setAnimation({
         "finisher_slide",
         function(anim_sprite, wait)
@@ -1066,7 +1073,10 @@ function KrisFinisher:startFinisherSlideAnimation(battle)
                 wait(FINISHER_KRIS_ANIMATION_SPEED)
             end
 
-            self:startFinisherSword(battle)
+            self:startFinisherSword(battle, function()
+                sword_dive_started = true
+                anim_sprite:setFrame(FINISHER_SLIDE_END_FRAME)
+            end)
 
             for _ = 1, FINISHER_SLIDE_LOOP_COUNT do
                 for frame = FINISHER_SLIDE_LOOP_START_FRAME, FINISHER_SLIDE_HOLD_FRAME do
@@ -1080,7 +1090,9 @@ function KrisFinisher:startFinisherSlideAnimation(battle)
                 wait(FINISHER_KRIS_ANIMATION_SPEED)
             end
 
-            anim_sprite:setFrame(FINISHER_SLIDE_END_FRAME)
+            while not sword_dive_started and anim_sprite.parent do
+                wait(1 / 60)
+            end
         end,
         callback = function(anim_sprite)
             anim_sprite:setFrame(FINISHER_SLIDE_END_FRAME)
