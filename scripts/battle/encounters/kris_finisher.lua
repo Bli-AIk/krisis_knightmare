@@ -2140,10 +2140,6 @@ end
 function KrisFinisher:startFinisherTP50Music(battle)
     self:clearFinisherTP50Music()
 
-    if battle and battle.music then
-        battle.music:stop()
-    end
-
     self.finisher_tp50_music = Music()
     self.finisher_tp50_music:play(FINISHER_SOUND.tp50_music)
 end
