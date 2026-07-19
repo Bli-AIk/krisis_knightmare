@@ -21,6 +21,13 @@ local FINAL_BLACK_FULL_TIME = 35.265
 local FINAL_TEXT_FADE_IN_TIME = 0.5
 local FINAL_TEXT_FADE_OUT_TIME = 0.5
 
+local function isEnvFlagSet(name)
+    local value = string.lower(os.getenv(name) or "")
+    return value == "1" or value == "true" or value == "yes" or value == "on"
+end
+
+local SHOW_TIME_DISPLAY = isEnvFlagSet("KRISIS_PROJECT4_SHOW_TIME")
+
 local SNOW_SHADER_SOURCE = [[
 extern float iTime;
 extern vec2 iResolution;
@@ -963,6 +970,17 @@ function Project4Scene:drawSkipPrompt()
     end
 end
 
+function Project4Scene:drawTimeDisplay()
+    if not SHOW_TIME_DISPLAY then
+        return
+    end
+
+    self:refreshFonts(false)
+    love.graphics.setFont(self.small_font)
+    Draw.setColor(1, 1, 1, 1)
+    love.graphics.print(string.format("TIME %.3f", self.time), 20, SCREEN_HEIGHT - 34)
+end
+
 function Project4Scene:draw()
     self:refreshFonts(false)
     love.graphics.push("all")
@@ -998,6 +1016,7 @@ function Project4Scene:draw()
 
     self:drawSceneText(self.time)
     self:drawSkipPrompt()
+    self:drawTimeDisplay()
 
     if self.ready and self.capture_times and not self.capture_requested and not self.capture_complete then
         local milliseconds = math.floor((self.time * 1000) + 0.5)
