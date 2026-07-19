@@ -1611,11 +1611,19 @@ function Mod:consumeKrisisFinisherResume()
     self.krisis_finisher_resume_consumed = true
 end
 
-function Mod:startKrisisBattlePrep()
+function Mod:startKrisisBattlePrep(skip_intro)
+    if Game and Game.world and Game.world.music then
+        Game.world.music:stop()
+    end
+    if Assets and Assets.stopAllSounds then
+        Assets.stopAllSounds()
+    end
+
     local stage = (Game and Game.stage) or (Kristal and Kristal.Stage)
     if BattlePrepScene and stage then
         stage:addChild(BattlePrepScene({
             encounter = "kris",
+            skip_intro = skip_intro == true,
         }))
     elseif Game then
         Game:encounter("kris", false)
@@ -1745,7 +1753,7 @@ function Mod:postLoad()
     end
     if self.krisis_gameover_resume_pending and not Game.battle then
         self.krisis_gameover_resume_pending = false
-        Game:encounter("kris", false)
+        self:startKrisisBattlePrep(true)
         return
     end
     if not self.krisis_finisher_resume_pending or Game.battle then
@@ -1808,6 +1816,10 @@ end
 function Mod:postDraw()
     if self.finisher_profiler then
         self.finisher_profiler:postDraw()
+    end
+
+    if Game.state ~= "BATTLE" then
+        return
     end
 
     local battle = Game.battle

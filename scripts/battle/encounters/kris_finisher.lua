@@ -2882,6 +2882,10 @@ function KrisFinisher:draw(fade)
 end
 
 function KrisFinisher:drawFinisherHurtFlash()
+    if Game.state ~= "BATTLE" then
+        return
+    end
+
     local flash = self.finisher_hurt_flash
     if not flash or not flash.parent then
         return
@@ -3757,6 +3761,7 @@ function KrisFinisher:onGameOver()
     self:clearFinisherTP50Music()
     self:clearFinisherTP100Music()
     self:clearFinisherWindBackground()
+    self:clearFinisherInversion()
     self:stopFinisherTransition()
 end
 

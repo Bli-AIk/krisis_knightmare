@@ -101,7 +101,7 @@ function BattlePrepScene:init(options)
     options = options or {}
     self.layer = 1000000
     self.encounter = options.encounter or "kris"
-    self.state = "TEXT"
+    self.state = options.skip_intro and "PRE_BATTLE_WHITE" or "TEXT"
     self.state_time = 0
     self.sequence_index = 1
     self.sequence_frame_three_sound_played = false
@@ -120,6 +120,10 @@ function BattlePrepScene:init(options)
     end
 
     self:refreshFonts(true)
+
+    if options.skip_intro then
+        Assets.playSound(PRE_BATTLE_WHITE_SOUND)
+    end
 end
 
 function BattlePrepScene:refreshFonts(force)

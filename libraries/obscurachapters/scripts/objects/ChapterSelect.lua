@@ -639,7 +639,11 @@ function ChapterSelect:startKrisShortcutBattle()
     if Game.world then
         Game.world:closeMenu()
     end
-    Game:encounter("kris", false)
+    if Mod and Mod.startKrisisBattlePrep then
+        Mod:startKrisisBattlePrep(true)
+    else
+        Game:encounter("kris", false)
+    end
 end
 
 function ChapterSelect:updateKrisShortcutPrompt()
