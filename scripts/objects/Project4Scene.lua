@@ -15,10 +15,37 @@ local PROMPT_FADE_IN_TIME = 0.12
 local INITIAL_TEXT_FADE_IN_TIME = 0.5
 local INITIAL_BLACK_FADE_START = 2.008
 local INITIAL_BLACK_FADE_END = 2.591
+local SNOW_STATIC_START = 21.283
 local FINAL_BLACK_START = 29.958
 local FINAL_BLACK_FULL_TIME = 35.265
 local FINAL_TEXT_FADE_IN_TIME = 0.5
 local FINAL_TEXT_FADE_OUT_TIME = 0.5
+
+local SNOW_SHADER_SOURCE = [[
+extern float iTime;
+extern vec2 iResolution;
+extern float snowStrength;
+
+float pixelNoise(vec2 p, float seed) {
+    float h1 = sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123;
+    float h2 = sin(seed * 91.345) * 8734.233;
+    return fract(sin(fract(h1) + fract(h2)) * 18375.4321);
+}
+
+vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+    vec4 source = Texel(texture, texture_coords) * color;
+    vec2 frag_coord = texture_coords * iResolution;
+    vec2 pixel_coord = floor(frag_coord / 2.0);
+    float time_seed = floor(iTime * 8.0);
+    float noise = pixelNoise(pixel_coord, time_seed);
+    float sparse_noise = pow(noise, 7.0);
+
+    float snow_alpha = sparse_noise * 0.15 * snowStrength;
+    vec3 mixed_color = mix(source.rgb, vec3(0.18), snow_alpha);
+    float gray = dot(mixed_color, vec3(0.299, 0.587, 0.114));
+    return vec4(vec3(gray), source.a);
+}
+]]
 
 local function isCjkCodepoint(codepoint)
     return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
@@ -398,6 +425,9 @@ function Project4Scene:init(options)
     })
     self.output_canvas:setFilter("nearest", "nearest")
     self.color_shader = love.graphics.newShader(COLOR_MATRIX_SHADER)
+    self.snow_shader = love.graphics.newShader(SNOW_SHADER_SOURCE)
+    self.snow_shader:send("iResolution", {CANVAS_WIDTH, CANVAS_HEIGHT})
+    self.snow_shader:send("snowStrength", 1)
 
     self.red_adjustment = adjustmentMatrix(RED_INSIDE, RED_OUTSIDE, 0.761719)
     self.gray_adjustment = adjustmentMatrix(GRAY_INSIDE, GRAY_OUTSIDE, 0.761719)
@@ -674,7 +704,7 @@ function Project4Scene:drawCompositedScene(time)
         return
     end
 
-    local grayscale = time >= 21.283
+    local grayscale = time >= SNOW_STATIC_START
     local inside = grayscale and GRAY_INSIDE or RED_INSIDE
     local adjustment = grayscale and self.gray_adjustment or self.red_adjustment
     local outside = blendMatrices(inside, adjustment, self:getSpotlightOpacity(time))
@@ -949,7 +979,21 @@ function Project4Scene:draw()
     love.graphics.setShader()
     love.graphics.setBlendMode("replace", "premultiplied")
     love.graphics.setColor(1, 1, 1, 1)
+    if self.time >= SNOW_STATIC_START then
+        self.snow_shader:send("iTime", self.time)
+        local snow_strength = 1
+        if self.time >= FINAL_BLACK_FULL_TIME then
+            snow_strength = 1 - clamp(
+                (self.time - FINAL_BLACK_FULL_TIME) / FINAL_TEXT_FADE_OUT_TIME,
+                0,
+                1
+            )
+        end
+        self.snow_shader:send("snowStrength", snow_strength)
+        love.graphics.setShader(self.snow_shader)
+    end
     love.graphics.draw(self.output_canvas, 0, 0)
+    love.graphics.setShader()
     love.graphics.setBlendMode("alpha", "alphamultiply")
 
     self:drawSceneText(self.time)
