@@ -1039,6 +1039,7 @@ function Mod:init()
 
     if envFlag("KRISIS_DEBUG_PROJECT4_SCENE") and Project4Scene and Kristal.Stage then
         self.krisis_update_check_seen = true
+        self.krisis_intro_seen = true
         local capture_times = parseNumberList(os.getenv("KRISIS_PROJECT4_CAPTURE_TIMES"))
         if #capture_times == 0 then
             capture_times = nil

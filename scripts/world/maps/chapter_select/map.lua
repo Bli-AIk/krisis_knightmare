@@ -6,6 +6,44 @@ local function openChapterSelect(world)
     world:openMenu(ChapterSelect())
 end
 
+local function openIntro(world)
+    if Mod.krisis_intro_seen then
+        openChapterSelect(world)
+        return
+    end
+
+    Mod.krisis_intro_seen = true
+    if world.music then
+        world.music:stop()
+    end
+
+    if Project4Scene then
+        world:addChild(Project4Scene({
+            on_complete = function()
+                openChapterSelect(world)
+            end,
+        }))
+    else
+        openChapterSelect(world)
+    end
+end
+
+local function openIntroAfterUpdateCheck(world)
+    if Mod.krisis_update_check_seen then
+        openIntro(world)
+        return
+    end
+
+    Mod.krisis_update_check_seen = true
+    if UpdateCheckSplash then
+        world:addChild(UpdateCheckSplash(function()
+            openIntro(world)
+        end))
+    else
+        openIntro(world)
+    end
+end
+
 local function hasDefaultEncounter()
     return Kristal and Kristal.getModOption and Kristal.getModOption("encounter") ~= nil
 end
@@ -23,22 +61,22 @@ function map:onEnter()
 
     if hasDefaultEncounter() then
         Mod.krisis_update_check_seen = true
+        Mod.krisis_intro_seen = true
         return
     end
 
     if Mod.krisis_update_check_seen then
-        openChapterSelect(self.world)
+        openIntro(self.world)
         return
     end
 
     Mod.krisis_update_check_seen = true
-
     if UpdateCheckSplash then
         self.world:addChild(UpdateCheckSplash(function()
-            openChapterSelect(self.world)
+            openIntro(self.world)
         end))
     else
-        openChapterSelect(self.world)
+        openIntro(self.world)
     end
 end
 

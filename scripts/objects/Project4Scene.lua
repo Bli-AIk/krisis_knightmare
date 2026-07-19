@@ -6,6 +6,51 @@ local CANVAS_HEIGHT = 480
 local AM_TO_LOGICAL = 4 / 9
 local PARTICLE_START = 17.766
 local PRE_PARTICLE_CHARACTER_Y = 10
+local HOLD_TO_SKIP_TIME = 0.65
+local CJK_TEXT_SPACING = 4
+local PROMPT_IDLE_DELAY = 1
+local PROMPT_FADE_OUT_TIME = 0.5
+local PROMPT_FADE_IN_TIME = 0.12
+
+local function isCjkCodepoint(codepoint)
+    return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
+        or (codepoint >= 0xF900 and codepoint <= 0xFAFF)
+        or (codepoint >= 0xFE10 and codepoint <= 0xFE1F)
+        or (codepoint >= 0xFF00 and codepoint <= 0xFFEF)
+        or (codepoint >= 0x20000 and codepoint <= 0x2FA1F)
+end
+
+local function getSpacedTextWidth(font, text)
+    local width = 0
+    for _, codepoint in utf8.codes(text) do
+        local char = utf8.char(codepoint)
+        width = width + font:getWidth(char)
+        if isCjkCodepoint(codepoint) then
+            width = width + CJK_TEXT_SPACING
+        end
+    end
+    return width
+end
+
+local function drawSpacedText(text, x, y)
+    local font = love.graphics.getFont()
+    local cursor_x = 0
+    for _, codepoint in utf8.codes(text) do
+        local char = utf8.char(codepoint)
+        love.graphics.print(char, x + cursor_x, y)
+        cursor_x = cursor_x + font:getWidth(char)
+        if isCjkCodepoint(codepoint) then
+            cursor_x = cursor_x + CJK_TEXT_SPACING
+        end
+    end
+end
+
+local function loc(default, id)
+    if Game and Game.loc then
+        return Game:loc(default, id)
+    end
+    return default
+end
 
 local RED_INSIDE = {
     r = {1.62960814, 0.04430889, -0.02988506},
@@ -273,6 +318,8 @@ function Project4Scene:init(options)
     self.timeline = _G.project4_timeline or Registry.getObject("project4_timeline")
     assert(self.timeline, "Project 4 timeline data was not registered")
 
+    self.on_complete = options.on_complete
+    self.interactive = type(self.on_complete) == "function"
     self.time = clamp(tonumber(options.start_time) or 0, 0, self.timeline.duration)
     self.paused = options.paused == true
     self.loop = options.loop == true
@@ -288,6 +335,11 @@ function Project4Scene:init(options)
     self.capture_complete = false
     self.ready = false
     self.ready_frames = 0
+    self.hold_time = 0
+    self.prompt_idle_time = 0
+    self.prompt_alpha = 1
+    self.font_language = nil
+    self.small_font = nil
 
     if self.capture_times and #self.capture_times > 0 then
         self.paused = true
@@ -311,6 +363,18 @@ function Project4Scene:init(options)
     self.red_adjustment = adjustmentMatrix(RED_INSIDE, RED_OUTSIDE, 0.761719)
     self.gray_adjustment = adjustmentMatrix(GRAY_INSIDE, GRAY_OUTSIDE, 0.761719)
     self.particle_layouts = self:createParticleLayouts()
+    self:refreshFonts(true)
+end
+
+function Project4Scene:refreshFonts(force)
+    local language = Game and Game.getLanguage and Game:getLanguage() or nil
+    if not force and self.font_language == language and self.small_font then
+        return
+    end
+
+    self.font_language = language
+    self.small_font = (language and Assets.getFont("lang/" .. language .. "/main", 16))
+        or Assets.getFont("main", 16)
 end
 
 function Project4Scene:createParticleLayouts()
@@ -653,16 +717,61 @@ function Project4Scene:update()
         return
     end
 
+    if self.interactive then
+        if Input.down("confirm") then
+            self.prompt_idle_time = 0
+            self.prompt_alpha = math.min(
+                self.prompt_alpha + (DT / PROMPT_FADE_IN_TIME),
+                1
+            )
+            self.hold_time = self.hold_time + DT
+            if self.hold_time >= HOLD_TO_SKIP_TIME then
+                self:finish()
+                return
+            end
+        else
+            self.hold_time = 0
+            self.prompt_idle_time = self.prompt_idle_time + DT
+            if self.prompt_idle_time >= PROMPT_IDLE_DELAY then
+                self.prompt_alpha = math.max(
+                    self.prompt_alpha - (DT / PROMPT_FADE_OUT_TIME),
+                    0
+                )
+            end
+        end
+    end
+
     if not self.paused then
         self.time = self.time + DT
         if self.time >= self.timeline.duration then
             if self.loop then
                 self.time = self.time % self.timeline.duration
+            elseif self.interactive then
+                self.time = self.timeline.duration
+                self:finish()
+                return
             else
                 self.time = self.timeline.duration
                 self.paused = true
             end
         end
+    end
+end
+
+function Project4Scene:finish()
+    if self.finished then
+        return
+    end
+
+    self.finished = true
+    self.time = self.timeline.duration
+    self.paused = true
+    self.hold_time = 0
+    Input.clear("confirm", true)
+    self:remove()
+
+    if self.on_complete then
+        self.on_complete()
     end
 end
 
@@ -674,7 +783,63 @@ function Project4Scene:setPaused(paused)
     self.paused = paused == true
 end
 
+function Project4Scene:drawSkipPrompt()
+    if not self.interactive or not self.ready then
+        return
+    end
+
+    self:refreshFonts(false)
+    love.graphics.setFont(self.small_font)
+
+    local left = loc("Hold ", "update_check.skip_left")
+    local right = loc(" to skip", "update_check.skip_right")
+    local key_text = Input.getText("confirm") or "[Z]"
+    local key_texture = nil
+    local key_width = getSpacedTextWidth(self.small_font, key_text)
+    local icon_scale = 2
+
+    if Input.usingGamepad() then
+        key_texture = Input.getTexture("confirm")
+        if key_texture then
+            key_width = key_texture:getWidth() * icon_scale
+        end
+    end
+
+    local left_width = getSpacedTextWidth(self.small_font, left)
+    local right_width = getSpacedTextWidth(self.small_font, right)
+    local total_width = left_width + key_width + right_width
+    local x = SCREEN_WIDTH - total_width - 20
+    local y = SCREEN_HEIGHT - 34
+
+    local alpha = self.prompt_alpha
+    Draw.setColor(1, 1, 1, alpha)
+    drawSpacedText(left, x, y)
+    x = x + left_width
+
+    if key_texture then
+        Draw.draw(key_texture, x, y - 3, 0, icon_scale, icon_scale)
+    else
+        drawSpacedText(key_text, x, y)
+    end
+    x = x + key_width
+    drawSpacedText(right, x, y)
+
+    if self.hold_time > 0 then
+        local width = 224
+        local height = 4
+        local bar_x = SCREEN_WIDTH - width - 20
+        local bar_y = SCREEN_HEIGHT - 10
+        local progress = math.min(self.hold_time / HOLD_TO_SKIP_TIME, 1)
+
+        Draw.setColor(0.28, 0.28, 0.28, alpha)
+        love.graphics.rectangle("fill", bar_x, bar_y, width, height)
+        Draw.setColor(1, 1, 1, alpha)
+        love.graphics.rectangle("fill", bar_x, bar_y, width * progress, height)
+    end
+end
+
 function Project4Scene:draw()
+    self:refreshFonts(false)
     love.graphics.push("all")
     love.graphics.origin()
     self:buildBaseCanvas(self.time)
@@ -691,6 +856,8 @@ function Project4Scene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.output_canvas, 0, 0)
     love.graphics.setBlendMode("alpha", "alphamultiply")
+
+    self:drawSkipPrompt()
 
     if self.ready and self.capture_times and not self.capture_requested and not self.capture_complete then
         local milliseconds = math.floor((self.time * 1000) + 0.5)

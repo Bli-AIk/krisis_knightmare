@@ -120,6 +120,6 @@
     "update_check.copy_copied": "已复制！",
     "update_check.copy_opened": "已打开下载页",
     "update_check.copy_failed": "无法复制下载链接",
-    "update_check.skip_left": "长按 ",
-    "update_check.skip_right": " 跳过"
+    "update_check.skip_left": "长按",
+    "update_check.skip_right": "跳过"
 }
