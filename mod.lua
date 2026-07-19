@@ -296,7 +296,7 @@ local KRISIS_RANDOM_MODULUS = 2147483647
 local KRISIS_RANDOM_MULTIPLIER = 48271
 local KRISIS_FINISHER_RESUME_FILE = "kris_finisher_resume"
 local KRISIS_FINISHER_RESUME_VERSION = 2
-local KRISIS_STATS_PAYLOAD_VERSION = 2
+local KRISIS_STATS_PAYLOAD_VERSION = 3
 local KRISIS_STATS_MAGIC = "KRS"
 local KRISIS_STATS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local KRISIS_STATS_ENCOUNTERS = {
@@ -333,12 +333,12 @@ local function newKrisisGameStats(previous_failures, seed_display)
     return {
         encounters = {
             kris = {
-                actual_hits = 0,
+                bullet_damage = 0,
                 bullet_hits = 0,
                 no_hit_turns = {},
             },
             kris_finisher = {
-                actual_hits = 0,
+                bullet_damage = 0,
                 bullet_hits = 0,
                 no_hit_turns = {},
             },
@@ -508,10 +508,10 @@ local function encodeKrisisGameStats(stats, context)
         string.char(KRISIS_STATS_PAYLOAD_VERSION),
     }
     local values = {
-        kris.actual_hits,
+        kris.bullet_damage,
         kris.bullet_hits,
         #kris.no_hit_turns,
-        finisher.actual_hits,
+        finisher.bullet_damage,
         finisher.bullet_hits,
         #finisher.no_hit_turns,
         stats.items_used,
@@ -580,10 +580,10 @@ local function decodeKrisisGameStats(payload, context)
     local seed_display = data:sub(position, position + seed_length - 1)
 
     local stats = newKrisisGameStats(values[10], seed_display)
-    stats.encounters.kris.actual_hits = values[1]
+    stats.encounters.kris.bullet_damage = values[1]
     stats.encounters.kris.bullet_hits = values[2]
     stats.encounters.kris.no_hit_turns = {}
-    stats.encounters.kris_finisher.actual_hits = values[4]
+    stats.encounters.kris_finisher.bullet_damage = values[4]
     stats.encounters.kris_finisher.bullet_hits = values[5]
     stats.encounters.kris_finisher.no_hit_turns = {}
     stats.items_used = values[7]
@@ -1341,28 +1341,31 @@ function Mod:getKrisisStatsForBattle(battle)
     return self.krisis_game_stats.encounters[encounter_id], self.krisis_game_stats
 end
 
-function Mod:recordKrisisBattleHurt(battler)
+function Mod:recordKrisisBulletDamage(battler, before, after)
     local battle = Game and Game.battle
     local encounter_stats, stats = self:getKrisisStatsForBattle(battle)
     if not encounter_stats then
         return
     end
 
-    encounter_stats.actual_hits = encounter_stats.actual_hits + 1
-    if battle.krisis_stats_round_active then
-        battle.krisis_stats_round_hurt = true
+    local damage = math.max((before or 0) - (after or 0), 0)
+    if damage > 0 then
+        encounter_stats.bullet_damage = encounter_stats.bullet_damage + damage
     end
-    stats.current_graze_combo = 0
 end
 
 function Mod:recordKrisisBulletHit(soul, bullet)
     local battle = Game and Game.battle
-    local encounter_stats = self:getKrisisStatsForBattle(battle)
+    local encounter_stats, stats = self:getKrisisStatsForBattle(battle)
     if not encounter_stats then
         return
     end
 
     encounter_stats.bullet_hits = encounter_stats.bullet_hits + 1
+    if battle.krisis_stats_round_active then
+        battle.krisis_stats_round_hurt = true
+    end
+    stats.current_graze_combo = 0
 end
 
 function Mod:recordKrisisGraze(soul, bullet, old_graze)

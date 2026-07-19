@@ -10,12 +10,12 @@ local CREDITS_FONT_SIZE = 32
 local NAME_LINE_HEIGHT = 32
 local ROLE_LINE_HEIGHT = 32
 local CJK_TEXT_SPACING = 2
-local TYPEWRITER_CHAR_DELAY = 0.04
-local TYPEWRITER_PUNCTUATION_PAUSE = 0.55
 local RECORD_ROLL_TIME = 0.8
+local RECORD_ROLL_SOUND_INTERVAL = 0.06
 local VERDICT_WAIT_TIME = 4 * 60 / CREDITS_BPM
-local SETTLEMENT_HOLD_TIME = 2.5
-local FINAL_TEXT_HOLD_TIME = 2.5
+local FINAL_TEXT_FADE_OUT_TIME = 1
+local FINAL_TEXT_RIGHT_PADDING = 16
+local FINAL_TEXT_BOTTOM_PADDING = 8
 local ROLE_COLOR = {0.55, 0.55, 0.55}
 local NAME_COLOR = {1, 1, 1}
 
@@ -70,10 +70,17 @@ local function formatDuration(milliseconds)
     local hours = math.floor(total_seconds / 3600)
     local minutes = math.floor((total_seconds % 3600) / 60)
     local seconds = total_seconds % 60
+    local parts = {}
     if hours > 0 then
-        return string.format("%02d:%02d:%02d", hours, minutes, seconds)
+        table.insert(parts, string.format("%dh", hours))
     end
-    return string.format("%02d:%02d", minutes, seconds)
+    if minutes > 0 then
+        table.insert(parts, string.format("%dm", minutes))
+    end
+    if seconds > 0 or #parts == 0 then
+        table.insert(parts, string.format("%ds", seconds))
+    end
+    return table.concat(parts, " ")
 end
 
 local function loc(default, id)
@@ -103,17 +110,17 @@ local CREDIT_DEFAULTS = {
 }
 
 local CREDIT_FINAL_DEFAULTS = {
-    ["credits.final_text"] = "The story of DELTARUNE\nwill continue here.",
-    ["credits.final_text_original"] = "DELTARUNE 的故事\n将于此续写下去。",
+    ["credits.final_text"] = "[speed:0.5]The story of DELTARUNE[wait:0.5s]\nwill continue here.",
+    ["credits.final_text_original"] = "[speed:0.5]DELTARUNE 的故事[wait:0.5s]\n将于此续写下去。",
     ["credits.thank_you_text"] = "- And most importantly... -\nYou, the Player.\n\nThank you for playing.",
 }
 
 local CREDIT_RECORD_DEFAULTS = {
     title = "GAME RECORD",
-    kris_hits = "KRIS HITS",
-    kris_bullet_hits = "KRIS BULLET HITS",
-    finisher_hits = "FINISHER HITS",
-    finisher_bullet_hits = "FINISHER BULLET HITS",
+    kris_hits = "KRIS BULLET HITS",
+    kris_bullet_hits = "KRIS BULLET DAMAGE",
+    finisher_hits = "FINISHER BULLET HITS",
+    finisher_bullet_hits = "FINISHER BULLET DAMAGE",
     items_used = "ITEMS USED",
     total_healed = "TOTAL HP RECOVERED",
     no_hit_turns = "NO-HIT TURNS",
@@ -126,8 +133,8 @@ local CREDIT_RECORD_DEFAULTS = {
 
 local CREDIT_VERDICT_DEFAULTS = {
     normal = "THE DARKNESS KEEPS GROWING",
-    no_item = "NO ITEM - THE SHADOWS CUTTING DEEPER",
-    no_hit = "NO HIT - SEEMS VERY VERY INTERESTING",
+    no_item = "NO ITEM[wait:3s] - THE SHADOWS CUTTING DEEPER",
+    no_hit = "NO HIT[wait:3s] - SEEMS VERY VERY INTERESTING",
 }
 
 local function localizeCredit(id)
@@ -229,14 +236,14 @@ function CreditsScene:init(on_complete)
     self.current_language = nil
     self.current_name_style = nil
     self.finished = false
-    self.final_characters = {}
-    self.final_visible_count = 0
-    self.final_reveal_timer = 0
-    self.final_char_delay = TYPEWRITER_CHAR_DELAY
+    self.verdict_dialogue = nil
+    self.final_dialogue = nil
     self.record_roll_timer = 0
+    self.record_roll_sound_timer = 0
     self.verdict_wait_timer = 0
-    self.settlement_hold_timer = 0
-    self.final_text_hold_timer = 0
+    self.fading_out = false
+    self.fade_out_timer = 0
+    self.fade_alpha = 1
     self.record_stats = Mod and Mod.getKrisisGameStatsSnapshot
         and Mod:getKrisisGameStatsSnapshot()
         or nil
@@ -252,7 +259,7 @@ function CreditsScene:getVerdictKey()
     local encounters = stats.encounters or {}
     local kris = encounters.kris or {}
     local finisher = encounters.kris_finisher or {}
-    if (kris.actual_hits or 0) == 0 and (finisher.actual_hits or 0) == 0 then
+    if (kris.bullet_hits or 0) == 0 and (finisher.bullet_hits or 0) == 0 then
         return "no_hit"
     elseif (stats.items_used or 0) == 0 then
         return "no_item"
@@ -301,6 +308,7 @@ function CreditsScene:refreshLocalization(force)
                     final_text_id
                 ),
                 static_text = card.static_text == true,
+                manual_advance = card.manual_advance == true,
             }
         elseif card.record then
             local record = {
@@ -337,65 +345,92 @@ end
 function CreditsScene:resetFinalText()
     local final_card = self.localized_cards[self.card_index]
     self.record_roll_timer = 0
+    self.record_roll_sound_timer = 0
     self.verdict_wait_timer = 0
-    self.settlement_hold_timer = 0
-    self.final_text_hold_timer = 0
-    if not final_card or (not final_card.final_text and not final_card.verdict_text) then
-        self.final_characters = {}
+    if self.verdict_dialogue then
+        self.verdict_dialogue.visible = false
+        self.verdict_dialogue:setPaused(true)
+    end
+    if self.final_dialogue then
+        self.final_dialogue.visible = false
+        self.final_dialogue:setPaused(true)
+    end
+    if not final_card then
         return
     end
 
-    self.final_characters = {}
-    local text = final_card.final_text or final_card.verdict_text
-    for _, codepoint in utf8.codes(text) do
-        table.insert(self.final_characters, utf8.char(codepoint))
-    end
-    if final_card.static_text then
-        self.final_visible_count = #self.final_characters
-        self.final_reveal_timer = 0
+    if final_card.record then
+        self:configureVerdictDialogue(final_card.verdict_text)
         return
     end
-    self.final_char_delay = TYPEWRITER_CHAR_DELAY
-    if #self.final_characters > 0 then
-        local reveal_duration = CARD_DURATION
-        if final_card.record then
-            reveal_duration = math.max(CARD_DURATION - VERDICT_WAIT_TIME, TYPEWRITER_CHAR_DELAY)
-        end
-        self.final_char_delay = math.min(
-            TYPEWRITER_CHAR_DELAY,
-            reveal_duration / #self.final_characters
-        )
+
+    if final_card.final_text and not final_card.static_text then
+        self:configureFinalDialogue(final_card.final_text)
     end
-    self.final_visible_count = 0
-    self.final_reveal_timer = 0
 end
 
-local function isCreditsPunctuation(character)
-    return character == "."
-        or character == ","
-        or character == "!"
-        or character == "?"
-        or character == ";"
-        or character == ":"
-        or character == "。"
-        or character == "，"
-        or character == "！"
-        or character == "？"
-        or character == "；"
-        or character == "："
-        or character == "、"
-        or character == "…"
-        or character == "】"
-        or character == ")"
-        or character == "）"
+local function stripTextCommands(text)
+    return (text or ""):gsub("%b[]", "")
 end
 
-function CreditsScene:getFinalCharacterDelay()
-    local previous = self.final_characters[self.final_visible_count]
-    if previous and isCreditsPunctuation(previous) then
-        return self.final_char_delay + TYPEWRITER_PUNCTUATION_PAUSE
+function CreditsScene:getCenteredTextLayout(text)
+    local block_width = 0
+    local lines = splitLines(stripTextCommands(text))
+    for _, line in ipairs(lines) do
+        block_width = math.max(block_width, getSpacedTextWidth(self.name_font, line))
     end
-    return self.final_char_delay
+    block_width = math.max(block_width, 1)
+    return (SCREEN_WIDTH - block_width) / 2,
+        (SCREEN_HEIGHT - (#lines * NAME_LINE_HEIGHT)) / 2,
+        block_width + FINAL_TEXT_RIGHT_PADDING,
+        math.max(NAME_LINE_HEIGHT, #lines * NAME_LINE_HEIGHT) + FINAL_TEXT_BOTTOM_PADDING
+end
+
+function CreditsScene:configureVerdictDialogue(text)
+    if not self.verdict_dialogue then
+        self.verdict_dialogue = self:addChild(DialogueText("", 20, SCREEN_HEIGHT - NAME_LINE_HEIGHT - 18,
+            SCREEN_WIDTH - 20, NAME_LINE_HEIGHT, {
+                font = "main_mono",
+                font_size = CREDITS_FONT_SIZE,
+                style = "none",
+                wrap = false,
+                line_offset = 0,
+            }))
+        self.verdict_dialogue.can_advance = false
+    end
+
+    self.verdict_dialogue.font = "lang/" .. tostring(self.current_language) .. "/main_mono"
+    self.verdict_dialogue.font_size = CREDITS_FONT_SIZE
+    self.verdict_dialogue:setText(text)
+    local color = self:getVerdictColor()
+    self.verdict_dialogue:setColor(color[1], color[2], color[3], 1)
+    self.verdict_dialogue.visible = false
+    self.verdict_dialogue:setPaused(true)
+end
+
+function CreditsScene:configureFinalDialogue(text)
+    local x, y, width, height = self:getCenteredTextLayout(text)
+    if not self.final_dialogue then
+        self.final_dialogue = self:addChild(DialogueText("", x, y, width, height, {
+            font = "main_mono",
+            font_size = CREDITS_FONT_SIZE,
+            style = "none",
+            wrap = false,
+            line_offset = 0,
+        }))
+        self.final_dialogue.can_advance = false
+    end
+
+    self.final_dialogue.font = "lang/" .. tostring(self.current_language) .. "/main_mono"
+    self.final_dialogue.font_size = CREDITS_FONT_SIZE
+    self.final_dialogue.x = x
+    self.final_dialogue.y = y
+    self.final_dialogue.width = width
+    self.final_dialogue.height = height
+    self.final_dialogue:setText(text)
+    self.final_dialogue:setColor(NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], 1)
+    self.final_dialogue.visible = true
+    self.final_dialogue:setPaused(false)
 end
 
 function CreditsScene:advanceCard()
@@ -430,16 +465,6 @@ function CreditsScene:jumpToSettlement()
     self.hold_time = 0
     Input.clear("confirm", true)
     self:resetFinalText()
-end
-
-function CreditsScene:revealFinalText(delta_time)
-    self.final_reveal_timer = self.final_reveal_timer + delta_time
-    while self.final_reveal_timer >= self:getFinalCharacterDelay()
-        and self.final_visible_count < #self.final_characters
-    do
-        self.final_reveal_timer = self.final_reveal_timer - self:getFinalCharacterDelay()
-        self.final_visible_count = self.final_visible_count + 1
-    end
 end
 
 function CreditsScene:getRolledRecordValue(value)
@@ -485,19 +510,19 @@ function CreditsScene:getRecordRows(card)
     return {
         {
             labels.kris_hits,
-            number(kris.actual_hits),
-        },
-        {
-            labels.kris_bullet_hits,
             number(kris.bullet_hits),
         },
         {
+            labels.kris_bullet_hits,
+            number(kris.bullet_damage),
+        },
+        {
             labels.finisher_hits,
-            number(finisher.actual_hits),
+            number(finisher.bullet_hits),
         },
         {
             labels.finisher_bullet_hits,
-            number(finisher.bullet_hits),
+            number(finisher.bullet_damage),
         },
         {
             labels.items_used,
@@ -555,20 +580,6 @@ function CreditsScene:drawRecordCard(card, alpha)
         )
     end
 
-    self:drawVerdictCard(card, alpha)
-end
-
-function CreditsScene:drawVerdictCard(card, alpha)
-    if not card.verdict_text or self.verdict_wait_timer < VERDICT_WAIT_TIME then
-        return
-    end
-
-    love.graphics.setFont(self.name_font)
-    local text = table.concat(self.final_characters, "", 1, self.final_visible_count)
-    local line_height = NAME_LINE_HEIGHT
-    local color = card.verdict_color or NAME_COLOR
-    Draw.setColor(color[1], color[2], color[3], alpha)
-    drawSpacedText(self.name_font, text, 20, SCREEN_HEIGHT - line_height - 18)
 end
 
 function CreditsScene:finish()
@@ -585,6 +596,21 @@ function CreditsScene:finish()
     end
 end
 
+function CreditsScene:startFadeOut()
+    if self.fading_out then
+        return
+    end
+
+    self.fading_out = true
+    self.fade_out_timer = 0
+    self.fade_alpha = 1
+    self.hold_time = 0
+    Input.clear("confirm", true)
+    if self.music then
+        self.music:fade(0, FINAL_TEXT_FADE_OUT_TIME)
+    end
+end
+
 function CreditsScene:onRemove(parent)
     super.onRemove(self, parent)
     if self.music then
@@ -598,7 +624,19 @@ function CreditsScene:update()
     super.update(self)
     self:refreshLocalization(false)
 
-    if Input.down("confirm") then
+    if self.fading_out then
+        self.fade_out_timer = self.fade_out_timer + DT
+        self.fade_alpha = 1 - math.min(self.fade_out_timer / FINAL_TEXT_FADE_OUT_TIME, 1)
+        if self.fade_out_timer >= FINAL_TEXT_FADE_OUT_TIME then
+            self:finish()
+        end
+        return
+    end
+
+    local card = self.localized_cards[self.card_index]
+
+    local manual_page = card and (card.record or card.manual_advance)
+    if not manual_page and Input.down("confirm") then
         self.hold_time = self.hold_time + DT
         if self.hold_time >= HOLD_TO_SKIP_TIME then
             self:jumpToSettlement()
@@ -609,38 +647,37 @@ function CreditsScene:update()
     end
 
     local confirm_pressed = Input.pressed("confirm")
-    local card = self.localized_cards[self.card_index]
     if card and card.record then
         self.record_roll_timer = math.min(self.record_roll_timer + DT, RECORD_ROLL_TIME)
+        if self.record_roll_timer < RECORD_ROLL_TIME then
+            self.record_roll_sound_timer = self.record_roll_sound_timer + DT
+            if self.record_roll_sound_timer >= RECORD_ROLL_SOUND_INTERVAL then
+                self.record_roll_sound_timer = self.record_roll_sound_timer % RECORD_ROLL_SOUND_INTERVAL
+                Assets.stopAndPlaySound("ui_select")
+            end
+        end
         if self.verdict_wait_timer < VERDICT_WAIT_TIME then
             self.verdict_wait_timer = self.verdict_wait_timer + DT
-        elseif self.final_visible_count < #self.final_characters then
-            self:revealFinalText(DT)
-        else
-            self.settlement_hold_timer = self.settlement_hold_timer + DT
+        elseif self.verdict_dialogue and self.verdict_dialogue:isPaused() then
+            self.verdict_dialogue.visible = true
+            self.verdict_dialogue:setPaused(false)
         end
 
         if confirm_pressed
             and self.verdict_wait_timer >= VERDICT_WAIT_TIME
-            and self.final_visible_count >= #self.final_characters
-            and self.settlement_hold_timer >= SETTLEMENT_HOLD_TIME
+            and self.verdict_dialogue
+            and not self.verdict_dialogue:isTyping()
         then
             self:advanceCard()
             return
         end
     elseif card and card.final_text and not card.static_text then
-        if self.final_visible_count < #self.final_characters then
-            self:revealFinalText(DT)
-        else
-            self.final_text_hold_timer = self.final_text_hold_timer + DT
-        end
-
         if confirm_pressed
             and card.manual_advance
-            and self.final_visible_count >= #self.final_characters
-            and self.final_text_hold_timer >= FINAL_TEXT_HOLD_TIME
+            and self.final_dialogue
+            and not self.final_dialogue:isTyping()
         then
-            self:finish()
+            self:startFadeOut()
             return
         end
     end
@@ -678,29 +715,19 @@ function CreditsScene:drawCard(card, alpha)
     end
 
     if card.final_text then
-        love.graphics.setFont(self.name_font)
-        love.graphics.setColor(NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], alpha)
-        local text = table.concat(self.final_characters, "", 1, self.final_visible_count)
-        local full_lines = splitLines(card.final_text)
-        local block_width = 0
-        for _, line in ipairs(full_lines) do
-            block_width = math.max(block_width, getSpacedTextWidth(self.name_font, line))
-        end
-        local block_x = (SCREEN_WIDTH - block_width) / 2
-        local start_y = (SCREEN_HEIGHT - (#full_lines * NAME_LINE_HEIGHT)) / 2
-        local visible_lines = splitLines(text)
-        for index, line in ipairs(visible_lines) do
-            if line ~= "" then
-                if card.static_text and index == 1 then
-                    love.graphics.setColor(ROLE_COLOR[1], ROLE_COLOR[2], ROLE_COLOR[3], alpha)
-                else
-                    love.graphics.setColor(NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], alpha)
-                end
-                local y = start_y + ((index - 1) * NAME_LINE_HEIGHT)
-                if card.static_text then
+        if card.static_text then
+            love.graphics.setFont(self.name_font)
+            local full_lines = splitLines(card.final_text)
+            local start_y = (SCREEN_HEIGHT - (#full_lines * NAME_LINE_HEIGHT)) / 2
+            for index, line in ipairs(full_lines) do
+                if line ~= "" then
+                    if index == 1 then
+                        love.graphics.setColor(ROLE_COLOR[1], ROLE_COLOR[2], ROLE_COLOR[3], alpha)
+                    else
+                        love.graphics.setColor(NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], alpha)
+                    end
+                    local y = start_y + ((index - 1) * NAME_LINE_HEIGHT)
                     drawCenteredSpacedText(self.name_font, line, y)
-                else
-                    drawSpacedText(self.name_font, line, block_x, y)
                 end
             end
         end
@@ -734,10 +761,18 @@ function CreditsScene:draw()
     love.graphics.push()
     love.graphics.setColor(0, 0, 0, 1)
     love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
-    if card then
-        self:drawCard(card, 1)
+    if self.verdict_dialogue then
+        self.verdict_dialogue.alpha = self.fade_alpha
     end
-    if self.hold_time > 0 then
+    if self.final_dialogue then
+        self.final_dialogue.alpha = self.fade_alpha
+    end
+    if card then
+        self:drawCard(card, self.fade_alpha)
+    end
+    self:drawChildren()
+    local manual_page = card and (card.record or card.manual_advance)
+    if self.hold_time > 0 and not manual_page then
         local width = 224
         local height = 4
         local x = SCREEN_WIDTH - width - 20

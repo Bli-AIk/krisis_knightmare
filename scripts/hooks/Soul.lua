@@ -2,7 +2,7 @@ local Soul, super = HookSystem.hookScript(Soul)
 
 function Soul:onDamage(bullet, amount)
     if Mod and Mod.recordKrisisBulletHit then
-        Mod:recordKrisisBulletHit(self, bullet)
+        Mod:recordKrisisBulletHit(self, bullet, amount)
     end
     return super.onDamage(self, bullet, amount)
 end
