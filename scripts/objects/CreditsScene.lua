@@ -7,6 +7,8 @@ local CREDITS_MUSIC = "credits"
 local CREDITS_MUSIC_VOLUME = 0.8
 local HOLD_TO_SKIP_TIME = 0.65
 local CREDITS_FONT_SIZE = 32
+local CREDITS_EN_RECORD_FONT_SIZE = 16
+local CREDITS_EN_RECORD_ROW_HEIGHT = 24
 local CREDIT_NAME_FONT_PATH = "lang/zh_hans/main_mono"
 local NAME_LINE_HEIGHT = 32
 local ROLE_LINE_HEIGHT = 32
@@ -294,6 +296,14 @@ function CreditsScene:refreshLocalization(force)
     self.name_font = Assets.getFont(CREDIT_NAME_FONT_PATH, CREDITS_FONT_SIZE)
         or Assets.getFont(font_path, CREDITS_FONT_SIZE)
         or Assets.getFont("main_mono", CREDITS_FONT_SIZE)
+    self.record_font = self.name_font
+    if language == "en" then
+        self.record_font = Assets.getFont(
+            CREDIT_NAME_FONT_PATH,
+            CREDITS_EN_RECORD_FONT_SIZE
+        ) or Assets.getFont("main_mono", CREDITS_EN_RECORD_FONT_SIZE)
+            or self.name_font
+    end
     self.localized_cards = {}
 
     for index, card in ipairs(self.cards) do
@@ -568,19 +578,23 @@ function CreditsScene:drawRecordCard(card, alpha)
     drawCenteredSpacedText(self.name_font, card.labels.title, 30)
 
     local rows = self:getRecordRows(card)
+    local english_layout = self.current_language == "en"
+    local record_font = self.record_font or self.name_font
     local column_x = {20, SCREEN_WIDTH / 2 + 2}
-    local first_y = 78
-    local row_height = 32
+    local column_centers = {SCREEN_WIDTH * 0.25, SCREEN_WIDTH * 0.75}
+    local first_y = english_layout and 88 or 78
+    local row_height = english_layout and CREDITS_EN_RECORD_ROW_HEIGHT or 32
     for index, row in ipairs(rows) do
         local column = index <= 6 and 1 or 2
         local row_index = ((index - 1) % 6)
         local text = row[1] .. ": " .. row[2]
-        drawSpacedText(
-            self.name_font,
-            text,
-            column_x[column],
-            first_y + row_index * row_height
-        )
+        local x = column_x[column]
+        if english_layout then
+            x = column_centers[column]
+                - getSpacedTextWidth(record_font, text) / 2
+        end
+        love.graphics.setFont(record_font)
+        drawSpacedText(record_font, text, x, first_y + row_index * row_height)
     end
 
 end
