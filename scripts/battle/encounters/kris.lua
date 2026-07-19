@@ -386,6 +386,9 @@ function MercyFinaleSoulHeart:update()
     self.sprite:setScale(scale)
     self.sprite.alpha = self.alpha
     if self.timer >= self.expand_time + self.hold_time then
+        if Mod and Mod.saveKrisisFinisherResume then
+            Mod:saveKrisisFinisherResume()
+        end
         love.event.quit(0)
         return
     end

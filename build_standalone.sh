@@ -188,6 +188,12 @@ patch_kristal_startup_credit() {
   python3 "$BUILD_HELPER" patch-kristal-startup-credit "$stage_dir"
 }
 
+patch_kristal_startup_resume() {
+  stage_dir="$1"
+
+  python3 "$BUILD_HELPER" patch-kristal-startup-resume "$stage_dir" "$MOD_ID"
+}
+
 patch_kristal_https_archive_fallback() {
   stage_dir="$1"
 
@@ -274,6 +280,7 @@ prepare_stage() {
   patch_lua_config "$variant" "$stage_dir" "$release_mode"
   patch_default_framerate "$stage_dir"
   patch_kristal_startup_credit "$stage_dir"
+  patch_kristal_startup_resume "$stage_dir"
   patch_kristal_https_archive_fallback "$stage_dir"
   patch_mod_manifest "$staged_mod_dir" "$mod_dev" "$object_editor_enabled"
   if [ "$variant" = "release" ]; then

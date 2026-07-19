@@ -390,6 +390,53 @@ function Loading:draw()
     write_text(path, text)
 
 
+def patch_kristal_startup_resume(args: argparse.Namespace) -> None:
+    stage_dir = Path(args.stage_dir)
+    path = stage_dir / "src/engine/loadstate.lua"
+    text = read_text(path)
+    resume_path = lua_quote(
+        f"saves/{args.mod_id}/kris_finisher_resume.json"
+    )
+
+    init_needle = "    self.h = self.logo:getHeight()\n"
+    init_replacement = init_needle + (
+        "    self.krisis_resume_intro = love.filesystem.getInfo "
+        f"and love.filesystem.getInfo({resume_path}) ~= nil or false\n"
+    )
+    if init_needle not in text:
+        raise SystemExit(f"Could not find Kristal loading dimensions in {path}")
+    text = text.replace(init_needle, init_replacement, 1)
+
+    enter_needle = '    if not Kristal.Config["skipIntro"] then\n'
+    enter_replacement = (
+        '    if not Kristal.Config["skipIntro"] and not self.krisis_resume_intro then\n'
+    )
+    if enter_needle not in text:
+        raise SystemExit(f"Could not find Kristal loading audio branch in {path}")
+    text = text.replace(enter_needle, enter_replacement, 1)
+
+    update_needle = (
+        '    if (self.loading_state == Loading.States.DONE) and self.key_check '
+        'and (self.animation_done or Kristal.Config["skipIntro"]) then\n'
+    )
+    update_replacement = (
+        '    if (self.loading_state == Loading.States.DONE) and self.key_check '
+        'and (self.animation_done or Kristal.Config["skipIntro"] '
+        'or self.krisis_resume_intro) then\n'
+    )
+    if update_needle not in text:
+        raise SystemExit(f"Could not find Kristal loading completion condition in {path}")
+    text = text.replace(update_needle, update_replacement, 1)
+
+    draw_needle = '    if Kristal.Config["skipIntro"] then\n'
+    draw_replacement = "    if self.krisis_resume_intro then\n        return\n    end\n\n" + draw_needle
+    if draw_needle not in text:
+        raise SystemExit(f"Could not find Kristal loading draw branch in {path}")
+    text = text.replace(draw_needle, draw_replacement, 1)
+
+    write_text(path, text)
+
+
 def patch_kristal_https_archive_fallback(args: argparse.Namespace) -> None:
     stage_dir = Path(args.stage_dir)
     path = stage_dir / "src/lib/https.lua"
@@ -512,6 +559,11 @@ def build_parser() -> argparse.ArgumentParser:
     startup_credit_parser = subparsers.add_parser("patch-kristal-startup-credit")
     startup_credit_parser.add_argument("stage_dir")
     startup_credit_parser.set_defaults(func=patch_kristal_startup_credit)
+
+    startup_resume_parser = subparsers.add_parser("patch-kristal-startup-resume")
+    startup_resume_parser.add_argument("stage_dir")
+    startup_resume_parser.add_argument("mod_id")
+    startup_resume_parser.set_defaults(func=patch_kristal_startup_resume)
 
     https_archive_parser = subparsers.add_parser("patch-kristal-https-archive-fallback")
     https_archive_parser.add_argument("stage_dir")

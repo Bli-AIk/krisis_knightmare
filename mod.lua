@@ -294,6 +294,8 @@ end
 
 local KRISIS_RANDOM_MODULUS = 2147483647
 local KRISIS_RANDOM_MULTIPLIER = 48271
+local KRISIS_FINISHER_RESUME_FILE = "kris_finisher_resume"
+local KRISIS_FINISHER_RESUME_VERSION = 1
 local KRISIS_SEED_ENTRY_MUSIC = {
     [1] = "man",
     [2] = "man",
@@ -955,6 +957,88 @@ function Mod:setTemporaryDefaultBattleEntry(encounter)
     end
 end
 
+function Mod:saveKrisisFinisherResume()
+    if self.krisis_finisher_resume_saved then
+        return true
+    end
+
+    if not Kristal or not Kristal.saveData then
+        print("[KRISIS] Kristal.saveData is unavailable; finisher resume was not saved")
+        return false
+    end
+
+    local ok, err = pcall(function()
+        Kristal.saveData(KRISIS_FINISHER_RESUME_FILE, {
+            version = KRISIS_FINISHER_RESUME_VERSION,
+            encounter = "kris_finisher",
+        })
+    end)
+    if not ok then
+        print("[KRISIS] Failed to save finisher resume: " .. tostring(err))
+        return false
+    end
+
+    self.krisis_finisher_resume_saved = true
+    return true
+end
+
+function Mod:loadKrisisFinisherResume()
+    if self.krisis_finisher_resume_checked then
+        return self.krisis_finisher_resume_pending == true
+    end
+    self.krisis_finisher_resume_checked = true
+
+    -- Explicit encounter arguments are useful for development and should not
+    -- be overridden by a stale resume marker.
+    local _, has_encounter = getKristalArg("encounter")
+    if has_encounter or not Kristal or not Kristal.loadData then
+        return false
+    end
+
+    local ok, data = pcall(Kristal.loadData, KRISIS_FINISHER_RESUME_FILE)
+    if not ok then
+        print("[KRISIS] Failed to load finisher resume: " .. tostring(data))
+        return false
+    end
+
+    if type(data) ~= "table"
+        or data.version ~= KRISIS_FINISHER_RESUME_VERSION
+        or data.encounter ~= "kris_finisher"
+    then
+        return false
+    end
+
+    self.krisis_finisher_resume_pending = true
+    self:setTemporaryDefaultBattleEntry("kris_finisher")
+    self.krisis_update_check_seen = true
+    self.krisis_intro_seen = true
+    return true
+end
+
+function Mod:consumeKrisisFinisherResume()
+    if not self.krisis_finisher_resume_pending
+        or not Game
+        or not Game.battle
+        or not Game.battle.encounter
+        or Game.battle.encounter.id ~= "kris_finisher"
+        or not Kristal
+        or not Kristal.eraseData
+    then
+        return
+    end
+
+    local ok, err = pcall(function()
+        Kristal.eraseData(KRISIS_FINISHER_RESUME_FILE)
+    end)
+    if not ok then
+        print("[KRISIS] Failed to clear finisher resume: " .. tostring(err))
+        return
+    end
+
+    self.krisis_finisher_resume_pending = false
+    self.krisis_finisher_resume_consumed = true
+end
+
 function Mod:startKrisisBattlePrep()
     local stage = (Game and Game.stage) or (Kristal and Kristal.Stage)
     if BattlePrepScene and stage then
@@ -1045,6 +1129,7 @@ function Mod:init()
     self:hookVesselAttackSound()
     self:hookItemTossRandom()
     self:loadKrisisRunOptions()
+    self:loadKrisisFinisherResume()
     self:getKrisisRunSeed()
     self:updateKrisisWindowTitle()
 
@@ -1077,6 +1162,16 @@ function Mod:init()
         return Squeak(data.x, data.y, {data.width, data.height, data.polygon})
     end)
     print(loc("Loaded [var:name]!", "mod.loaded", {name = self.info.name}))
+end
+
+function Mod:postLoad()
+    if not self.krisis_finisher_resume_pending or Game.battle then
+        return
+    end
+
+    -- A normal save file skips Game:load's new-file encounter branch. Start
+    -- the resumed battle here after the saved world has been reconstructed.
+    Game:encounter("kris_finisher", false)
 end
 
 function Mod:preUpdate()
@@ -1119,6 +1214,8 @@ function Mod:postUpdate()
     if self.finisher_profiler then
         self.finisher_profiler:postUpdate()
     end
+
+    self:consumeKrisisFinisherResume()
 end
 
 function Mod:preDraw()
