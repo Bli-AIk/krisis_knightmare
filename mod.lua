@@ -955,6 +955,17 @@ function Mod:setTemporaryDefaultBattleEntry(encounter)
     end
 end
 
+function Mod:startKrisisBattlePrep()
+    local stage = (Game and Game.stage) or (Kristal and Kristal.Stage)
+    if BattlePrepScene and stage then
+        stage:addChild(BattlePrepScene({
+            encounter = "kris",
+        }))
+    elseif Game then
+        Game:encounter("kris", false)
+    end
+end
+
 function Mod:loadKrisisRunOptions()
     if self.krisis_run_options_loaded then
         return

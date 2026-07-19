@@ -20,7 +20,11 @@ function ChapterTransitionEffect:update()
             self:remove()
             Game.world:openMenu(ChapterTitle(self.chapter, function()
                 Game.fader:fadeOut(function()
-                    Game.world:loadMap(self.chapter.map)
+                    if Mod and Mod.startKrisisBattlePrep then
+                        Mod:startKrisisBattlePrep()
+                    else
+                        Game.world:loadMap(self.chapter.map)
+                    end
                     Game.fader:fadeIn()
                 end, {speed = 1})
             end))
