@@ -10,8 +10,9 @@ run *args:
 
     usage() {
       printf '%s\n' \
-        'usage: just run [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n] [--mercy n|-m n] [--proceed|-p]' \
+        'usage: just run [--credit|-c] [--encounter [id]|-e [id]] [--wave n|-w n] [--wave-force n|-wf n] [--tp n|-tp n] [--mercy n|-m n] [--proceed|-p]' \
         '' \
+        '  --credit, -c          Start directly in the credits.' \
         '  --encounter, -e       Start directly in an encounter. Defaults to "kris".' \
         '  --wave, -w            Start the encounter from a specific wave number.' \
         '  --wave-force, -wf     Lock the encounter to a specific wave number.' \
@@ -50,6 +51,10 @@ run *args:
           encounter_requested=1
           value=${1#--encounter=}
           kristal_args+=(--encounter "${value:-kris}")
+          shift
+          ;;
+        --credit|-c)
+          kristal_args+=(--credit)
           shift
           ;;
         --encounter|-e)
@@ -204,6 +209,10 @@ run *args:
 
     cd "$engine_root"
     exec love "$engine_root" --mod "$mod_id" --auto-mod-start "${kristal_args[@]}"
+
+# Add, clear, or inspect the finisher resume marker for development.
+finisher *args:
+    @./scripts/finisher_resume.sh {{ args }}
 
 # Run this mod through Kristal in a detached terminal.
 term:

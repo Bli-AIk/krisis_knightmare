@@ -5,10 +5,10 @@ local CREDITS_BEATS_PER_CARD = 8
 local CARD_DURATION = CREDITS_BEATS_PER_CARD * 60 / CREDITS_BPM
 local CREDITS_MUSIC = "credits"
 local CREDITS_MUSIC_VOLUME = 0.8
-local ROLE_FONT_SIZE = 16
-local NAME_FONT_SIZE = 18
-local NAME_LINE_HEIGHT = 22
-local ROLE_LINE_HEIGHT = 20
+local HOLD_TO_SKIP_TIME = 0.65
+local CREDITS_FONT_SIZE = 32
+local NAME_LINE_HEIGHT = 32
+local ROLE_LINE_HEIGHT = 32
 local CJK_TEXT_SPACING = 2
 local TYPEWRITER_CHAR_DELAY = 0.04
 local ROLE_COLOR = {0.55, 0.55, 0.55}
@@ -51,6 +51,14 @@ local function drawCenteredSpacedText(font, text, y)
     drawSpacedText(font, text, x, y)
 end
 
+local function splitLines(text)
+    local lines = {}
+    for line in (text .. "\n"):gmatch("(.-)\n") do
+        table.insert(lines, line)
+    end
+    return lines
+end
+
 local function loc(default, id)
     if Game and Game.loc then
         return Game:loc(default, id)
@@ -79,7 +87,7 @@ local CREDIT_DEFAULTS = {
 
 local CREDIT_FINAL_DEFAULTS = {
     ["credits.final_text"] = "The story of DELTARUNE\nwill continue here.",
-    ["credits.thank_you_text"] = "And most importantly...\nYou, the Player.\n\nThank you for playing.",
+    ["credits.thank_you_text"] = "- And most importantly... -\nYou, the Player.\n\nThank you for playing.",
 }
 
 local function localizeCredit(id)
@@ -157,10 +165,11 @@ local function getCards()
             group("credits.role_engine", {"Kristal"}),
         }, 26),
         {
-            final_text = "credits.final_text",
+            final_text = "credits.thank_you_text",
+            static_text = true,
         },
         {
-            final_text = "credits.thank_you_text",
+            final_text = "credits.final_text",
         },
     }
 end
@@ -179,6 +188,7 @@ function CreditsScene:init(on_complete)
     self.final_visible_count = 0
     self.final_reveal_timer = 0
     self.final_char_delay = TYPEWRITER_CHAR_DELAY
+    self.hold_time = 0
     self.music = Music()
     self.music:play(CREDITS_MUSIC, CREDITS_MUSIC_VOLUME)
 
@@ -193,8 +203,10 @@ function CreditsScene:refreshLocalization(force)
 
     self.current_language = language
     local font_path = "lang/" .. tostring(language) .. "/main_mono"
-    self.role_font = Assets.getFont(font_path, ROLE_FONT_SIZE) or Assets.getFont("main_mono", ROLE_FONT_SIZE)
-    self.name_font = Assets.getFont(font_path, NAME_FONT_SIZE) or Assets.getFont("main_mono", NAME_FONT_SIZE)
+    self.role_font = Assets.getFont(font_path, CREDITS_FONT_SIZE)
+        or Assets.getFont("main_mono", CREDITS_FONT_SIZE)
+    self.name_font = Assets.getFont(font_path, CREDITS_FONT_SIZE)
+        or Assets.getFont("main_mono", CREDITS_FONT_SIZE)
     self.localized_cards = {}
 
     for index, card in ipairs(self.cards) do
@@ -204,6 +216,7 @@ function CreditsScene:refreshLocalization(force)
                     CREDIT_FINAL_DEFAULTS[card.final_text] or card.final_text,
                     card.final_text
                 ),
+                static_text = card.static_text == true,
             }
         else
             local localized = {
@@ -234,6 +247,11 @@ function CreditsScene:resetFinalText()
     for _, codepoint in utf8.codes(final_card.final_text) do
         table.insert(self.final_characters, utf8.char(codepoint))
     end
+    if final_card.static_text then
+        self.final_visible_count = #self.final_characters
+        self.final_reveal_timer = 0
+        return
+    end
     self.final_char_delay = TYPEWRITER_CHAR_DELAY
     if #self.final_characters > 0 then
         self.final_char_delay = math.min(
@@ -251,6 +269,8 @@ function CreditsScene:finish()
     end
 
     self.finished = true
+    self.hold_time = 0
+    Input.clear("confirm", true)
     self:remove()
     if self.on_complete then
         self.on_complete()
@@ -270,13 +290,20 @@ function CreditsScene:update()
     super.update(self)
     self:refreshLocalization(false)
 
-    if Input.pressed("confirm") or Input.pressed("cancel") then
-        self:finish()
-        return
+    if Input.down("confirm") then
+        self.hold_time = self.hold_time + DT
+        if self.hold_time >= HOLD_TO_SKIP_TIME then
+            self:finish()
+            return
+        end
+    else
+        self.hold_time = 0
     end
 
     local card = self.localized_cards[self.card_index]
-    if card and card.final_text and self.final_visible_count < #self.final_characters then
+    if card and card.final_text and not card.static_text
+        and self.final_visible_count < #self.final_characters
+    then
         self.final_reveal_timer = self.final_reveal_timer + DT
         while self.final_reveal_timer >= self.final_char_delay
             and self.final_visible_count < #self.final_characters
@@ -318,24 +345,28 @@ function CreditsScene:drawCard(card, alpha)
         love.graphics.setFont(self.name_font)
         love.graphics.setColor(NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], alpha)
         local text = table.concat(self.final_characters, "", 1, self.final_visible_count)
-        local full_lines = {}
-        for line in card.final_text:gmatch("[^\n]+") do
-            table.insert(full_lines, line)
-        end
-
-        local max_width = 0
+        local full_lines = splitLines(card.final_text)
+        local block_width = 0
         for _, line in ipairs(full_lines) do
-            max_width = math.max(max_width, getSpacedTextWidth(self.name_font, line))
+            block_width = math.max(block_width, getSpacedTextWidth(self.name_font, line))
         end
-
-        local x = (SCREEN_WIDTH - max_width) / 2
+        local block_x = (SCREEN_WIDTH - block_width) / 2
         local start_y = (SCREEN_HEIGHT - (#full_lines * NAME_LINE_HEIGHT)) / 2
-        local visible_lines = {}
-        for line in text:gmatch("[^\n]+") do
-            table.insert(visible_lines, line)
-        end
+        local visible_lines = splitLines(text)
         for index, line in ipairs(visible_lines) do
-            drawSpacedText(self.name_font, line, x, start_y + ((index - 1) * NAME_LINE_HEIGHT))
+            if line ~= "" then
+                if card.static_text and index == 1 then
+                    love.graphics.setColor(ROLE_COLOR[1], ROLE_COLOR[2], ROLE_COLOR[3], alpha)
+                else
+                    love.graphics.setColor(NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], alpha)
+                end
+                local y = start_y + ((index - 1) * NAME_LINE_HEIGHT)
+                if card.static_text then
+                    drawCenteredSpacedText(self.name_font, line, y)
+                else
+                    drawSpacedText(self.name_font, line, block_x, y)
+                end
+            end
         end
         return
     end
@@ -369,6 +400,18 @@ function CreditsScene:draw()
     love.graphics.rectangle("fill", 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
     if card then
         self:drawCard(card, 1)
+    end
+    if self.hold_time > 0 then
+        local width = 224
+        local height = 4
+        local x = SCREEN_WIDTH - width - 20
+        local y = SCREEN_HEIGHT - 10
+        local progress = math.min(self.hold_time / HOLD_TO_SKIP_TIME, 1)
+
+        Draw.setColor(0.28, 0.28, 0.28, 1)
+        love.graphics.rectangle("fill", x, y, width, height)
+        Draw.setColor(1, 1, 1, 1)
+        love.graphics.rectangle("fill", x, y, width * progress, height)
     end
     love.graphics.pop()
     love.graphics.setFont(old_font)

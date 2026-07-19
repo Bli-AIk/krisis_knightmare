@@ -52,6 +52,10 @@ local function hasDefaultEncounter()
     return Kristal and Kristal.getModOption and Kristal.getModOption("encounter") ~= nil
 end
 
+local function hasCreditOption()
+    return Kristal and Kristal.Args and Kristal.Args["credit"] ~= nil
+end
+
 function map:init(world,data)
     super.init(self,world,data)
     self.music = nil
@@ -62,6 +66,19 @@ function map:onEnter()
     -- It's the funniest thing ever! If you press F6, you'll see A SINGLE GREEN PIXEL!!!
     self.world.player:setPosition(-4,19)
     self.world.can_open_menu = false
+
+    if hasCreditOption() then
+        Mod.krisis_update_check_seen = true
+        Mod.krisis_intro_seen = true
+        if CreditsScene then
+            self.world:addChild(CreditsScene(function()
+                openChapterSelect(self.world)
+            end))
+        else
+            openChapterSelect(self.world)
+        end
+        return
+    end
 
     if hasDefaultEncounter() then
         Mod.krisis_update_check_seen = true
