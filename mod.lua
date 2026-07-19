@@ -1214,8 +1214,6 @@ function Mod:postUpdate()
     if self.finisher_profiler then
         self.finisher_profiler:postUpdate()
     end
-
-    self:consumeKrisisFinisherResume()
 end
 
 function Mod:preDraw()

@@ -3554,6 +3554,14 @@ function KrisFinisher:update()
     self:updatePlayerDrift()
 end
 
+function KrisFinisher:onGameOver()
+    -- GameOver is added after the battle is removed, while postDraw can still
+    -- see the old Game.battle reference for the rest of this frame.
+    self:clearFinisherHurtFlash()
+    self:clearFinisherWindBackground()
+    self:stopFinisherTransition()
+end
+
 function KrisFinisher:onBattleEnd()
     self:clearFinisherWindBackground()
     self:clearFinisherWarpBackground()
@@ -3583,6 +3591,10 @@ function KrisFinisher:onBattleEnd()
     if self.finisher_wave_circle_empty_mask then
         self.finisher_wave_circle_empty_mask:release()
         self.finisher_wave_circle_empty_mask = nil
+    end
+
+    if Mod and Mod.consumeKrisisFinisherResume then
+        Mod:consumeKrisisFinisherResume()
     end
 end
 
