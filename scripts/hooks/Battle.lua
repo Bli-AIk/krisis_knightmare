@@ -3,6 +3,10 @@ local Battle, super = HookSystem.hookScript(Battle)
 function Battle:onAdd(stage)
     super.onAdd(self, stage)
 
+    if Mod and Mod.beginKrisisBattle then
+        Mod:beginKrisisBattle(self)
+    end
+
     local enc = self.encounter
     if enc and enc.setupBackground then
         enc:setupBackground(self)
@@ -10,6 +14,24 @@ function Battle:onAdd(stage)
     if enc and enc.onBattleAdd then
         enc:onBattleAdd(self)
     end
+end
+
+function Battle:onStateChange(old, new, reason)
+    if Mod and Mod.onKrisisBattleStateChange then
+        Mod:onKrisisBattleStateChange(self, old, new)
+    end
+    return super.onStateChange(self, old, new, reason)
+end
+
+function Battle:processAction(action)
+    if action and action.action == "ITEM"
+        and not action.krisis_stats_item_counted
+        and Mod and Mod.recordKrisisItemUse
+    then
+        action.krisis_stats_item_counted = true
+        Mod:recordKrisisItemUse(action.data)
+    end
+    return super.processAction(self, action)
 end
 
 function Battle:setWaves(waves, allow_duplicates)

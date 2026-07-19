@@ -2029,6 +2029,9 @@ function KrisFinisher:finishFinisherTPFinaleToCredits(battle)
     end
 
     self.finisher_tp_credits_started = true
+    if Mod and Mod.completeKrisisGameStats then
+        Mod:completeKrisisGameStats()
+    end
     world:addChild(CreditsScene(function()
         if Game.world and Game.world.mapTransition then
             Game.world:mapTransition(

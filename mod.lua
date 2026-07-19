@@ -295,7 +295,14 @@ end
 local KRISIS_RANDOM_MODULUS = 2147483647
 local KRISIS_RANDOM_MULTIPLIER = 48271
 local KRISIS_FINISHER_RESUME_FILE = "kris_finisher_resume"
-local KRISIS_FINISHER_RESUME_VERSION = 1
+local KRISIS_FINISHER_RESUME_VERSION = 2
+local KRISIS_STATS_PAYLOAD_VERSION = 2
+local KRISIS_STATS_MAGIC = "KRS"
+local KRISIS_STATS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local KRISIS_STATS_ENCOUNTERS = {
+    kris = true,
+    kris_finisher = true,
+}
 local KRISIS_SEED_ENTRY_MUSIC = {
     [1] = "man",
     [2] = "man",
@@ -313,6 +320,306 @@ local KRISIS_SEED_DIGIT_COUNT = 10
 local KRISIS_SEED_ENTRY_REACTION_TIME = 1
 local KRISIS_SEED_TRANSITION_TIME = 0.75
 local KRISIS_SEED_SLIDE_TIME = 0.35
+
+local function getNonNegativeInteger(value)
+    value = tonumber(value)
+    if not value or value < 0 then
+        return 0
+    end
+    return math.floor(value)
+end
+
+local function newKrisisGameStats(previous_failures, seed_display)
+    return {
+        encounters = {
+            kris = {
+                actual_hits = 0,
+                bullet_hits = 0,
+                no_hit_turns = {},
+            },
+            kris_finisher = {
+                actual_hits = 0,
+                bullet_hits = 0,
+                no_hit_turns = {},
+            },
+        },
+        items_used = 0,
+        total_healed = 0,
+        max_graze_combo = 0,
+        current_graze_combo = 0,
+        total_grazes = 0,
+        previous_failures = getNonNegativeInteger(previous_failures),
+        elapsed_milliseconds = 0,
+        seed_display = tostring(seed_display or ""),
+    }
+end
+
+local function appendByte(parts, value)
+    table.insert(parts, string.char(value % 256))
+end
+
+local function appendUint16(parts, value)
+    value = getNonNegativeInteger(value) % 65536
+    appendByte(parts, math.floor(value / 256))
+    appendByte(parts, value)
+end
+
+local function appendUint32(parts, value)
+    value = getNonNegativeInteger(value) % 4294967296
+    appendByte(parts, math.floor(value / 16777216))
+    appendByte(parts, math.floor(value / 65536))
+    appendByte(parts, math.floor(value / 256))
+    appendByte(parts, value)
+end
+
+local function readByte(data, position)
+    if position > #data then
+        return nil, position
+    end
+    return string.byte(data, position), position + 1
+end
+
+local function readUint16(data, position)
+    local first, next_position = readByte(data, position)
+    if not first then
+        return nil, position
+    end
+    local second
+    second, next_position = readByte(data, next_position)
+    if not second then
+        return nil, position
+    end
+    return first * 256 + second, next_position
+end
+
+local function readUint32(data, position)
+    local first, next_position = readByte(data, position)
+    if not first then
+        return nil, position
+    end
+    local second
+    second, next_position = readByte(data, next_position)
+    if not second then
+        return nil, position
+    end
+    local third
+    third, next_position = readByte(data, next_position)
+    if not third then
+        return nil, position
+    end
+    local fourth
+    fourth, next_position = readByte(data, next_position)
+    if not fourth then
+        return nil, position
+    end
+    return first * 16777216 + second * 65536 + third * 256 + fourth, next_position
+end
+
+local function checksumBytes(data, context)
+    local checksum = 2166136261
+    local salt = table.concat({
+        os.getenv("USER") or os.getenv("USERNAME") or "unknown-user",
+        os.getenv("HOME") or os.getenv("USERPROFILE") or "unknown-home",
+        os.getenv("HOSTNAME") or os.getenv("COMPUTERNAME") or "unknown-host",
+    }, "\0")
+    local material = salt .. "\0" .. tostring(context or "stats")
+    for index = 1, #material do
+        checksum = (checksum * 16777619 + string.byte(material, index)) % 4294967296
+    end
+    for index = 1, #data do
+        checksum = (checksum * 16777619 + string.byte(data, index)) % 4294967296
+    end
+    return checksum
+end
+
+local function base64Encode(data)
+    local result = {}
+    local alphabet = KRISIS_STATS_BASE64_ALPHABET
+    for index = 1, #data, 3 do
+        local first = string.byte(data, index) or 0
+        local second = string.byte(data, index + 1)
+        local third = string.byte(data, index + 2)
+        local value = first * 65536 + (second or 0) * 256 + (third or 0)
+        local first_index = math.floor(value / 262144) % 64 + 1
+        local second_index = math.floor(value / 4096) % 64 + 1
+        local third_index = math.floor(value / 64) % 64 + 1
+        local fourth_index = value % 64 + 1
+
+        table.insert(result, alphabet:sub(first_index, first_index))
+        table.insert(result, alphabet:sub(second_index, second_index))
+        table.insert(result, second and alphabet:sub(third_index, third_index) or "=")
+        table.insert(result, third and alphabet:sub(fourth_index, fourth_index) or "=")
+    end
+    return table.concat(result)
+end
+
+local function base64Decode(data)
+    if type(data) ~= "string" or (#data % 4) ~= 0 then
+        return nil
+    end
+
+    local alphabet = KRISIS_STATS_BASE64_ALPHABET
+    local result = {}
+    for index = 1, #data, 4 do
+        local values = {}
+        local padding = 0
+        for offset = 0, 3 do
+            local character = data:sub(index + offset, index + offset)
+            if character == "=" then
+                values[offset + 1] = 0
+                padding = padding + 1
+            else
+                local value = alphabet:find(character, 1, true)
+                if not value then
+                    return nil
+                end
+                values[offset + 1] = value - 1
+            end
+        end
+
+        local combined = values[1] * 262144
+            + values[2] * 4096
+            + values[3] * 64
+            + values[4]
+        appendByte(result, math.floor(combined / 65536))
+        if padding < 2 then
+            appendByte(result, math.floor(combined / 256))
+        end
+        if padding == 0 then
+            appendByte(result, combined)
+        end
+    end
+    return table.concat(result)
+end
+
+local function encodeKrisisGameStats(stats, context)
+    if type(stats) ~= "table" then
+        return nil
+    end
+
+    local kris = stats.encounters and stats.encounters.kris or {}
+    local finisher = stats.encounters and stats.encounters.kris_finisher or {}
+    local seed_display = tostring(stats.seed_display or "")
+    local seed_length = math.min(#seed_display, 65535)
+    seed_display = seed_display:sub(1, seed_length)
+
+    local parts = {
+        KRISIS_STATS_MAGIC,
+        string.char(KRISIS_STATS_PAYLOAD_VERSION),
+    }
+    local values = {
+        kris.actual_hits,
+        kris.bullet_hits,
+        #kris.no_hit_turns,
+        finisher.actual_hits,
+        finisher.bullet_hits,
+        #finisher.no_hit_turns,
+        stats.items_used,
+        stats.total_healed,
+        stats.max_graze_combo,
+        stats.previous_failures,
+        stats.total_grazes,
+        stats.elapsed_milliseconds,
+    }
+    for _, value in ipairs(values) do
+        appendUint32(parts, value)
+    end
+    appendUint16(parts, seed_length)
+    table.insert(parts, seed_display)
+    appendUint16(parts, math.min(#kris.no_hit_turns, 65535))
+    for index = 1, math.min(#kris.no_hit_turns, 65535) do
+        appendUint16(parts, kris.no_hit_turns[index])
+    end
+    appendUint16(parts, math.min(#finisher.no_hit_turns, 65535))
+    for index = 1, math.min(#finisher.no_hit_turns, 65535) do
+        appendUint16(parts, finisher.no_hit_turns[index])
+    end
+
+    local body = table.concat(parts)
+    local payload = body .. string.char(
+        math.floor(checksumBytes(body, context) / 16777216) % 256,
+        math.floor(checksumBytes(body, context) / 65536) % 256,
+        math.floor(checksumBytes(body, context) / 256) % 256,
+        checksumBytes(body, context) % 256
+    )
+    return base64Encode(payload)
+end
+
+local function decodeKrisisGameStats(payload, context)
+    local data = base64Decode(payload)
+    if not data or #data < 4 + (12 * 4) + 2 + 4 then
+        return nil
+    end
+
+    local body = data:sub(1, -5)
+    local stored_checksum = readUint32(data, #data - 3)
+    if not stored_checksum or checksumBytes(body, context) ~= stored_checksum then
+        return nil
+    end
+    if data:sub(1, 3) ~= KRISIS_STATS_MAGIC
+        or string.byte(data, 4) ~= KRISIS_STATS_PAYLOAD_VERSION
+    then
+        return nil
+    end
+
+    local position = 5
+    local values = {}
+    for index = 1, 12 do
+        local value
+        value, position = readUint32(data, position)
+        if value == nil then
+            return nil
+        end
+        values[index] = value
+    end
+    local seed_length
+    seed_length, position = readUint16(data, position)
+    if not seed_length or position + seed_length - 1 > #body then
+        return nil
+    end
+    local seed_display = data:sub(position, position + seed_length - 1)
+
+    local stats = newKrisisGameStats(values[10], seed_display)
+    stats.encounters.kris.actual_hits = values[1]
+    stats.encounters.kris.bullet_hits = values[2]
+    stats.encounters.kris.no_hit_turns = {}
+    stats.encounters.kris_finisher.actual_hits = values[4]
+    stats.encounters.kris_finisher.bullet_hits = values[5]
+    stats.encounters.kris_finisher.no_hit_turns = {}
+    stats.items_used = values[7]
+    stats.total_healed = values[8]
+    stats.max_graze_combo = values[9]
+    stats.total_grazes = values[11]
+    stats.elapsed_milliseconds = values[12]
+    position = position + seed_length
+    local kris_no_hit_count
+    kris_no_hit_count, position = readUint16(data, position)
+    if not kris_no_hit_count then
+        return nil
+    end
+    for _ = 1, kris_no_hit_count do
+        local round
+        round, position = readUint16(data, position)
+        if not round then
+            return nil
+        end
+        table.insert(stats.encounters.kris.no_hit_turns, round)
+    end
+    local finisher_no_hit_count
+    finisher_no_hit_count, position = readUint16(data, position)
+    if not finisher_no_hit_count then
+        return nil
+    end
+    for _ = 1, finisher_no_hit_count do
+        local round
+        round, position = readUint16(data, position)
+        if not round then
+            return nil
+        end
+        table.insert(stats.encounters.kris_finisher.no_hit_turns, round)
+    end
+    return stats
+end
 
 local function normalizeSeedValue(value)
     if value == nil or value == false or value == "" then
@@ -947,6 +1254,258 @@ function Mod:hookVesselAttackSound()
     end)
 end
 
+function Mod:initializeKrisisGameStats()
+    self.krisis_game_stats = nil
+    self.krisis_retry_stats = nil
+    self.krisis_run_started = false
+    self.krisis_run_completed = false
+    self.krisis_failure_recorded = false
+    self.krisis_stats_start_playtime = nil
+    self.krisis_stats_elapsed_base = 0
+    self.krisis_finisher_resume_saved = false
+end
+
+function Mod:restoreKrisisGameStats(stats, continue_run)
+    if type(stats) ~= "table" then
+        return false
+    end
+
+    if stats.seed_display and stats.seed_display ~= "" then
+        local ok = pcall(function()
+            self:setKrisisRunSeed(stats.seed_display)
+        end)
+        if not ok then
+            return false
+        end
+    end
+
+    if continue_run then
+        self.krisis_game_stats = stats
+        self.krisis_retry_stats = nil
+        self.krisis_run_started = true
+        self.krisis_stats_start_playtime = Game and Game.playtime or 0
+        self.krisis_stats_elapsed_base = stats.elapsed_milliseconds or 0
+    else
+        self.krisis_retry_stats = stats
+    end
+    return true
+end
+
+function Mod:startKrisisGameStats(encounter_id)
+    if not KRISIS_STATS_ENCOUNTERS[encounter_id] then
+        return false
+    end
+    if self.krisis_run_started then
+        return true
+    end
+
+    local retry_stats = self.krisis_retry_stats
+    local previous_failures = retry_stats and retry_stats.previous_failures or 0
+    local seed_display = self.krisis_run_seed_display
+    if not seed_display and retry_stats then
+        seed_display = retry_stats.seed_display
+    end
+    self:getKrisisRunSeed()
+    seed_display = seed_display or self.krisis_run_seed_display or self.krisis_run_seed
+
+    self.krisis_game_stats = newKrisisGameStats(previous_failures, seed_display)
+    self.krisis_retry_stats = nil
+    self.krisis_run_started = true
+    self.krisis_run_completed = false
+    self.krisis_failure_recorded = false
+    self.krisis_stats_start_playtime = Game and Game.playtime or 0
+    self.krisis_stats_elapsed_base = 0
+    return true
+end
+
+function Mod:beginKrisisBattle(battle)
+    local encounter = battle and battle.encounter
+    local encounter_id = encounter and encounter.id
+    if not self:startKrisisGameStats(encounter_id) then
+        return
+    end
+
+    battle.krisis_stats_encounter_id = encounter_id
+    battle.krisis_stats_round_active = false
+    battle.krisis_stats_round_hurt = false
+end
+
+function Mod:getKrisisStatsForBattle(battle)
+    if not battle or not self.krisis_game_stats then
+        return nil
+    end
+    local encounter_id = battle.krisis_stats_encounter_id
+    if not KRISIS_STATS_ENCOUNTERS[encounter_id] then
+        return nil
+    end
+    return self.krisis_game_stats.encounters[encounter_id], self.krisis_game_stats
+end
+
+function Mod:recordKrisisBattleHurt(battler)
+    local battle = Game and Game.battle
+    local encounter_stats, stats = self:getKrisisStatsForBattle(battle)
+    if not encounter_stats then
+        return
+    end
+
+    encounter_stats.actual_hits = encounter_stats.actual_hits + 1
+    if battle.krisis_stats_round_active then
+        battle.krisis_stats_round_hurt = true
+    end
+    stats.current_graze_combo = 0
+end
+
+function Mod:recordKrisisBulletHit(soul, bullet)
+    local battle = Game and Game.battle
+    local encounter_stats = self:getKrisisStatsForBattle(battle)
+    if not encounter_stats then
+        return
+    end
+
+    encounter_stats.bullet_hits = encounter_stats.bullet_hits + 1
+end
+
+function Mod:recordKrisisGraze(soul, bullet, old_graze)
+    if old_graze then
+        return
+    end
+    local _, stats = self:getKrisisStatsForBattle(Game and Game.battle)
+    if not stats then
+        return
+    end
+
+    stats.total_grazes = stats.total_grazes + 1
+    stats.current_graze_combo = stats.current_graze_combo + 1
+    stats.max_graze_combo = math.max(stats.max_graze_combo, stats.current_graze_combo)
+end
+
+function Mod:recordKrisisItemUse(item)
+    local _, stats = self:getKrisisStatsForBattle(Game and Game.battle)
+    if stats then
+        stats.items_used = stats.items_used + 1
+    end
+end
+
+function Mod:recordKrisisHeal(party_member, before, after)
+    local _, stats = self:getKrisisStatsForBattle(Game and Game.battle)
+    if not stats then
+        return
+    end
+
+    stats.total_healed = stats.total_healed + math.max((after or 0) - (before or 0), 0)
+end
+
+function Mod:finishKrisisBattleRound(battle, count_no_hit)
+    if not battle or not battle.krisis_stats_round_active then
+        return
+    end
+
+    local encounter_stats = self:getKrisisStatsForBattle(battle)
+    if encounter_stats and count_no_hit and not battle.krisis_stats_round_hurt then
+        table.insert(encounter_stats.no_hit_turns, math.max(battle.turn_count or 0, 1))
+    end
+    battle.krisis_stats_round_active = false
+end
+
+function Mod:onKrisisBattleStateChange(battle, old, new)
+    if new == "DEFENDINGBEGIN" then
+        battle.krisis_stats_round_active = true
+        battle.krisis_stats_round_hurt = false
+    elseif old == "DEFENDING" and new ~= "DEFENDINGBEGIN" then
+        self:finishKrisisBattleRound(battle, new ~= "TRANSITIONOUT")
+    end
+end
+
+function Mod:onKrisisBattleGameOver(battle)
+    self:finishKrisisBattleRound(battle, false)
+end
+
+function Mod:getKrisisGameStatsElapsedMilliseconds()
+    local stats = self.krisis_game_stats
+    if not stats then
+        return 0
+    end
+
+    local elapsed = self.krisis_stats_elapsed_base or 0
+    if self.krisis_stats_start_playtime ~= nil and Game and Game.playtime then
+        elapsed = elapsed + math.max(Game.playtime - self.krisis_stats_start_playtime, 0) * 1000
+    end
+    return math.floor(elapsed)
+end
+
+function Mod:getKrisisGameStatsSnapshot()
+    local stats = self.krisis_game_stats
+    if not stats then
+        stats = newKrisisGameStats(0, self.krisis_run_seed_display or self.krisis_run_seed or "")
+    end
+
+    local snapshot = newKrisisGameStats(stats.previous_failures, stats.seed_display)
+    for _, encounter_id in ipairs({"kris", "kris_finisher"}) do
+        for key, value in pairs(stats.encounters[encounter_id]) do
+            if key == "no_hit_turns" then
+                snapshot.encounters[encounter_id][key] = {}
+                for _, round in ipairs(value) do
+                    table.insert(snapshot.encounters[encounter_id][key], round)
+                end
+            else
+                snapshot.encounters[encounter_id][key] = value
+            end
+        end
+    end
+    snapshot.items_used = stats.items_used
+    snapshot.total_healed = stats.total_healed
+    snapshot.max_graze_combo = stats.max_graze_combo
+    snapshot.total_grazes = stats.total_grazes
+    snapshot.elapsed_milliseconds = self:getKrisisGameStatsElapsedMilliseconds()
+    snapshot.seed_display = stats.seed_display
+        or self.krisis_run_seed_display
+        or tostring(self.krisis_run_seed or "")
+    return snapshot
+end
+
+function Mod:saveKrisisRunState(encounter)
+    if not Kristal or not Kristal.saveData or not self.krisis_game_stats then
+        return false
+    end
+
+    local payload = encodeKrisisGameStats(self:getKrisisGameStatsSnapshot(), encounter)
+    if not payload then
+        return false
+    end
+
+    local ok, err = pcall(function()
+        Kristal.saveData(KRISIS_FINISHER_RESUME_FILE, {
+            version = KRISIS_FINISHER_RESUME_VERSION,
+            encounter = encounter,
+            payload = payload,
+        })
+    end)
+    if not ok then
+        print("[KRISIS] Failed to save run state: " .. tostring(err))
+        return false
+    end
+    return true
+end
+
+function Mod:recordKrisisGameOver()
+    if not self.krisis_run_started or self.krisis_run_completed or self.krisis_failure_recorded then
+        return
+    end
+
+    self.krisis_failure_recorded = true
+    self.krisis_game_stats.previous_failures = self.krisis_game_stats.previous_failures + 1
+    self:onKrisisBattleGameOver(Game and Game.battle)
+    self:saveKrisisRunState("retry")
+end
+
+function Mod:completeKrisisGameStats()
+    self.krisis_run_completed = true
+    self.krisis_retry_stats = nil
+    if Kristal and Kristal.eraseData then
+        pcall(Kristal.eraseData, KRISIS_FINISHER_RESUME_FILE)
+    end
+end
+
 function Mod:setTemporaryDefaultBattleEntry(encounter)
     self.krisis_default_battle_entry = encounter
     if Kristal then
@@ -962,19 +1521,8 @@ function Mod:saveKrisisFinisherResume()
         return true
     end
 
-    if not Kristal or not Kristal.saveData then
-        print("[KRISIS] Kristal.saveData is unavailable; finisher resume was not saved")
-        return false
-    end
-
-    local ok, err = pcall(function()
-        Kristal.saveData(KRISIS_FINISHER_RESUME_FILE, {
-            version = KRISIS_FINISHER_RESUME_VERSION,
-            encounter = "kris_finisher",
-        })
-    end)
-    if not ok then
-        print("[KRISIS] Failed to save finisher resume: " .. tostring(err))
+    if not self:saveKrisisRunState("kris_finisher") then
+        print("[KRISIS] Failed to save finisher resume")
         return false
     end
 
@@ -988,10 +1536,8 @@ function Mod:loadKrisisFinisherResume()
     end
     self.krisis_finisher_resume_checked = true
 
-    -- Explicit encounter arguments are useful for development and should not
-    -- be overridden by a stale resume marker.
     local _, has_encounter = getKristalArg("encounter")
-    if has_encounter or not Kristal or not Kristal.loadData then
+    if not Kristal or not Kristal.loadData then
         return false
     end
 
@@ -1002,9 +1548,26 @@ function Mod:loadKrisisFinisherResume()
     end
 
     if type(data) ~= "table"
-        or data.version ~= KRISIS_FINISHER_RESUME_VERSION
-        or data.encounter ~= "kris_finisher"
+        or (data.version ~= 1 and data.version ~= KRISIS_FINISHER_RESUME_VERSION)
+        or (data.encounter ~= "kris_finisher" and data.encounter ~= "retry")
     then
+        return false
+    end
+
+    if data.payload then
+        local stats = decodeKrisisGameStats(data.payload, data.encounter)
+        if not stats then
+            print("[KRISIS] Ignoring run state with an invalid local checksum")
+            return false
+        end
+        if data.encounter == "retry" then
+            self:restoreKrisisGameStats(stats, false)
+            return false
+        end
+        if has_encounter or not self:restoreKrisisGameStats(stats, true) then
+            return false
+        end
+    elseif has_encounter then
         return false
     end
 
@@ -1129,6 +1692,9 @@ function Mod:init()
     self:hookVesselAttackSound()
     self:hookItemTossRandom()
     self:loadKrisisRunOptions()
+    self:initializeKrisisGameStats()
+    self.krisis_finisher_resume_checked = false
+    self.krisis_finisher_resume_pending = false
     self:loadKrisisFinisherResume()
     self:getKrisisRunSeed()
     self:updateKrisisWindowTitle()
@@ -1165,6 +1731,9 @@ function Mod:init()
 end
 
 function Mod:postLoad()
+    if self.krisis_run_started then
+        self.krisis_stats_start_playtime = Game and Game.playtime or 0
+    end
     if not self.krisis_finisher_resume_pending or Game.battle then
         return
     end
