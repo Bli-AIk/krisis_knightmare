@@ -56,6 +56,16 @@ local MERCY_FINALE_SCREEN_SHAKE_AMOUNT = 2
 local MERCY_FINALE_SCREEN_SHAKE_PERIOD = 0.25
 local MERCY_FINALE_THROW_SHAKE_AMOUNT = 4
 local MERCY_FINALE_THROW_SHAKE_DURATION = 0.45
+local MERCY_FINALE_THROW_EFFECT_FRAME = 11
+local MERCY_FINALE_THROW_RED_PULSE_COUNT = 3
+local MERCY_FINALE_THROW_RED_PULSE_DURATION = 0.12
+local MERCY_FINALE_THROW_RED_PULSE_START_ALPHA = 0.5
+local MERCY_FINALE_THROW_RED_PULSE_MAX_SCALE = 2
+local MERCY_FINALE_THROW_JUMP_FRAME_TIME = 3 / 30
+local MERCY_FINALE_THROW_JUMP_SOUND = "mercy_finale_jump"
+local MERCY_FINALE_SOUL_HEART_MAX_SOUND = "mercy_finale_heart_stop"
+local MERCY_FINALE_THROW_JUMP_SCALE_X = 1
+local MERCY_FINALE_THROW_JUMP_SCALE_Y = 1
 local MERCY_FINALE_RIGHT_TEXT_OFFSET_X = 32
 local MERCY_FINALE_PUT_BACK_FRAMES = {
     1, 2, 3,
@@ -120,6 +130,15 @@ local function getSoulMotionOffset(offsets, frame)
     local offset = offsets[frame_index]
     return offset[1], offset[2]
 end
+
+local MERCY_FINALE_RED_PULSE_SHADER = [[
+extern float pulse_alpha;
+
+vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+    vec4 pixel = Texel(texture, texture_coords) * color;
+    return vec4(1.0, 0.0, 0.0, pixel.a * pulse_alpha);
+}
+]]
 
 local function isAttackAction(action)
     return action and (action.action == "ATTACK" or action.action == "AUTOATTACK")
@@ -353,6 +372,119 @@ function MercyFinaleAfterimage:draw()
     afterimage_super.draw(self)
 end
 
+local MercyFinaleThrowRedPulse, red_pulse_super = Class(Object)
+
+function MercyFinaleThrowRedPulse:init(source_sprite)
+    red_pulse_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.source_sprite = source_sprite
+    self.pulse_index = 1
+    self.pulse_time = 0
+    self.shader = love.graphics.newShader(MERCY_FINALE_RED_PULSE_SHADER)
+end
+
+function MercyFinaleThrowRedPulse:update()
+    if not self.source_sprite or not self.source_sprite.parent then
+        self:remove()
+        return
+    end
+
+    self.pulse_time = self.pulse_time + DT
+    while self.pulse_time >= MERCY_FINALE_THROW_RED_PULSE_DURATION do
+        self.pulse_time = self.pulse_time - MERCY_FINALE_THROW_RED_PULSE_DURATION
+        self.pulse_index = self.pulse_index + 1
+        if self.pulse_index > MERCY_FINALE_THROW_RED_PULSE_COUNT then
+            self:remove()
+            return
+        end
+    end
+
+    red_pulse_super.update(self)
+end
+
+function MercyFinaleThrowRedPulse:applyTransformTo(transform)
+    if self.parent then
+        transform:reset()
+    end
+    red_pulse_super.applyTransformTo(self, transform)
+end
+
+function MercyFinaleThrowRedPulse:draw()
+    local progress = MathUtils.clamp(
+        self.pulse_time / MERCY_FINALE_THROW_RED_PULSE_DURATION,
+        0,
+        1
+    )
+    local eased_progress = easeOutCubic(progress)
+    local scale = 1 + ((MERCY_FINALE_THROW_RED_PULSE_MAX_SCALE - 1) * eased_progress)
+    local alpha = MERCY_FINALE_THROW_RED_PULSE_START_ALPHA * (1 - progress)
+    local pivot_x = (self.source_sprite.width / 2) + 4.5
+    local pivot_y = (self.source_sprite.height / 2) + 7
+
+    love.graphics.push("all")
+    love.graphics.applyTransform(self.source_sprite:getFullTransform())
+    love.graphics.translate(pivot_x, pivot_y)
+    love.graphics.scale(scale, scale)
+    love.graphics.translate(-pivot_x, -pivot_y)
+    self.shader:send("pulse_alpha", alpha)
+    love.graphics.setShader(self.shader)
+    self.source_sprite:draw()
+    love.graphics.pop()
+
+    red_pulse_super.draw(self)
+end
+
+local MercyFinaleThrowJump, throw_jump_super = Class(Object)
+
+function MercyFinaleThrowJump:init(source_sprite)
+    throw_jump_super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    self.source_sprite = source_sprite
+    self.sprite = Sprite("enemies/kris/throw_soul_jump")
+    self.sprite:setScale(
+        MERCY_FINALE_THROW_JUMP_SCALE_X,
+        MERCY_FINALE_THROW_JUMP_SCALE_Y
+    )
+    self.sprite:setAnimation({
+        "enemies/kris/throw_soul_jump",
+        MERCY_FINALE_THROW_JUMP_FRAME_TIME,
+        false,
+        callback = function()
+            self:remove()
+        end,
+    })
+end
+
+function MercyFinaleThrowJump:update()
+    if not self.source_sprite or not self.source_sprite.parent then
+        self:remove()
+        return
+    end
+
+    self.sprite:update()
+    throw_jump_super.update(self)
+end
+
+function MercyFinaleThrowJump:applyTransformTo(transform)
+    if self.parent then
+        transform:reset()
+    end
+    throw_jump_super.applyTransformTo(self, transform)
+end
+
+function MercyFinaleThrowJump:draw()
+    love.graphics.push("all")
+    love.graphics.applyTransform(self.source_sprite:getFullTransform())
+    love.graphics.scale(
+        MERCY_FINALE_THROW_JUMP_SCALE_X,
+        MERCY_FINALE_THROW_JUMP_SCALE_Y
+    )
+    self.sprite:draw()
+    love.graphics.pop()
+
+    throw_jump_super.draw(self)
+end
+
 local MercyFinaleSoulHeart, soul_heart_super = Class(Object)
 
 function MercyFinaleSoulHeart:init(x, y)
@@ -362,6 +494,7 @@ function MercyFinaleSoulHeart:init(x, y)
     self.expand_time = MERCY_FINALE_SOUL_HEART_EXPAND_TIME
     self.hold_time = MERCY_FINALE_SOUL_HEART_HOLD_TIME
     self.start_scale = 0.25
+    self.max_sound_played = false
 
     self.sprite = Sprite("player/heart")
     self.sprite:setOrigin(0.5, 0.5)
@@ -386,6 +519,10 @@ function MercyFinaleSoulHeart:update()
 
     self.sprite:setScale(scale)
     self.sprite.alpha = self.alpha
+    if self.timer >= self.expand_time and not self.max_sound_played then
+        self.max_sound_played = true
+        Assets.playSound(MERCY_FINALE_SOUL_HEART_MAX_SOUND)
+    end
     if self.timer >= self.expand_time + self.hold_time then
         if Mod and Mod.saveKrisisFinisherResume then
             Mod:saveKrisisFinisherResume()
@@ -429,6 +566,9 @@ function Kris:init()
     self.mercy_finale_soul_heart = nil
     self.mercy_finale_soul_afterimage_timer = 0
     self.mercy_finale_soul_afterimages = {}
+    self.mercy_finale_throw_effect_played = false
+    self.mercy_finale_throw_red_pulse = nil
+    self.mercy_finale_throw_jump = nil
     self.mercy_finale_soul_noise_pending = false
     self.mercy_finale_wind_music = nil
     self.mercy_finale_zzz_music = nil
@@ -979,7 +1119,7 @@ function Kris:updateMercyFinaleDetached()
     elseif phase == "SOUL_IDLE" then
         self:updateMercyFinaleSoulCutscene()
         if self.mercy_finale_soul_noise_pending then
-            Assets.playSound("mercy_finale_noise")
+            Assets.playSound("noise")
             self.mercy_finale_soul_noise_pending = false
         end
         self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
@@ -1182,7 +1322,6 @@ function Kris:startMercyFinaleFinalReinstall()
             self.mercy_finale_detached_timer = 0
         end,
     })
-    Assets.playSound("mercy_finale_grab")
 end
 
 function Kris:showMercyFinaleAfterimage()
@@ -1235,6 +1374,14 @@ function Kris:clearMercyFinaleSoulCutsceneEffects()
         self.mercy_finale_soul_heart:remove()
     end
     self.mercy_finale_soul_heart = nil
+
+    for _, key in ipairs({ "mercy_finale_throw_red_pulse", "mercy_finale_throw_jump" }) do
+        local effect = self[key]
+        if effect and effect.parent then
+            effect:remove()
+        end
+        self[key] = nil
+    end
 end
 
 function Kris:spawnMercyFinaleSoulAfterimage()
@@ -1253,6 +1400,25 @@ function Kris:spawnMercyFinaleSoulAfterimage()
     image.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) - 0.001
     battle:addChild(image)
     table.insert(self.mercy_finale_soul_afterimages, image)
+end
+
+function Kris:spawnMercyFinaleThrowEffects()
+    local battle = Game.battle
+    local enemy = self:getKrisEnemy()
+    if not battle or not enemy or not enemy.sprite then
+        return
+    end
+
+    local base_layer = enemy.layer or BATTLE_LAYERS["battlers"]
+    local red_pulse = MercyFinaleThrowRedPulse(enemy.sprite)
+    red_pulse.layer = base_layer - 0.002
+    battle:addChild(red_pulse)
+    self.mercy_finale_throw_red_pulse = red_pulse
+
+    local jump = MercyFinaleThrowJump(enemy.sprite)
+    jump.layer = base_layer - 0.003
+    battle:addChild(jump)
+    self.mercy_finale_throw_jump = jump
 end
 
 function Kris:updateMercyFinaleSoulCutscene()
@@ -1313,6 +1479,13 @@ function Kris:updateMercyFinaleSoulCutscene()
             target_x + offset_x,
             target_y + offset_y
         )
+        if frame == MERCY_FINALE_THROW_EFFECT_FRAME
+            and not self.mercy_finale_throw_effect_played
+        then
+            self.mercy_finale_throw_effect_played = true
+            Assets.playSound(MERCY_FINALE_THROW_JUMP_SOUND)
+            self:spawnMercyFinaleThrowEffects()
+        end
     else
         self:setMercyFinaleSoulSceneEnemyOrigin(enemy, target_x, target_y)
     end
@@ -1391,6 +1564,7 @@ function Kris:startMercyFinaleSoulThrow()
 
     self.mercy_finale_detached_phase = "SOUL_THROW"
     self.mercy_finale_detached_timer = 0
+    self.mercy_finale_throw_effect_played = false
     enemy:setAnimation({
         "throw_soul",
         MERCY_FINALE_SOUL_THROW_SPEED,
@@ -1623,7 +1797,7 @@ function Kris:showMercyFinaleProceed()
     self.mercy_finale_narration_texts = { proceed_text }
     self.mercy_finale_detached_phase = "PROCEED"
     self.mercy_finale_detached_timer = 0
-    Assets.playSound("mercy_finale_noise")
+    Assets.playSound("noise")
 end
 
 function Kris:showMercyFinaleReinstallPrompt()
