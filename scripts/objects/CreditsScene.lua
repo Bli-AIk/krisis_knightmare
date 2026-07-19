@@ -7,6 +7,7 @@ local CREDITS_MUSIC = "credits"
 local CREDITS_MUSIC_VOLUME = 0.8
 local HOLD_TO_SKIP_TIME = 0.65
 local CREDITS_FONT_SIZE = 32
+local CREDIT_NAME_FONT_PATH = "lang/zh_hans/main_mono"
 local NAME_LINE_HEIGHT = 32
 local ROLE_LINE_HEIGHT = 32
 local CJK_TEXT_SPACING = 2
@@ -289,7 +290,9 @@ function CreditsScene:refreshLocalization(force)
     local font_path = "lang/" .. tostring(language) .. "/main_mono"
     self.role_font = Assets.getFont(font_path, CREDITS_FONT_SIZE)
         or Assets.getFont("main_mono", CREDITS_FONT_SIZE)
-    self.name_font = Assets.getFont(font_path, CREDITS_FONT_SIZE)
+    -- Contributor names stay in their original scripts, including Chinese.
+    self.name_font = Assets.getFont(CREDIT_NAME_FONT_PATH, CREDITS_FONT_SIZE)
+        or Assets.getFont(font_path, CREDITS_FONT_SIZE)
         or Assets.getFont("main_mono", CREDITS_FONT_SIZE)
     self.localized_cards = {}
 
@@ -399,7 +402,7 @@ function CreditsScene:configureVerdictDialogue(text)
         self.verdict_dialogue.can_advance = false
     end
 
-    self.verdict_dialogue.font = "lang/" .. tostring(self.current_language) .. "/main_mono"
+    self.verdict_dialogue.font = "main_mono"
     self.verdict_dialogue.font_size = CREDITS_FONT_SIZE
     self.verdict_dialogue:setText(text)
     local color = self:getVerdictColor()
@@ -421,7 +424,7 @@ function CreditsScene:configureFinalDialogue(text)
         self.final_dialogue.can_advance = false
     end
 
-    self.final_dialogue.font = "lang/" .. tostring(self.current_language) .. "/main_mono"
+    self.final_dialogue.font = "main_mono"
     self.final_dialogue.font_size = CREDITS_FONT_SIZE
     self.final_dialogue.x = x
     self.final_dialogue.y = y
