@@ -1,6 +1,8 @@
-local Project4Scene, super = Class(Object)
+local OverworldScene, super = Class(Object)
 
 local ASSET_ROOT = "project4_scene/"
+local OW_SCENE_MUSIC = "ow"
+local OW_SCENE_MUSIC_START_OFFSET = 0.675
 local CANVAS_WIDTH = 640
 local CANVAS_HEIGHT = 480
 local AM_TO_LOGICAL = 4 / 9
@@ -13,8 +15,8 @@ local PROMPT_IDLE_DELAY = 1
 local PROMPT_FADE_OUT_TIME = 0.5
 local PROMPT_FADE_IN_TIME = 0.12
 local INITIAL_TEXT_FADE_IN_TIME = 0.5
-local INITIAL_BLACK_FADE_START = 2.008
-local INITIAL_BLACK_FADE_END = 2.591
+local INITIAL_BLACK_FADE_START = 2.258
+local INITIAL_BLACK_FADE_END = 2.841
 local SNOW_STATIC_START = 21.283
 local FINAL_BLACK_START = 29.958
 local FINAL_BLACK_FULL_TIME = 35.265
@@ -382,7 +384,7 @@ local function simplexNoise(x, y, z)
     return (n0 + n1 + n2 + n3) * 32
 end
 
-function Project4Scene:init(options)
+function OverworldScene:init(options)
     super.init(self, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
     options = options or {}
@@ -413,6 +415,9 @@ function Project4Scene:init(options)
     self.font_language = nil
     self.small_font = nil
     self.text_font = nil
+    self.music = Music()
+    self.music:play(OW_SCENE_MUSIC)
+    self.music:seek(OW_SCENE_MUSIC_START_OFFSET)
 
     if self.capture_times and #self.capture_times > 0 then
         self.paused = true
@@ -442,7 +447,16 @@ function Project4Scene:init(options)
     self:refreshFonts(true)
 end
 
-function Project4Scene:refreshFonts(force)
+function OverworldScene:onRemove(parent)
+    super.onRemove(self, parent)
+    if self.music then
+        self.music:stop()
+        self.music:remove()
+        self.music = nil
+    end
+end
+
+function OverworldScene:refreshFonts(force)
     local language = Game and Game.getLanguage and Game:getLanguage() or nil
     if force and language and Game.setLanguage then
         Game:setLanguage(language, true)
@@ -458,7 +472,7 @@ function Project4Scene:refreshFonts(force)
     self.text_font = Assets.getFont("main_mono")
 end
 
-function Project4Scene:createParticleLayouts()
+function OverworldScene:createParticleLayouts()
     local layouts = {}
     for _, group in ipairs(self.timeline.particles) do
         local particles = {}
@@ -473,7 +487,7 @@ function Project4Scene:createParticleLayouts()
     return layouts
 end
 
-function Project4Scene:getTexture(filename)
+function OverworldScene:getTexture(filename)
     local id = filename:gsub("%.png$", "")
     local texture = self.textures[id]
     if not texture then
@@ -484,7 +498,7 @@ function Project4Scene:getTexture(filename)
     return texture
 end
 
-function Project4Scene:drawTexture(filename, x, y, width, height)
+function OverworldScene:drawTexture(filename, x, y, width, height)
     local texture = self:getTexture(filename)
     love.graphics.draw(
         texture,
@@ -496,7 +510,7 @@ function Project4Scene:drawTexture(filename, x, y, width, height)
     )
 end
 
-function Project4Scene:getSpotlight(time)
+function OverworldScene:getSpotlight(time)
     local offset_x, offset_y = interpolateKeyframes(self.timeline.spotlight_offset, time)
     local center_x = 313 + (offset_x / 3)
     local center_y = -39 + (offset_y / 3)
@@ -505,7 +519,7 @@ function Project4Scene:getSpotlight(time)
     return center_x, center_y, radius
 end
 
-function Project4Scene:getWalkFrame(time)
+function OverworldScene:getWalkFrame(time)
     for _, embed in ipairs(self.timeline.walk_embeds) do
         if time >= embed.start and time <= embed.finish then
             local local_time = time - embed.start
@@ -522,7 +536,7 @@ function Project4Scene:getWalkFrame(time)
     end
 end
 
-function Project4Scene:getCharacterFrame(time)
+function OverworldScene:getCharacterFrame(time)
     for _, loop in ipairs(self.timeline.character_loops) do
         if time >= loop.start and time <= loop.finish then
             local local_time = (time - loop.start) % loop.cycle
@@ -541,7 +555,7 @@ function Project4Scene:getCharacterFrame(time)
     end
 end
 
-function Project4Scene:drawWalkCharacter(time, expected_embed)
+function OverworldScene:drawWalkCharacter(time, expected_embed)
     local image, embed_id = self:getWalkFrame(time)
     if not image or embed_id ~= expected_embed then
         return
@@ -551,7 +565,7 @@ function Project4Scene:drawWalkCharacter(time, expected_embed)
     self:drawTexture(image, center_x - 30, center_y - 25, 60, 68)
 end
 
-function Project4Scene:drawFullCharacter(time)
+function OverworldScene:drawFullCharacter(time)
     local image, frame = self:getCharacterFrame(time)
     if not image then
         return
@@ -572,7 +586,7 @@ function Project4Scene:drawFullCharacter(time)
     self:drawTexture(image, (location_x - 720) * AM_TO_LOGICAL, location_y)
 end
 
-function Project4Scene:drawBackgroundLayers(time)
+function OverworldScene:drawBackgroundLayers(time)
     if time <= 34.782 then
         self:drawTexture("1771128825718.png")
     end
@@ -600,7 +614,7 @@ function Project4Scene:drawBackgroundLayers(time)
     self:drawFullCharacter(time)
 end
 
-function Project4Scene:interpolateParticleValue(keyframes, time, field)
+function OverworldScene:interpolateParticleValue(keyframes, time, field)
     if time <= keyframes[1].t then
         return keyframes[1][field]
     end
@@ -611,7 +625,7 @@ function Project4Scene:interpolateParticleValue(keyframes, time, field)
     return lerp(keyframes[1][field], target[field], amount)
 end
 
-function Project4Scene:drawParticles(time)
+function OverworldScene:drawParticles(time)
     local circle = self:getTexture("1771143741888.png")
     for _, group in ipairs(self.timeline.particles) do
         if time >= group.start and time <= group.finish then
@@ -660,7 +674,7 @@ function Project4Scene:drawParticles(time)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function Project4Scene:buildBaseCanvas(time)
+function OverworldScene:buildBaseCanvas(time)
     Draw.pushCanvas(self.base_canvas)
     love.graphics.origin()
     love.graphics.clear(0, 0, 0, 1)
@@ -677,21 +691,21 @@ function Project4Scene:buildBaseCanvas(time)
     Draw.popCanvas()
 end
 
-function Project4Scene:getSpotlightOpacity(time)
+function OverworldScene:getSpotlightOpacity(time)
     if time <= 28.925 then
         return 0.761719
     end
     return lerp(0.761719, 1, clamp((time - 28.925) / (31.443 - 28.925), 0, 1))
 end
 
-function Project4Scene:sendMatrix(matrix)
+function OverworldScene:sendMatrix(matrix)
     self.color_shader:send("matrix_r", matrix.r)
     self.color_shader:send("matrix_g", matrix.g)
     self.color_shader:send("matrix_b", matrix.b)
     self.color_shader:send("matrix_bias", matrix.bias)
 end
 
-function Project4Scene:sendGradeState(time)
+function OverworldScene:sendGradeState(time)
     self.color_shader:send("light_texture", self:getTexture("1771129253481.png"))
     self.color_shader:send("light_enabled", time <= 34.132 and 1 or 0)
     self.color_shader:send("color_layers_enabled", time <= 34.332 and 1 or 0)
@@ -704,7 +718,7 @@ function Project4Scene:sendGradeState(time)
     self.color_shader:send("pre_spotlight_black", pre_spotlight_black)
 end
 
-function Project4Scene:drawCompositedScene(time)
+function OverworldScene:drawCompositedScene(time)
     if time >= 35.265 then
         love.graphics.setColor(0, 0, 0, 1)
         love.graphics.rectangle("fill", 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
@@ -734,10 +748,15 @@ function Project4Scene:drawCompositedScene(time)
     love.graphics.setStencilTest()
     love.graphics.setShader()
 
-    if time <= 2.591 then
+    if time <= INITIAL_BLACK_FADE_END then
         local alpha = 1
-        if time > 2.008 then
-            alpha = 1 - clamp((time - 2.008) / (2.591 - 2.008), 0, 1)
+        if time > INITIAL_BLACK_FADE_START then
+            alpha = 1 - clamp(
+                (time - INITIAL_BLACK_FADE_START)
+                    / (INITIAL_BLACK_FADE_END - INITIAL_BLACK_FADE_START),
+                0,
+                1
+            )
         end
         love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("fill", 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
@@ -750,7 +769,7 @@ function Project4Scene:drawCompositedScene(time)
     end
 end
 
-function Project4Scene:drawSceneText(time)
+function OverworldScene:drawSceneText(time)
     local initial_alpha = 0
     if time <= INITIAL_BLACK_FADE_END then
         initial_alpha = clamp(time / INITIAL_TEXT_FADE_IN_TIME, 0, 1)
@@ -801,7 +820,7 @@ function Project4Scene:drawSceneText(time)
     )
 end
 
-function Project4Scene:updateCapture()
+function OverworldScene:updateCapture()
     if not self.capture_times or self.capture_complete then
         return
     end
@@ -829,7 +848,7 @@ function Project4Scene:updateCapture()
     end
 end
 
-function Project4Scene:update()
+function OverworldScene:update()
     super.update(self)
 
     if not self.ready then
@@ -890,7 +909,7 @@ function Project4Scene:update()
     end
 end
 
-function Project4Scene:finish()
+function OverworldScene:finish()
     if self.finished then
         return
     end
@@ -907,15 +926,15 @@ function Project4Scene:finish()
     end
 end
 
-function Project4Scene:seek(time)
+function OverworldScene:seek(time)
     self.time = clamp(tonumber(time) or 0, 0, self.timeline.duration)
 end
 
-function Project4Scene:setPaused(paused)
+function OverworldScene:setPaused(paused)
     self.paused = paused == true
 end
 
-function Project4Scene:drawSkipPrompt()
+function OverworldScene:drawSkipPrompt()
     if not self.interactive or not self.ready then
         return
     end
@@ -970,7 +989,7 @@ function Project4Scene:drawSkipPrompt()
     end
 end
 
-function Project4Scene:drawTimeDisplay()
+function OverworldScene:drawTimeDisplay()
     if not SHOW_TIME_DISPLAY then
         return
     end
@@ -981,7 +1000,7 @@ function Project4Scene:drawTimeDisplay()
     love.graphics.print(string.format("TIME %.3f", self.time), 20, SCREEN_HEIGHT - 34)
 end
 
-function Project4Scene:draw()
+function OverworldScene:draw()
     self:refreshFonts(false)
     love.graphics.push("all")
     love.graphics.origin()
@@ -1023,11 +1042,11 @@ function Project4Scene:draw()
         local filename = string.format("frame_%06d.png", milliseconds)
         local path = self.capture_directory .. "/" .. filename
         love.graphics.captureScreenshot(path)
-        print(string.format("[Project4Scene] capture %.3fs -> %s", self.time, path))
+        print(string.format("[OverworldScene] capture %.3fs -> %s", self.time, path))
         self.capture_requested = true
     end
 
     love.graphics.pop()
 end
 
-return Project4Scene
+return OverworldScene

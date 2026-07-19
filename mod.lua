@@ -1133,7 +1133,7 @@ function Mod:init()
     self:getKrisisRunSeed()
     self:updateKrisisWindowTitle()
 
-    if envFlag("KRISIS_DEBUG_PROJECT4_SCENE") and Project4Scene and Kristal.Stage then
+    if envFlag("KRISIS_DEBUG_PROJECT4_SCENE") and OverworldScene and Kristal.Stage then
         self.krisis_update_check_seen = true
         self.krisis_intro_seen = true
         local capture_times = parseNumberList(os.getenv("KRISIS_PROJECT4_CAPTURE_TIMES"))
@@ -1143,7 +1143,7 @@ function Mod:init()
             love.window.setMode(1280, 960, {resizable = false, vsync = 0})
         end
 
-        self.project4_scene = Kristal.Stage:addChild(Project4Scene({
+        self.overworld_scene = Kristal.Stage:addChild(OverworldScene({
             start_time = tonumber(os.getenv("KRISIS_PROJECT4_START_TIME")),
             capture_times = capture_times,
             capture_directory = os.getenv("KRISIS_PROJECT4_CAPTURE_DIR"),

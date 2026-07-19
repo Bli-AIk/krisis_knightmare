@@ -17,8 +17,8 @@ local function openIntro(world)
         world.music:stop()
     end
 
-    if Project4Scene then
-        world:addChild(Project4Scene({
+    if OverworldScene then
+        world:addChild(OverworldScene({
             on_complete = function()
                 openChapterSelect(world)
             end,
