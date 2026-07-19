@@ -32,6 +32,15 @@ local FINISHER_SWORD_POST_EXIT_PAUSE = 6 / 60
 local FINISHER_SWORD_BLUR_ALPHA = 0.22
 local FINISHER_SWORD_BLUR_FADE_SPEED = 0.12
 local FINISHER_SWORD_BLUR_DRIFT = -5
+local FINISHER_SOUND = {
+    tp50 = "kris_knee_slide",
+    fountain_wave = "fountain_digging",
+    fountain_open = "fountain_open_2s",
+    fountain_open_pitch = 0.8,
+    fountain_open_hold_time = 2,
+    fountain_open_fade_time = 0.5,
+    fountain_wave_midpoint = 6 / 60,
+}
 
 local FINISHER_ELLIPSE_GROW_TIME = 0.22
 local FINISHER_ELLIPSE_START_CENTER_Y = SCREEN_HEIGHT * 0.90
@@ -1450,6 +1459,7 @@ function KrisFinisher:init()
     self.finisher_fountain_flash_emitting = false
     self.finisher_fountain_flash_position = 1
     self.finisher_fountain_flash_wave = 0
+    self.finisher_fountain_flash_interstitial_timer = nil
     self.finisher_rains = {}
     self.finisher_rain_emitting = false
     self.finisher_rain_spawn_timer = 0
@@ -1478,6 +1488,8 @@ function KrisFinisher:init()
     self.finisher_fountain_cover_shader = nil
     self.finisher_fountain_inversion_shader = nil
     self.finisher_fountain = nil
+    self.finisher_fountain_open_sound = nil
+    self.finisher_fountain_open_sound_elapsed = 0
     self.finisher_tp_reached = false
     self.finisher_tp_finale_active = false
     self.finisher_tp_finale_phase = nil
@@ -1843,6 +1855,8 @@ function KrisFinisher:clearFinisherSword()
 end
 
 function KrisFinisher:clearFinisherFountain()
+    self:clearFinisherFountainOpenSound()
+
     if self.finisher_inversion_stage and self.finisher_inversion_stage_fx then
         self:clearFinisherInversion()
     end
@@ -1855,6 +1869,58 @@ function KrisFinisher:clearFinisherFountain()
         fountain:releaseMaskCanvas()
     end
     self.finisher_fountain = nil
+end
+
+function KrisFinisher:clearFinisherFountainOpenSound()
+    if self.finisher_fountain_open_sound then
+        self.finisher_fountain_open_sound:stop()
+    end
+    self.finisher_fountain_open_sound = nil
+    self.finisher_fountain_open_sound_elapsed = 0
+end
+
+function KrisFinisher:startFinisherFountainOpenSound()
+    self:clearFinisherFountainOpenSound()
+
+    local source = Assets.playSound(
+        FINISHER_SOUND.fountain_open,
+        1,
+        FINISHER_SOUND.fountain_open_pitch
+    )
+    if source then
+        self.finisher_fountain_open_sound = source
+        self.finisher_fountain_open_sound_elapsed = 0
+    end
+end
+
+function KrisFinisher:updateFinisherFountainOpenSound()
+    local source = self.finisher_fountain_open_sound
+    if not source then
+        return
+    end
+
+    if not source:isPlaying() then
+        self:clearFinisherFountainOpenSound()
+        return
+    end
+
+    self.finisher_fountain_open_sound_elapsed =
+        self.finisher_fountain_open_sound_elapsed + DT
+    local fade_elapsed = self.finisher_fountain_open_sound_elapsed
+        - FINISHER_SOUND.fountain_open_hold_time
+    if fade_elapsed <= 0 then
+        return
+    end
+
+    local fade_progress = clamp(
+        fade_elapsed / FINISHER_SOUND.fountain_open_fade_time,
+        0,
+        1
+    )
+    source:setVolume(1 - fade_progress)
+    if fade_progress >= 1 then
+        self:clearFinisherFountainOpenSound()
+    end
 end
 
 function KrisFinisher:clearFinisherInversion()
@@ -2052,6 +2118,7 @@ function KrisFinisher:startFinisherFountain(battle)
     })
     Game.stage:addChild(fountain)
     self.finisher_fountain = fountain
+    self:startFinisherFountainOpenSound()
 end
 
 function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
@@ -2372,6 +2439,7 @@ function KrisFinisher:triggerFinisherTPReached()
     end
 
     self.finisher_tp_reached = true
+    Assets.playSound(FINISHER_SOUND.tp50)
     self:stopFinisherStarEmitter()
     self:stopFinisherWaveCircles()
     self:stopFinisherFountainFlashEmitter()
@@ -3297,6 +3365,7 @@ function KrisFinisher:startFinisherFountainFlashEmitter(battle)
     self.finisher_fountain_flash_emitting = true
     self.finisher_fountain_flash_position = 1
     self.finisher_fountain_flash_wave = 0
+    self.finisher_fountain_flash_interstitial_timer = nil
 
     self:spawnFinisherFountainFlashWave()
 end
@@ -3321,6 +3390,8 @@ function KrisFinisher:spawnFinisherFountainFlashWave()
         or 1
     count = math.min(count, #FINISHER_FOUNTAIN_FLASH_POSITIONS - position_index + 1)
 
+    Assets.playSound(FINISHER_SOUND.fountain_wave)
+
     local wave = {
         flash_one_count = 0,
         triggered = false,
@@ -3328,6 +3399,14 @@ function KrisFinisher:spawnFinisherFountainFlashWave()
     local wave_index = self.finisher_fountain_flash_wave
     self.finisher_fountain_flash_wave = wave_index + 1
     self.finisher_fountain_flash_position = position_index + count
+    if self.finisher_fountain_flash_position <= #FINISHER_FOUNTAIN_FLASH_POSITIONS then
+        -- Each wave's two-frame animation takes 12/60 seconds; play the
+        -- interstitial sound at the midpoint, 6/60 seconds after spawning.
+        self.finisher_fountain_flash_interstitial_timer =
+            FINISHER_SOUND.fountain_wave_midpoint
+    else
+        self.finisher_fountain_flash_interstitial_timer = nil
+    end
 
     local function onFlashOne()
         if not self.finisher_fountain_flash_emitting or wave.triggered then
@@ -3365,8 +3444,27 @@ end
 
 function KrisFinisher:stopFinisherFountainFlashEmitter()
     self.finisher_fountain_flash_emitting = false
+    self.finisher_fountain_flash_interstitial_timer = nil
     self:clearFinisherFountainFlashes()
     self.finisher_fountain_flash_battle = nil
+end
+
+function KrisFinisher:updateFinisherFountainFlashInterstitialSound()
+    local timer = self.finisher_fountain_flash_interstitial_timer
+    if not timer then
+        return
+    end
+
+    timer = timer - DT
+    if timer > 0 then
+        self.finisher_fountain_flash_interstitial_timer = timer
+        return
+    end
+
+    self.finisher_fountain_flash_interstitial_timer = nil
+    if self.finisher_fountain_flash_emitting then
+        Assets.playSound(FINISHER_SOUND.fountain_wave)
+    end
 end
 
 function KrisFinisher:startFinisherStarEmitter(battle)
@@ -3559,6 +3657,8 @@ function KrisFinisher:update()
 
     self:updateFinisherWindBackground()
     self:updateFinisherSword()
+    self:updateFinisherFountainFlashInterstitialSound()
+    self:updateFinisherFountainOpenSound()
 
     if self.finisher_opening then
         self:updateOpening()
@@ -3578,6 +3678,7 @@ function KrisFinisher:onGameOver()
     -- GameOver is added after the battle is removed, while postDraw can still
     -- see the old Game.battle reference for the rest of this frame.
     self:clearFinisherHurtFlash()
+    self:clearFinisherFountainOpenSound()
     self:clearFinisherWindBackground()
     self:stopFinisherTransition()
 end
