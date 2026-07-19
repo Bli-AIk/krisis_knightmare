@@ -26,6 +26,7 @@ local FULL_MERCY = 100
 local MERCY_FINALE_LAYER = BATTLE_LAYERS["ui"] - 2
 local FAST_SPEED = 4 / 30
 local MERCY_FINALE_MUSIC_FADE_TIME = 0.25
+local MERCY_FINALE_WIND_FADE_TIME = 0.5
 local MERCY_FINALE_MUSIC_END_WINDOW = 1
 local MERCY_FINALE_ENEMY_TURN_DURATION = 5
 local MERCY_FINALE_UI_FADE_TIME = 3
@@ -428,6 +429,9 @@ function Kris:init()
     self.mercy_finale_soul_heart = nil
     self.mercy_finale_soul_afterimage_timer = 0
     self.mercy_finale_soul_afterimages = {}
+    self.mercy_finale_soul_noise_pending = false
+    self.mercy_finale_wind_music = nil
+    self.mercy_finale_zzz_music = nil
     self.mercy_finale_screen_shaking = false
     self.mercy_finale_screen_shake_time = 0
     self.mercy_finale_screen_shake_restore = nil
@@ -535,6 +539,47 @@ function Kris:handleMercyFinaleMusic(battle)
     end)
 end
 
+function Kris:playMercyFinaleWind()
+    self:stopMercyFinaleWind()
+    self.mercy_finale_wind_music = Music()
+    self.mercy_finale_wind_music:play("mercy_finale_wind")
+end
+
+function Kris:stopMercyFinaleWind()
+    if self.mercy_finale_wind_music then
+        self.mercy_finale_wind_music:stop()
+        self.mercy_finale_wind_music:remove()
+        self.mercy_finale_wind_music = nil
+    end
+end
+
+function Kris:fadeMercyFinaleWind()
+    local music = self.mercy_finale_wind_music
+    if not music then
+        return
+    end
+
+    self.mercy_finale_wind_music = nil
+    music:fade(0, MERCY_FINALE_WIND_FADE_TIME, function(current_music)
+        current_music:stop()
+        current_music:remove()
+    end)
+end
+
+function Kris:playMercyFinaleZzz()
+    self:stopMercyFinaleZzz()
+    self.mercy_finale_zzz_music = Music()
+    self.mercy_finale_zzz_music:play("mercy_finale_zzz")
+end
+
+function Kris:stopMercyFinaleZzz()
+    if self.mercy_finale_zzz_music then
+        self.mercy_finale_zzz_music:stop()
+        self.mercy_finale_zzz_music:remove()
+        self.mercy_finale_zzz_music = nil
+    end
+end
+
 function Kris:tryStartMercyFinale(reason)
     if self.mercy_finale_started or not self:isFullMercy() then
         return false
@@ -562,6 +607,7 @@ function Kris:tryStartMercyFinale(reason)
         layer = MERCY_FINALE_LAYER,
         on_black_screen = function()
             self:clearRechargeForMercyFinale()
+            self:playMercyFinaleWind()
         end,
         on_light_ready = function()
             self:releaseMercyFinaleToPlayerTurn()
@@ -877,6 +923,8 @@ function Kris:updateMercyFinaleDetached()
             if enemy then
                 enemy:setAnimation({ "angry_shake", FAST_SPEED, true })
             end
+            self:fadeMercyFinaleWind()
+            self:playMercyFinaleZzz()
             self.mercy_finale_detached_phase = "ANGRY_SHAKE_WAIT"
             self.mercy_finale_detached_timer = 0
         end
@@ -930,6 +978,10 @@ function Kris:updateMercyFinaleDetached()
         self:updateMercyFinaleSoulCutscene()
     elseif phase == "SOUL_IDLE" then
         self:updateMercyFinaleSoulCutscene()
+        if self.mercy_finale_soul_noise_pending then
+            Assets.playSound("mercy_finale_noise")
+            self.mercy_finale_soul_noise_pending = false
+        end
         self.mercy_finale_detached_timer = self.mercy_finale_detached_timer + DT
         if self.mercy_finale_detached_timer >= MERCY_FINALE_SOUL_IDLE_WAIT then
             self:startMercyFinaleSoulThrow()
@@ -1084,11 +1136,18 @@ function Kris:showMercyFinalePutBackHeart()
 
     local battle = Game.battle
     local enemy = self:getKrisEnemy()
-    if not battle or not enemy or not enemy.sprite or enemy.sprite.frame ~= 8 then
+    local phase = self.mercy_finale_detached_phase
+    local heart_frame = phase == "REINSTALLING" and 8
+        or phase == "FINAL_REINSTALLING" and 4
+    if not battle or not enemy or not enemy.sprite or not heart_frame
+        or enemy.sprite.frame ~= heart_frame
+    then
         return
     end
 
     local x, y = self.mercy_finale:getEnemyOrigin()
+    Assets.playSound("mercy_finale_grab")
+    self:stopMercyFinaleZzz()
     local burst = HeartBurst(x - 2, y + 1, { 1, 0, 0 })
     burst.layer = (enemy.layer or BATTLE_LAYERS["battlers"]) + 0.1
     battle:addChild(burst)
@@ -1116,12 +1175,14 @@ function Kris:startMercyFinaleFinalReinstall()
         callback = function(sprite)
             sprite:setFrame(4)
             sprite:pause()
+            self:showMercyFinalePutBackHeart()
             self:stopMercyFinaleScreenShake(Game.battle)
             self:showMercyFinaleAfterimage()
             self.mercy_finale_detached_phase = "FINAL_AFTERIMAGE_WAIT"
             self.mercy_finale_detached_timer = 0
         end,
     })
+    Assets.playSound("mercy_finale_grab")
 end
 
 function Kris:showMercyFinaleAfterimage()
@@ -1285,6 +1346,7 @@ function Kris:startMercyFinaleSoulCutscene()
     local first_offset = MERCY_FINALE_SOUL_GRAB_OFFSETS[1]
     self.mercy_finale_detached_phase = "SOUL_GRAB"
     self.mercy_finale_detached_timer = 0
+    self.mercy_finale_soul_noise_pending = false
     self.mercy_finale_soul_afterimage_timer = 0
     enemy.visible = true
     enemy.active = true
@@ -1309,6 +1371,8 @@ function Kris:startMercyFinaleSoulCutscene()
             sprite:setFrame(1)
             sprite:pause()
             self:startMercyFinaleThrowScreenShake(Game.battle)
+            Assets.playSound("mercy_finale_impact")
+            self.mercy_finale_soul_noise_pending = true
             self.mercy_finale_detached_phase = "SOUL_IDLE"
             self.mercy_finale_detached_timer = 0
         end,
@@ -1559,6 +1623,7 @@ function Kris:showMercyFinaleProceed()
     self.mercy_finale_narration_texts = { proceed_text }
     self.mercy_finale_detached_phase = "PROCEED"
     self.mercy_finale_detached_timer = 0
+    Assets.playSound("mercy_finale_noise")
 end
 
 function Kris:showMercyFinaleReinstallPrompt()
@@ -1582,6 +1647,7 @@ function Kris:handleMercyFinaleDetachedInput(key)
 
     if self.mercy_finale_detached_phase == "PROCEED" then
         Input.clear("confirm", true)
+        Assets.playSound("mercy_finale_grab")
         self:startMercyFinaleSoulCutscene()
         return
     end
@@ -1604,6 +1670,7 @@ function Kris:handleMercyFinaleDetachedInput(key)
     battle.battle_ui:clearEncounterText()
     vessel.visible = false
     vessel.active = false
+    Assets.playSound("mercy_finale_item")
 
     enemy:setAnimation({
         "put_back",
@@ -1622,6 +1689,7 @@ function Kris:handleMercyFinaleDetachedInput(key)
             end
         end,
     })
+    Assets.playSound("mercy_finale_grab")
 end
 
 function Kris:clearMercyFinaleHighlights()
@@ -1759,6 +1827,8 @@ end
 function Kris:onBattleEnd()
     self.finisher_battle_pending = true
     self:clearRecharge(true)
+    self:stopMercyFinaleWind()
+    self:stopMercyFinaleZzz()
 
     for _, enemy in ipairs(Game.battle.enemies or {}) do
         if enemy.clearHeartbeatSpeedBoost then

@@ -257,6 +257,7 @@ function KrisMercyFinale:spawnCircles()
     end
     self.phase = "CIRCLES"
     self.circle_time = 0
+    Assets.playSound("kris_boom")
 end
 
 function KrisMercyFinale:getCircleState(circle)
@@ -419,6 +420,7 @@ function KrisMercyFinale:update()
             self.phase = "FLASH"
             self.phase_time = 0
             self.flash_alpha = 1
+            Assets.playSound("kris_hit_twist")
         end
     elseif self.phase == "FLASH" then
         self.flash_alpha = 1 - clamp(self.phase_time / FLASH_FADE_TIME, 0, 1)

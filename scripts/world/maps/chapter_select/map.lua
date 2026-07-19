@@ -28,7 +28,7 @@ local function openIntro(world)
     end
 end
 
-local UPDATE_CHECK_BLACK_DELAY = 2.0
+local UPDATE_CHECK_BLACK_DELAY = 0.5
 
 local function startIntroAfterUpdateCheck(world)
     local black_screen = Rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)

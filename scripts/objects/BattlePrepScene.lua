@@ -1,6 +1,9 @@
 local BattlePrepScene, super = Class(Object)
 
 local ASSET_ROOT = "battle_prep/kris/"
+local SEQUENCE_START_SOUND = "battle_prep_slash"
+local SEQUENCE_FRAME_THREE_SOUND = "battle_prep_boxbreak"
+local PRE_BATTLE_WHITE_SOUND = "entrance"
 local FRAME_TIME = 4 / 30
 local TEXT_HOLD_TIME = 2
 local TEXT_FADE_OUT_TIME = 0.5
@@ -101,6 +104,7 @@ function BattlePrepScene:init(options)
     self.state = "TEXT"
     self.state_time = 0
     self.sequence_index = 1
+    self.sequence_frame_three_sound_played = false
     self.battle_started = false
     self.font_language = nil
     self.text_font = nil
@@ -141,14 +145,20 @@ function BattlePrepScene:update()
         if self.state_time >= TEXT_HOLD_TIME + TEXT_FADE_OUT_TIME then
             self.state = "SEQUENCE"
             self.state_time = 0
+            Assets.playSound(SEQUENCE_START_SOUND)
         end
     elseif self.state == "SEQUENCE" then
         while self.state_time >= FRAME_TIME and self.state == "SEQUENCE" do
             self.state_time = self.state_time - FRAME_TIME
             self.sequence_index = self.sequence_index + 1
+            if self.sequence_index == 3 and not self.sequence_frame_three_sound_played then
+                Assets.playSound(SEQUENCE_FRAME_THREE_SOUND)
+                self.sequence_frame_three_sound_played = true
+            end
             if self.sequence_index > #SEQUENCE_FRAMES then
                 self.state = "PRE_BATTLE_WHITE"
                 self.state_time = 0
+                Assets.playSound(PRE_BATTLE_WHITE_SOUND)
             end
         end
     elseif self.state == "PRE_BATTLE_WHITE" then
