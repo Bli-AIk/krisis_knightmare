@@ -699,14 +699,6 @@ function ChapterSelect:drawKrisShortcutPrompt()
         { text = loc(" to jump", "chapter_select.kris_shortcut_hold_right") },
     }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 82, "right", 1)
     drawPromptSegments({
-        { text = loc("This will temporarily set the game to ", "chapter_select.kris_shortcut_default_left") },
-        {
-            text = loc("default battle entry", "chapter_select.kris_shortcut_default_highlight"),
-            color = KRIS_SHORTCUT_YELLOW,
-        },
-        { text = loc("", "chapter_select.kris_shortcut_default_right") },
-    }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 58, "right", 1)
-    drawPromptSegments({
         { text = loc("Press ", "chapter_select.kris_shortcut_return_left") },
         { text = x_text, color = KRIS_SHORTCUT_YELLOW },
         { text = loc(" to return to Chapter Select", "chapter_select.kris_shortcut_return_right") },

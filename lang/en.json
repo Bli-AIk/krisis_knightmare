@@ -23,9 +23,6 @@
     "chapter_select.kris_shortcut_question": "Jump directly to the battle with [var:kris]?",
     "chapter_select.kris_shortcut_hold_left": "Hold ",
     "chapter_select.kris_shortcut_hold_right": " to jump",
-    "chapter_select.kris_shortcut_default_left": "This will temporarily set the game to ",
-    "chapter_select.kris_shortcut_default_highlight": "default battle entry",
-    "chapter_select.kris_shortcut_default_right": "",
     "chapter_select.kris_shortcut_return_left": "Press ",
     "chapter_select.kris_shortcut_return_right": " to return to Chapter Select",
 

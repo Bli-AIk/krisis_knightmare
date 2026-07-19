@@ -1,6 +1,9 @@
 local Game, super = HookSystem.hookScript(Game)
 
 function Game:gameOver(x, y)
+    if Mod and Mod.prepareKrisisGameOverResume then
+        Mod:prepareKrisisGameOverResume(self.battle)
+    end
     if Mod and Mod.recordKrisisGameOver then
         Mod:recordKrisisGameOver()
     end

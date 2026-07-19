@@ -1263,6 +1263,7 @@ function Mod:initializeKrisisGameStats()
     self.krisis_stats_start_playtime = nil
     self.krisis_stats_elapsed_base = 0
     self.krisis_finisher_resume_saved = false
+    self.krisis_gameover_resume_pending = false
 end
 
 function Mod:restoreKrisisGameStats(stats, continue_run)
@@ -1421,6 +1422,11 @@ end
 
 function Mod:onKrisisBattleGameOver(battle)
     self:finishKrisisBattleRound(battle, false)
+end
+
+function Mod:prepareKrisisGameOverResume(battle)
+    local encounter = battle and battle.encounter
+    self.krisis_gameover_resume_pending = not encounter or encounter.id ~= "kris_finisher"
 end
 
 function Mod:getKrisisGameStatsElapsedMilliseconds()
@@ -1736,6 +1742,11 @@ end
 function Mod:postLoad()
     if self.krisis_run_started then
         self.krisis_stats_start_playtime = Game and Game.playtime or 0
+    end
+    if self.krisis_gameover_resume_pending and not Game.battle then
+        self.krisis_gameover_resume_pending = false
+        Game:encounter("kris", false)
+        return
     end
     if not self.krisis_finisher_resume_pending or Game.battle then
         return
