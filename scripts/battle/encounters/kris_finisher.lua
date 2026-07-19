@@ -40,6 +40,9 @@ local FINISHER_SOUND = {
     fountain_open_hold_time = 2,
     fountain_open_fade_time = 0.5,
     fountain_wave_midpoint = 3 / 60,
+    soul_star = "finisher_soul_star",
+    soul_star_pitch = 0.9,
+    soul_ellipse = "kris_wild_slash",
 }
 
 local FINISHER_ELLIPSE_GROW_TIME = 0.22
@@ -3070,6 +3073,7 @@ function KrisFinisher:spawnFinisherSoulAttackEllipse(battle, center_x, center_y)
         FINISHER_SOUL_ATTACK_BEAM_MIN_LENGTH,
         (target_distance + FINISHER_SOUL_ATTACK_BEAM_OVERHANG) * 2
     ) * FINISHER_SOUL_ATTACK_BEAM_LENGTH_MULTIPLIER
+    Assets.playSound(FINISHER_SOUND.soul_ellipse)
     local assets = self:setupFinisherSoulAttackEllipseAssets()
     self:trackFinisherSoulAttackObject(FinisherSoulAttackWindupLine(
         center_x,
@@ -3118,6 +3122,7 @@ function KrisFinisher:pruneFinisherSoulAttackObjects()
 end
 
 function KrisFinisher:spawnFinisherSoulAttackRing(battle, center_x, center_y, radius, scale)
+    Assets.playSound(FINISHER_SOUND.soul_star, 1, FINISHER_SOUND.soul_star_pitch)
     for index = 0, 11 do
         local angle = FINISHER_SOUL_ATTACK_ANGLE_OFFSET
             + index * (math.pi * 2 / 12)
@@ -3131,6 +3136,7 @@ function KrisFinisher:spawnFinisherSoulAttackRing(battle, center_x, center_y, ra
 end
 
 function KrisFinisher:spawnFinisherSoulOutwardStars(battle, center_x, center_y)
+    Assets.playSound(FINISHER_SOUND.soul_star, 1, FINISHER_SOUND.soul_star_pitch)
     for index = 0, 11 do
         local angle = FINISHER_SOUL_ATTACK_ANGLE_OFFSET
             + index * (math.pi * 2 / 12)
