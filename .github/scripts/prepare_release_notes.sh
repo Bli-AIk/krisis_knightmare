@@ -23,8 +23,8 @@ trap 'rm -f -- "$temporary_intro" "$temporary_clean" "$temporary_changelog" "$te
 awk '
   /<!-- KRISIS-KNIGHTMARE-RELEASE-INTRO-START -->/ { in_intro = 1; next }
   /<!-- KRISIS-KNIGHTMARE-RELEASE-INTRO-END -->/ { in_intro = 0; next }
-  /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-START -->/ { in_security = 1; next }
-  /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-END -->/ { in_security = 0; next }
+  /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-ZH-START -->/ || /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-EN-START -->/ || /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-START -->/ { in_security = 1; next }
+  /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-ZH-END -->/ || /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-EN-END -->/ || /<!-- KRISIS-KNIGHTMARE-SHA256-SECURITY-END -->/ { in_security = 0; next }
   !in_intro && !in_security { print }
 ' "$input_file" > "$temporary_clean"
 
