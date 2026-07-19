@@ -226,6 +226,10 @@ hold:
 build:
     @{{ build_script }}
 
+# Build the player-facing Kristal mod package.
+build-mod:
+    @./.github/scripts/build_mod.sh
+
 # Build only the release standalone packages.
 build-release:
     @BUILD_VARIANTS=release {{ build_script }}
@@ -260,3 +264,4 @@ alias L := hold
 alias b := build
 alias br := build-release
 alias bd := build-debug
+alias bm := build-mod

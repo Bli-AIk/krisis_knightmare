@@ -18,6 +18,33 @@
 
 *你也可以在 [Youtube](https://www.youtube.com/watch?v=GOfVuCJ4BG8) 观看此动画的英文版本。*
 
+## 下载与运行
+
+本项目保留 Kristal 项目包（mod 形式）和 standalone 两种分发方式。[GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases)、GameBanana 和 Gamejolt 都是本游戏的**官方发布源**。目前 GitHub Releases 已开放，GameBanana 和 Gamejolt 页面正在准备中，即将发布。
+
+- **Kristal 项目包（mod 形式，实验性）**：下载 release 中的 `krisis-knightmare-mod.zip`，安装 Kristal `v0.10.0`，将 ZIP 直接放入 Kristal 主菜单打开的 projects 文件夹（源码运行时对应 `mods/` 目录），然后在项目列表中选择 `krisis_knightmare`。不要在 ZIP 外再套一层目录。
+- **Standalone**：Windows 用户可以下载 `*-win64.zip`，解压后直接运行；其他平台可以根据需要使用 `.love` 文件和对应的 LÖVE 运行时。
+
+以 Kristal 项目包形式单独运行目前尚未经过完整验证，但从项目结构和开发方式来看理论上可行。
+
+<details>
+<summary>关于 mod 运行方式和开发环境</summary>
+
+本项目本身就是在 Kristal 的 mod 运行方式下开发的：开发时将项目放在 Kristal 的 `mods/` 目录中运行，游戏逻辑和资源都位于本项目内。这里的 mod ZIP 是项目文件包，不包含 standalone 构建时使用的修改版 Kristal 引擎。
+
+为了生成 standalone 构建，构建脚本会把 Kristal 复制到临时构建目录，再只对那份副本做轻度修改。这些修改不会写入仓库中的 Kristal，也不会进入 mod ZIP，主要包括：
+
+- 设置目标项目、自动启动项目、窗口标题和窗口身份；
+- 将引擎默认帧率改为不限制；
+- 在启动画面显示 `made with` 署名；
+- 在检测到 finisher 恢复记录时跳过启动动画；
+- 让 `.love` 中的 HTTPS 原生库可以释放到存档目录后加载；
+- release 构建中关闭 Kristal DebugSystem 的输入钩子；
+- debug 构建中支持外部 `mod.json` 覆盖，并根据构建类型调整 mod 的开发配置。
+
+因此，mod 形式是否能在未经修改的 Kristal 环境中完整运行仍需要实际测试；目前不能将其视为已经验证的独立玩家版本。
+</details>
+
 ## 致谢
 
 ### 原片制作
@@ -69,9 +96,11 @@
 | 游戏测试 | church\_wafer, Nahisa图文, 滑稽体验镇魂曲, Gpie\_A, Anskiyy |
 | 引擎 | [Kristal](https://github.com/KristalTeam/Kristal) |
 
-## 使用方式
+## 从源码运行
 
-1. 安装 [Kristal](https://github.com/KristalTeam/Kristal) 引擎。
+以下步骤适用于开发者从源码运行项目，不是 release mod ZIP 的安装步骤。
+
+1. 安装 [Kristal](https://github.com/KristalTeam/Kristal) `v0.10.0`。
 2. 将本仓库克隆到 Kristal 的 `mods/` 目录下：
 
    ```bash

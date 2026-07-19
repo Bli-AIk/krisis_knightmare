@@ -74,6 +74,9 @@ jobs:
       - name: Build standalone packages
         run: ./build_standalone.sh
 
+      - name: Build mod package
+        run: ./.github/scripts/build_mod.sh
+
       - name: Verify release artifacts
         run: |
           set -euo pipefail
@@ -83,6 +86,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/krisis-knightmare-mod.zip
           )
 
           for file in "${files[@]}"; do
@@ -93,9 +97,11 @@ jobs:
           unzip -t dist/krisis-knightmare-debug.love >/dev/null
           unzip -t dist/krisis-knightmare-release-win64.zip >/dev/null
           unzip -t dist/krisis-knightmare-debug-win64.zip >/dev/null
+          unzip -t dist/krisis-knightmare-mod.zip >/dev/null
 
           unzip -l dist/krisis-knightmare-release-win64.zip | grep -F "KRISIS-KNIGHTMARE-release.exe"
           unzip -l dist/krisis-knightmare-debug-win64.zip | grep -F "KRISIS-KNIGHTMARE-debug.exe"
+          unzip -Z1 dist/krisis-knightmare-mod.zip | grep -Fx "mod.json" >/dev/null
 
       - name: Generate and verify SHA-256 manifest
         run: |
@@ -103,7 +109,7 @@ jobs:
 
           .github/scripts/generate_sha256sums.sh dist
           test -s dist/SHA256SUMS
-          test "$(wc -l < dist/SHA256SUMS)" -eq 4
+          test "$(wc -l < dist/SHA256SUMS)" -eq 5
           (cd dist && sha256sum -c SHA256SUMS)
 
       - name: Upload build artifacts
@@ -115,6 +121,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/krisis-knightmare-mod.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -131,6 +138,7 @@ jobs:
             dist/krisis-knightmare-debug.love
             dist/krisis-knightmare-release-win64.zip
             dist/krisis-knightmare-debug-win64.zip
+            dist/krisis-knightmare-mod.zip
             dist/SHA256SUMS
           )
           release_flags=()

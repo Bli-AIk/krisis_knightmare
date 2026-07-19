@@ -3,7 +3,7 @@
 
 **SHA-256 哈希校验是确认下载文件安全性的重要步骤。** 文件即使名称和大小看起来正常，内容也可能已经损坏、被替换或被第三方重新打包。将本地计算出的哈希值与官方 `SHA256SUMS` 中的值比较，可以在运行游戏前发现这些问题，避免运行与官方发布版本不一致的文件。
 
-请从本仓库官方 GitHub Release 同时下载游戏包和 `SHA256SUMS`。哈希值不能阻止文件被篡改，也不能单独证明发布者身份；但只要 `SHA256SUMS` 来自可信的官方 Release，校验值一致就表示你下载的文件内容与官方发布资产一致。
+GitHub Releases、GameBanana 和 Gamejolt 都是本游戏的官方发布源；目前只有 GitHub Releases 已开放，GameBanana 和 Gamejolt 页面即将发布。请从本游戏的官方发布源下载；当前请从本仓库官方 GitHub Release 同时下载游戏包和 `SHA256SUMS`。mod 包 `krisis-knightmare-mod.zip` 也可以用同一份清单校验。哈希值不能阻止文件被篡改，也不能单独证明发布者身份；但只要 `SHA256SUMS` 来自可信的官方 Release，校验值一致就表示你下载的文件内容与官方发布资产一致。
 
 #### Windows（使用系统自带 PowerShell）
 

@@ -19,6 +19,7 @@ assets=(
   krisis-knightmare-debug.love
   krisis-knightmare-release-win64.zip
   krisis-knightmare-debug-win64.zip
+  krisis-knightmare-mod.zip
 )
 
 for asset in "${assets[@]}"; do
