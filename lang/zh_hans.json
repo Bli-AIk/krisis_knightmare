@@ -2,6 +2,9 @@
     "mod.loaded": "Loaded [var:name]!",
     "mod.language_switched": "Language switched to [var:language].",
 
+    "intro.chapter5_weird_ending": "第五章怪异线结尾",
+    "intro.connection_lost": "连接已断开",
+
     "chapter_select.info_author": "TEAM KRISIS",
     "chapter_select.info_project": "KRISIS: KNIGHTMARE",
     "chapter_select.chapter_label": "第[var:index]章",

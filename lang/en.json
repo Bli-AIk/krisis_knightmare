@@ -2,6 +2,9 @@
     "mod.loaded": "Loaded [var:name]!",
     "mod.language_switched": "* Language switched to [var:language].",
 
+    "intro.chapter5_weird_ending": "CHAPTER5 WEIRD ENDING",
+    "intro.connection_lost": "CONNECTION LOST",
+
     "chapter_select.info_author": "TEAM KRISIS",
     "chapter_select.info_project": "KRISIS: KNIGHTMARE",
     "chapter_select.chapter_label": "Chapter [var:index]",

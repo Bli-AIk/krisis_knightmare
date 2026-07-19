@@ -8,9 +8,17 @@ local PARTICLE_START = 17.766
 local PRE_PARTICLE_CHARACTER_Y = 10
 local HOLD_TO_SKIP_TIME = 0.65
 local CJK_TEXT_SPACING = 4
+local GONER_TEXT_CJK_SPACING = 8
 local PROMPT_IDLE_DELAY = 1
 local PROMPT_FADE_OUT_TIME = 0.5
 local PROMPT_FADE_IN_TIME = 0.12
+local INITIAL_TEXT_FADE_IN_TIME = 0.5
+local INITIAL_BLACK_FADE_START = 2.008
+local INITIAL_BLACK_FADE_END = 2.591
+local FINAL_BLACK_START = 29.958
+local FINAL_BLACK_FULL_TIME = 35.265
+local FINAL_TEXT_FADE_IN_TIME = 0.5
+local FINAL_TEXT_FADE_OUT_TIME = 0.5
 
 local function isCjkCodepoint(codepoint)
     return (codepoint >= 0x2E80 and codepoint <= 0x9FFF)
@@ -20,19 +28,21 @@ local function isCjkCodepoint(codepoint)
         or (codepoint >= 0x20000 and codepoint <= 0x2FA1F)
 end
 
-local function getSpacedTextWidth(font, text)
+local function getSpacedTextWidth(font, text, cjk_spacing)
+    cjk_spacing = cjk_spacing or CJK_TEXT_SPACING
     local width = 0
     for _, codepoint in utf8.codes(text) do
         local char = utf8.char(codepoint)
         width = width + font:getWidth(char)
         if isCjkCodepoint(codepoint) then
-            width = width + CJK_TEXT_SPACING
+            width = width + cjk_spacing
         end
     end
     return width
 end
 
-local function drawSpacedText(text, x, y)
+local function drawSpacedText(text, x, y, cjk_spacing)
+    cjk_spacing = cjk_spacing or CJK_TEXT_SPACING
     local font = love.graphics.getFont()
     local cursor_x = 0
     for _, codepoint in utf8.codes(text) do
@@ -40,9 +50,37 @@ local function drawSpacedText(text, x, y)
         love.graphics.print(char, x + cursor_x, y)
         cursor_x = cursor_x + font:getWidth(char)
         if isCjkCodepoint(codepoint) then
-            cursor_x = cursor_x + CJK_TEXT_SPACING
+            cursor_x = cursor_x + cjk_spacing
         end
     end
+end
+
+local function drawGonerText(text, font, center_x, center_y, alpha, timer)
+    if alpha <= 0 then
+        return
+    end
+
+    local width = getSpacedTextWidth(font, text, GONER_TEXT_CJK_SPACING)
+    local x = center_x - (width / 2)
+    local y = center_y - (font:getHeight() / 2)
+    love.graphics.setFont(font)
+
+    Draw.setColor(1, 1, 1, alpha)
+    drawSpacedText(text, x, y, GONER_TEXT_CJK_SPACING)
+
+    local outline_alpha = alpha * (0.3 + (math.sin(timer / 14) * 0.1))
+    Draw.setColor(1, 1, 1, outline_alpha)
+    drawSpacedText(text, x + 2, y, GONER_TEXT_CJK_SPACING)
+    drawSpacedText(text, x - 2, y, GONER_TEXT_CJK_SPACING)
+    drawSpacedText(text, x, y + 2, GONER_TEXT_CJK_SPACING)
+    drawSpacedText(text, x, y - 2, GONER_TEXT_CJK_SPACING)
+
+    local outer_outline_alpha = alpha * (0.08 + (math.sin(timer / 14) * 0.04))
+    Draw.setColor(1, 1, 1, outer_outline_alpha)
+    drawSpacedText(text, x + 2, y, GONER_TEXT_CJK_SPACING)
+    drawSpacedText(text, x - 2, y, GONER_TEXT_CJK_SPACING)
+    drawSpacedText(text, x, y + 2, GONER_TEXT_CJK_SPACING)
+    drawSpacedText(text, x, y - 2, GONER_TEXT_CJK_SPACING)
 end
 
 local function loc(default, id)
@@ -340,6 +378,7 @@ function Project4Scene:init(options)
     self.prompt_alpha = 1
     self.font_language = nil
     self.small_font = nil
+    self.text_font = nil
 
     if self.capture_times and #self.capture_times > 0 then
         self.paused = true
@@ -368,13 +407,18 @@ end
 
 function Project4Scene:refreshFonts(force)
     local language = Game and Game.getLanguage and Game:getLanguage() or nil
-    if not force and self.font_language == language and self.small_font then
+    if force and language and Game.setLanguage then
+        Game:setLanguage(language, true)
+    end
+
+    if not force and self.font_language == language and self.small_font and self.text_font then
         return
     end
 
     self.font_language = language
     self.small_font = (language and Assets.getFont("lang/" .. language .. "/main", 16))
         or Assets.getFont("main", 16)
+    self.text_font = Assets.getFont("main_mono")
 end
 
 function Project4Scene:createParticleLayouts()
@@ -669,6 +713,57 @@ function Project4Scene:drawCompositedScene(time)
     end
 end
 
+function Project4Scene:drawSceneText(time)
+    local initial_alpha = 0
+    if time <= INITIAL_BLACK_FADE_END then
+        initial_alpha = clamp(time / INITIAL_TEXT_FADE_IN_TIME, 0, 1)
+        if time > INITIAL_BLACK_FADE_START then
+            initial_alpha = initial_alpha * (1 - clamp(
+                (time - INITIAL_BLACK_FADE_START)
+                    / (INITIAL_BLACK_FADE_END - INITIAL_BLACK_FADE_START),
+                0,
+                1
+            ))
+        end
+    end
+
+    local final_alpha = 0
+    if time >= FINAL_BLACK_START then
+        final_alpha = clamp(
+            (time - FINAL_BLACK_START) / FINAL_TEXT_FADE_IN_TIME,
+            0,
+            1
+        )
+        if time >= FINAL_BLACK_FULL_TIME then
+            final_alpha = final_alpha * (1 - clamp(
+                (time - FINAL_BLACK_FULL_TIME) / FINAL_TEXT_FADE_OUT_TIME,
+                0,
+                1
+            ))
+        end
+    end
+
+    local center_x = SCREEN_WIDTH / 2
+    local center_y = SCREEN_HEIGHT / 2
+    local goner_timer = time * 60
+    drawGonerText(
+        loc("CHAPTER5 WEIRD ENDING", "intro.chapter5_weird_ending"),
+        self.text_font,
+        center_x,
+        center_y,
+        initial_alpha,
+        goner_timer
+    )
+    drawGonerText(
+        loc("CONNECTION LOST", "intro.connection_lost"),
+        self.text_font,
+        center_x,
+        center_y,
+        final_alpha,
+        goner_timer
+    )
+end
+
 function Project4Scene:updateCapture()
     if not self.capture_times or self.capture_complete then
         return
@@ -811,7 +906,7 @@ function Project4Scene:drawSkipPrompt()
     local x = SCREEN_WIDTH - total_width - 20
     local y = SCREEN_HEIGHT - 34
 
-    local alpha = self.prompt_alpha
+    local alpha = self.prompt_alpha * clamp(self.time / INITIAL_TEXT_FADE_IN_TIME, 0, 1)
     Draw.setColor(1, 1, 1, alpha)
     drawSpacedText(left, x, y)
     x = x + left_width
@@ -857,6 +952,7 @@ function Project4Scene:draw()
     love.graphics.draw(self.output_canvas, 0, 0)
     love.graphics.setBlendMode("alpha", "alphamultiply")
 
+    self:drawSceneText(self.time)
     self:drawSkipPrompt()
 
     if self.ready and self.capture_times and not self.capture_requested and not self.capture_complete then

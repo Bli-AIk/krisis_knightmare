@@ -28,19 +28,23 @@ local function openIntro(world)
     end
 end
 
-local function openIntroAfterUpdateCheck(world)
-    if Mod.krisis_update_check_seen then
+local UPDATE_CHECK_BLACK_DELAY = 2.0
+
+local function startIntroAfterUpdateCheck(world)
+    local black_screen = Rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    black_screen.layer = 1000000
+    black_screen:setColor(0, 0, 0)
+    world:addChild(black_screen)
+
+    local function continueToIntro()
+        black_screen:remove()
         openIntro(world)
-        return
     end
 
-    Mod.krisis_update_check_seen = true
-    if UpdateCheckSplash then
-        world:addChild(UpdateCheckSplash(function()
-            openIntro(world)
-        end))
+    if world.timer then
+        world.timer:after(UPDATE_CHECK_BLACK_DELAY, continueToIntro)
     else
-        openIntro(world)
+        continueToIntro()
     end
 end
 
@@ -73,7 +77,7 @@ function map:onEnter()
     Mod.krisis_update_check_seen = true
     if UpdateCheckSplash then
         self.world:addChild(UpdateCheckSplash(function()
-            openIntro(self.world)
+            startIntroAfterUpdateCheck(self.world)
         end))
     else
         openIntro(self.world)
