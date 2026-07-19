@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.1](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.3.0...v0.3.1) (2026-07-19)
+
+
+### chore
+
+* force release 0.3.1 ([e005fc0](https://github.com/Bli-AIk/krisis_knightmare/commit/e005fc074755c383f79a079c071ee02064019d99))
+
+
+### Features
+
+* 添加 mod 分发包和发布说明 ([e5b1c91](https://github.com/Bli-AIk/krisis_knightmare/commit/e5b1c914ccfb0d004da9bd90dd9dcb2bb8444dc4))
+
+
+### Bug Fixes
+
+* 修复 release notes 安全说明更新 ([bfb1fd6](https://github.com/Bli-AIk/krisis_knightmare/commit/bfb1fd6eec1769ef8644b0a9fb23a6eddfc95548))
+* 修复50tp时停止背景音乐的bug ([1923780](https://github.com/Bli-AIk/krisis_knightmare/commit/19237803fcc94f3f732c771c2030289ff2fe26e0))
+* 修复英文下credits场景报错，字体错误等问题 ([6af0d2e](https://github.com/Bli-AIk/krisis_knightmare/commit/6af0d2e6135378a3d1d73813a56b593a6d6ca36b))
+* 调整英文credits结算页面排版 ([b7f2b2c](https://github.com/Bli-AIk/krisis_knightmare/commit/b7f2b2c238fda77ae2d16adcd2ec3dae5d818073))
+
 ## [0.3.0](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.2.0...v0.3.0) (2026-07-19)
 
 
