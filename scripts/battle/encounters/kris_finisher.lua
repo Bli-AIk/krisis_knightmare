@@ -290,6 +290,11 @@ local OPENING_FOURTH_FLICKER_INTERVAL = 13 / 60
 local OPENING_ACCELERATION_TIME = 60 / 60
 local OPENING_MIN_FLICKER_INTERVAL = 1 / 60
 local OPENING_FLICKER_CURVE_POWER = 2
+-- The WAV has trailing silence after about 0.904 seconds. Only schedule
+-- through the last audible part so that silence is not counted as a lead.
+local OPENING_ELECTRIC_SOUND_DURATION = 0.904014 - 0.1
+local OPENING_ELECTRIC_SOUND = "kris_finisher_electric"
+local OPENING_JUMPSCARE_SOUND = "kris_chase_jumpscare"
 
 -- Adjust the opening heart position here.
 local OPENING_PLAYER_POSITION = {
@@ -1527,8 +1532,10 @@ function KrisFinisher:onBattleInit()
         timer = 0,
         flicker_timer = 0,
         acceleration_timer = 0,
+        elapsed_timer = 0,
         flicker_count = 0,
         fourth_flicker_done = false,
+        electric_started = false,
         heart_visible = false,
         kris_alpha = 0,
         prepared = false,
@@ -1682,6 +1689,7 @@ function KrisFinisher:finishOpening()
     if battle then
         battle.transition_timer = 10
         battle.tension_bar:show()
+        Assets.playSound(OPENING_JUMPSCARE_SOUND)
         battle.music:play(self.music, nil, FINISHER_MUSIC_PITCH)
     end
 
@@ -2613,6 +2621,8 @@ function KrisFinisher:updateOpening()
         return
     end
 
+    opening.elapsed_timer = opening.elapsed_timer + DT
+
     if not opening.prepared and Game.battle then
         self:onBattleAdd(Game.battle)
     end
@@ -2676,6 +2686,16 @@ function KrisFinisher:updateOpening()
             opening.phase = "DONE"
             opening.heart_visible = true
         end
+    end
+
+    local opening_finish_time = OPENING_REVEAL_DELAY
+        + OPENING_INITIAL_FLICKER_INTERVAL * OPENING_INITIAL_FLICKER_COUNT * 2
+        + OPENING_ACCELERATION_TIME
+    if not opening.electric_started
+        and opening.elapsed_timer >= opening_finish_time - OPENING_ELECTRIC_SOUND_DURATION
+    then
+        Assets.playSound(OPENING_ELECTRIC_SOUND)
+        opening.electric_started = true
     end
 
     self:applyOpeningVisuals(opening)
