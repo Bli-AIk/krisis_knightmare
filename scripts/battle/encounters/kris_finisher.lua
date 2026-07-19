@@ -39,7 +39,7 @@ local FINISHER_SOUND = {
     fountain_open_pitch = 0.8,
     fountain_open_hold_time = 2,
     fountain_open_fade_time = 0.5,
-    fountain_wave_midpoint = 6 / 60,
+    fountain_wave_midpoint = 3 / 60,
 }
 
 local FINISHER_ELLIPSE_GROW_TIME = 0.22
@@ -3400,8 +3400,8 @@ function KrisFinisher:spawnFinisherFountainFlashWave()
     self.finisher_fountain_flash_wave = wave_index + 1
     self.finisher_fountain_flash_position = position_index + count
     if self.finisher_fountain_flash_position <= #FINISHER_FOUNTAIN_FLASH_POSITIONS then
-        -- Each wave's two-frame animation takes 12/60 seconds; play the
-        -- interstitial sound at the midpoint, 6/60 seconds after spawning.
+        -- Each wave's two-frame animation takes 12/60 seconds. Play the
+        -- interstitial sound 3/60 seconds after spawning.
         self.finisher_fountain_flash_interstitial_timer =
             FINISHER_SOUND.fountain_wave_midpoint
     else
