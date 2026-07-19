@@ -1,6 +1,10 @@
 local CreditsScene, super = Class(Object)
 
-local CARD_DURATION = 5
+local CREDITS_BPM = 80
+local CREDITS_BEATS_PER_CARD = 8
+local CARD_DURATION = CREDITS_BEATS_PER_CARD * 60 / CREDITS_BPM
+local CREDITS_MUSIC = "credits"
+local CREDITS_MUSIC_VOLUME = 0.8
 local ROLE_FONT_SIZE = 16
 local NAME_FONT_SIZE = 18
 local NAME_LINE_HEIGHT = 22
@@ -71,6 +75,11 @@ local CREDIT_DEFAULTS = {
     ["credits.role_game_developer"] = "Game Developer",
     ["credits.role_game_testing"] = "Game Testing",
     ["credits.role_engine"] = "Engine",
+}
+
+local CREDIT_FINAL_DEFAULTS = {
+    ["credits.final_text"] = "The story of DELTARUNE\nwill continue here.",
+    ["credits.thank_you_text"] = "And most importantly...\nYou, the Player.\n\nThank you for playing.",
 }
 
 local function localizeCredit(id)
@@ -150,6 +159,9 @@ local function getCards()
         {
             final_text = "credits.final_text",
         },
+        {
+            final_text = "credits.thank_you_text",
+        },
     }
 end
 
@@ -166,6 +178,9 @@ function CreditsScene:init(on_complete)
     self.final_characters = {}
     self.final_visible_count = 0
     self.final_reveal_timer = 0
+    self.final_char_delay = TYPEWRITER_CHAR_DELAY
+    self.music = Music()
+    self.music:play(CREDITS_MUSIC, CREDITS_MUSIC_VOLUME)
 
     self:refreshLocalization(true)
 end
@@ -185,7 +200,10 @@ function CreditsScene:refreshLocalization(force)
     for index, card in ipairs(self.cards) do
         if card.final_text then
             self.localized_cards[index] = {
-                final_text = loc("The story will continue here.", card.final_text),
+                final_text = loc(
+                    CREDIT_FINAL_DEFAULTS[card.final_text] or card.final_text,
+                    card.final_text
+                ),
             }
         else
             local localized = {
@@ -216,6 +234,13 @@ function CreditsScene:resetFinalText()
     for _, codepoint in utf8.codes(final_card.final_text) do
         table.insert(self.final_characters, utf8.char(codepoint))
     end
+    self.final_char_delay = TYPEWRITER_CHAR_DELAY
+    if #self.final_characters > 0 then
+        self.final_char_delay = math.min(
+            TYPEWRITER_CHAR_DELAY,
+            CARD_DURATION / #self.final_characters
+        )
+    end
     self.final_visible_count = 0
     self.final_reveal_timer = 0
 end
@@ -232,6 +257,15 @@ function CreditsScene:finish()
     end
 end
 
+function CreditsScene:onRemove(parent)
+    super.onRemove(self, parent)
+    if self.music then
+        self.music:stop()
+        self.music:remove()
+        self.music = nil
+    end
+end
+
 function CreditsScene:update()
     super.update(self)
     self:refreshLocalization(false)
@@ -244,10 +278,10 @@ function CreditsScene:update()
     local card = self.localized_cards[self.card_index]
     if card and card.final_text and self.final_visible_count < #self.final_characters then
         self.final_reveal_timer = self.final_reveal_timer + DT
-        while self.final_reveal_timer >= TYPEWRITER_CHAR_DELAY
+        while self.final_reveal_timer >= self.final_char_delay
             and self.final_visible_count < #self.final_characters
         do
-            self.final_reveal_timer = self.final_reveal_timer - TYPEWRITER_CHAR_DELAY
+            self.final_reveal_timer = self.final_reveal_timer - self.final_char_delay
             self.final_visible_count = self.final_visible_count + 1
         end
     end

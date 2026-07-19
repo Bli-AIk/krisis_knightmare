@@ -41,8 +41,13 @@ local FINISHER_SOUND = {
     fountain_open_fade_time = 0.5,
     fountain_wave_midpoint = 3 / 60,
     soul_star = "finisher_soul_star",
-    soul_star_pitch = 0.9,
+    soul_star_pitch = 1,
     soul_ellipse = "kris_wild_slash",
+    soul_release = "soul_pre_release_0_8x",
+    soul_release_pitch = 0.8,
+    tp50_music = "noisey",
+    tp100_music = "snd_revival",
+    tp50_music_fade_time = 0.5,
 }
 
 local FINISHER_ELLIPSE_GROW_TIME = 0.22
@@ -1493,6 +1498,8 @@ function KrisFinisher:init()
     self.finisher_fountain = nil
     self.finisher_fountain_open_sound = nil
     self.finisher_fountain_open_sound_elapsed = 0
+    self.finisher_tp50_music = nil
+    self.finisher_tp100_music = nil
     self.finisher_tp_reached = false
     self.finisher_tp_finale_active = false
     self.finisher_tp_finale_phase = nil
@@ -2122,6 +2129,57 @@ function KrisFinisher:startFinisherFountain(battle)
     Game.stage:addChild(fountain)
     self.finisher_fountain = fountain
     self:startFinisherFountainOpenSound()
+    if not self.finisher_tp_finale_active then
+        self:startFinisherTP50Music(battle)
+    end
+end
+
+function KrisFinisher:startFinisherTP50Music(battle)
+    self:clearFinisherTP50Music()
+
+    if battle and battle.music then
+        battle.music:stop()
+    end
+
+    self.finisher_tp50_music = Music()
+    self.finisher_tp50_music:play(FINISHER_SOUND.tp50_music)
+end
+
+function KrisFinisher:clearFinisherTP50Music()
+    if self.finisher_tp50_music then
+        self.finisher_tp50_music:stop()
+        self.finisher_tp50_music:remove()
+        self.finisher_tp50_music = nil
+    end
+end
+
+function KrisFinisher:fadeToFinisherTP100Music()
+    local music = self.finisher_tp50_music
+    if music then
+        music:fade(0, FINISHER_SOUND.tp50_music_fade_time, function(current_music)
+            current_music:stop()
+            current_music:remove()
+            if self.finisher_tp50_music == current_music then
+                self.finisher_tp50_music = nil
+            end
+        end)
+    end
+
+    if self.finisher_tp100_music then
+        self.finisher_tp100_music:stop()
+        self.finisher_tp100_music:remove()
+    end
+    self.finisher_tp100_music = Music()
+    self.finisher_tp100_music:setLooping(false)
+    self.finisher_tp100_music:play(FINISHER_SOUND.tp100_music)
+end
+
+function KrisFinisher:clearFinisherTP100Music()
+    if self.finisher_tp100_music then
+        self.finisher_tp100_music:stop()
+        self.finisher_tp100_music:remove()
+        self.finisher_tp100_music = nil
+    end
 end
 
 function KrisFinisher:finishFinisherFountainInversion(fountain, battle)
@@ -2505,6 +2563,7 @@ function KrisFinisher:triggerFinisherTP100Reached()
 
     self.finisher_tp_finale_active = true
     self.finisher_tp_reached = true
+    Assets.playSound(FINISHER_SOUND.tp50)
     self.finisher_tp_finale_phase = "WAIT_RED"
     self.finisher_tp_finale_timer = 0
     self.finisher_tp_player_start = nil
@@ -2584,6 +2643,12 @@ function KrisFinisher:updateFinisherTPFinale()
         local soul = battle.soul
         if soul and soul.parent then
             soul:setColor(1, 0, 0, soul.alpha)
+            self:spawnFinisherPlayerBurst(battle)
+            Assets.playSound(
+                FINISHER_SOUND.soul_release,
+                1,
+                FINISHER_SOUND.soul_release_pitch
+            )
         end
         self.finisher_tp_finale_phase = "WAIT_CENTER"
         self.finisher_tp_finale_timer = 0
@@ -2641,6 +2706,7 @@ function KrisFinisher:updateFinisherTPFinale()
             return
         end
 
+        self:fadeToFinisherTP100Music()
         self:spawnFinisherPlayerBurst(battle)
         self.finisher_tp_echo_second_started = false
         self.finisher_tp_finale_phase = "ECHOES"
@@ -3685,6 +3751,8 @@ function KrisFinisher:onGameOver()
     -- see the old Game.battle reference for the rest of this frame.
     self:clearFinisherHurtFlash()
     self:clearFinisherFountainOpenSound()
+    self:clearFinisherTP50Music()
+    self:clearFinisherTP100Music()
     self:clearFinisherWindBackground()
     self:stopFinisherTransition()
 end
@@ -3696,6 +3764,8 @@ function KrisFinisher:onBattleEnd()
     self:clearFinisherSword()
     self:clearFinisherInversion()
     self:clearFinisherFountain()
+    self:clearFinisherTP50Music()
+    self:clearFinisherTP100Music()
     self:clearFinisherHurtFlash()
     self:stopFinisherTransition()
     self:stopFinisherStarEmitter()
