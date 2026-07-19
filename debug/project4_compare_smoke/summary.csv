@@ -1,0 +1,2 @@
+time_seconds,frame,capture,width,height,mae,rmse,psnr_db,ssim
+4.73,284,/home/aik/.local/share/love/kristal/debug/project4_scene_capture/frame_004730.png,1280,960,0.7475517988204956,4.80936336517334,34.489051791353184,0.9999695420265198

@@ -189,6 +189,21 @@ local function envFlag(name)
     return value == "1" or value == "true" or value == "yes" or value == "on"
 end
 
+local function parseNumberList(value)
+    local result = {}
+    if type(value) ~= "string" then
+        return result
+    end
+
+    for item in value:gmatch("[^,]+") do
+        local number = tonumber(item)
+        if number then
+            table.insert(result, number)
+        end
+    end
+    return result
+end
+
 local function getKristalArg(name)
     local args = Kristal and Kristal.Args and Kristal.Args[name]
     if type(args) ~= "table" then
@@ -1021,6 +1036,26 @@ function Mod:init()
     self:loadKrisisRunOptions()
     self:getKrisisRunSeed()
     self:updateKrisisWindowTitle()
+
+    if envFlag("KRISIS_DEBUG_PROJECT4_SCENE") and Project4Scene and Kristal.Stage then
+        self.krisis_update_check_seen = true
+        local capture_times = parseNumberList(os.getenv("KRISIS_PROJECT4_CAPTURE_TIMES"))
+        if #capture_times == 0 then
+            capture_times = nil
+        elseif love.window then
+            love.window.setMode(1280, 960, {resizable = false, vsync = 0})
+        end
+
+        self.project4_scene = Kristal.Stage:addChild(Project4Scene({
+            start_time = tonumber(os.getenv("KRISIS_PROJECT4_START_TIME")),
+            capture_times = capture_times,
+            capture_directory = os.getenv("KRISIS_PROJECT4_CAPTURE_DIR"),
+            disable_particles = envFlag("KRISIS_PROJECT4_DISABLE_PARTICLES"),
+            particle_center_x = os.getenv("KRISIS_PROJECT4_PARTICLE_CENTER_X"),
+            particle_center_y = os.getenv("KRISIS_PROJECT4_PARTICLE_CENTER_Y"),
+            quit_after_capture = envFlag("KRISIS_PROJECT4_QUIT"),
+        }))
+    end
 
     if (envFlag("KRISIS_FINISHER_PROFILE") or envFlag("KRISIS_PROFILE")) and FinisherProfiler then
         self.finisher_profiler = FinisherProfiler()

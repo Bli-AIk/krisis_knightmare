@@ -1,0 +1,13 @@
+[
+  {
+    "time_seconds": 4.73,
+    "frame": 284,
+    "capture": "/home/aik/.local/share/love/kristal/debug/project4_scene_capture/frame_004730.png",
+    "width": 1280,
+    "height": 960,
+    "mae": 0.7475517988204956,
+    "rmse": 4.80936336517334,
+    "psnr_db": 34.489051791353184,
+    "ssim": 0.9999695420265198
+  }
+]
