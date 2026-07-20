@@ -3,7 +3,9 @@ local KrisPhase1_04, super = Class(Wave)
 local FPS = 30
 local WAVE_SECONDS = 8
 local FAST_SPEED = 4 / FPS
-local FOLLOWUP_SPEED_FACTOR = 0.9
+local NORMAL_ARENA_SIZE = 142
+local ARENA_SIZE_SCALE = 1.25
+local INITIAL_SPEED_FACTOR = 0.75
 local FOLLOWUP_MAX_DIAMOND_COUNT = 5
 local FOLLOWUP_BOUNCE_SPEED_FACTORS = { 1, 0.9 }
 local READY_TIME = 0.75
@@ -31,6 +33,7 @@ end
 
 function KrisPhase1_04:init()
     super.init(self)
+    self:setArenaSize(NORMAL_ARENA_SIZE * ARENA_SIZE_SCALE)
     self.time = WAVE_SECONDS
     self.precise_buster_hitboxes = true
     self.initial_buster_spawned = false
@@ -50,7 +53,7 @@ end
 
 function KrisPhase1_04:getInitialRudeBusterOptions()
     return {
-        followup_speed_factor = FOLLOWUP_SPEED_FACTOR,
+        followup_speed_factor = INITIAL_SPEED_FACTOR,
         followup_max_diamond_count = FOLLOWUP_MAX_DIAMOND_COUNT,
         followup_bounce_speed_factors = FOLLOWUP_BOUNCE_SPEED_FACTORS,
     }
