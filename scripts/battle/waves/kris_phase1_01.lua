@@ -11,7 +11,7 @@ local SOUL_BULLET_LAYER = BATTLE_LAYERS["above_bullets"] + 2
 local SOUL_DEPTH_SPAWN_SOUND = "soul_charge"
 local SOUL_DEPTH_FINISH_SOUND = "soul_absorb"
 local SOUL_DEPTH_FIRST_STAR_WAVE_SOUND = "flicker_burst"
-local SOUL_DEPTH_ARENA_EXPAND_SCALE = 1.1
+local SOUL_DEPTH_ARENA_EXPAND_SCALE = 1.25
 
 local function copyTable(source)
     local copied = {}

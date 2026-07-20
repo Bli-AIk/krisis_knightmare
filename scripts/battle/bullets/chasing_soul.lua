@@ -1,6 +1,6 @@
 local ChasingSoul, super = Class(Bullet)
 
-local DEFAULT_MOVE_SPEED = 4
+local DEFAULT_MOVE_SPEED = 3.8
 local EDGE_MARGIN = 18
 local TARGET_EPSILON = 1
 local TRANSITION_TIME = 7
