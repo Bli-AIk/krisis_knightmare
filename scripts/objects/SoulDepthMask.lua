@@ -9,6 +9,7 @@ local DEPTH_SHRINK_TIME = 5 / 60
 local SOUL_WHITE_DELAY = 0.1
 local SOUL_WHITE_TIME = 40 / 60
 local FINALE_DELAY = 20 / 60
+local ARENA_EXPAND_TIME = 45 / 60
 local SCROLL_SPEED = 12
 local TEXTURE_SCALE_X = 1.8
 local TEXTURE_SCALE_Y = 1.75
@@ -110,6 +111,13 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
     self.star_bursts_enabled = true
     self.star_travel_time_scale = options.star_travel_time_scale or STAR_TRAVEL_TIME_SCALE
     self.star_collision_delay = options.star_collision_delay or STAR_COLLISION_DELAY
+    self.arena_expand_scale = options.arena_expand_scale
+    self.arena_expand_started = false
+    self.arena_expand_done = false
+    self.arena_expand_elapsed = 0
+    self.arena_expand_arena = nil
+    self.arena_expand_start_width = nil
+    self.arena_expand_start_height = nil
     self.radial_particles_enabled = options.radial_particles == true
     self.radial_particles = {}
     self.star_indicator_particles = {}
@@ -201,6 +209,59 @@ function SoulDepthMask:spawnDepthEcho()
     self.depth_echo = self.wave:spawnObjectTo(self.parent, SoulDepthEcho(SOUL_ECHO_ALPHA), self.x, self.y)
 end
 
+function SoulDepthMask:startArenaExpansion()
+    if self.arena_expand_started or self.arena_expand_done then
+        return
+    end
+
+    local scale = self.arena_expand_scale
+    local arena = Game.battle and Game.battle.arena
+    if not scale or scale <= 1 or not arena or not arena.setSize then
+        return
+    end
+
+    local width = arena.width
+    local height = arena.height
+    if (not width or not height) and arena.getLeft and arena.getRight and arena.getTop and arena.getBottom then
+        width = math.abs(arena:getRight() - arena:getLeft())
+        height = math.abs(arena:getBottom() - arena:getTop())
+    end
+    if not width or not height or width <= 0 or height <= 0 then
+        return
+    end
+
+    self.arena_expand_started = true
+    self.arena_expand_arena = arena
+    self.arena_expand_start_width = width
+    self.arena_expand_start_height = height
+    self.arena_expand_elapsed = 0
+
+    arena:setSize(width, height)
+end
+
+function SoulDepthMask:updateArenaExpansion()
+    if not self.arena_expand_started or self.arena_expand_done then
+        return
+    end
+
+    local arena = self.arena_expand_arena
+    if not arena or not arena.parent then
+        self.arena_expand_done = true
+        return
+    end
+
+    self.arena_expand_elapsed = math.min(self.arena_expand_elapsed + DT, ARENA_EXPAND_TIME)
+    local progress = MathUtils.clamp(self.arena_expand_elapsed / ARENA_EXPAND_TIME, 0, 1)
+    local eased = easeOutCubic(progress)
+    local width = lerp(self.arena_expand_start_width, self.arena_expand_start_width * self.arena_expand_scale, eased)
+    local height = lerp(self.arena_expand_start_height, self.arena_expand_start_height * self.arena_expand_scale, eased)
+    arena:setSize(width, height)
+
+    if progress >= 1 then
+        self.arena_expand_done = true
+    end
+end
+
 function SoulDepthMask:beginWhiteFade()
     if self.white_fading then
         return
@@ -211,6 +272,7 @@ function SoulDepthMask:beginWhiteFade()
     self.white_timer = 0
     self.white_elapsed = 0
     self.soul_white_complete_elapsed = nil
+    self:startArenaExpansion()
 
     if self.parent and self.parent.stopChase then
         self.parent:stopChase()
@@ -493,6 +555,7 @@ function SoulDepthMask:updateRadialRings()
 end
 
 function SoulDepthMask:update()
+    self:updateArenaExpansion()
     super.update(self)
 
     if self.shrinking then
