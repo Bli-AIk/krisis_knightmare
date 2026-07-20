@@ -22,6 +22,7 @@ local RECHARGE_RETURN_TARGET_OFFSET_X = -2
 local RECHARGE_RETURN_TARGET_OFFSET_Y = 1
 local PEAKS_SPRITE = "battle/backgrounds/kris_peaks"
 local PEAKS_ALPHA = 0.275
+local BACKGROUND_GLOW_COLOR = { 1.0, 0.28, 0.10 }
 local PLATFORM_SPRITE = "battle/backgrounds/kris_platform_adjusted"
 local PLATFORM_LIGHT_SPRITE = "battle/backgrounds/kris_platform_light"
 local FULL_MERCY = 100
@@ -2269,6 +2270,29 @@ function Kris:setPlatformSprite(texture, fade_time)
     end
 end
 
+function Kris:setBackgroundGlowColor(enabled)
+    self.background_glow_active = enabled == true
+
+    if self.bg_depth then
+        self.bg_depth:setGlowColor(
+            BACKGROUND_GLOW_COLOR,
+            self.background_glow_active and 1 or 0
+        )
+    end
+
+    if self.bg_peaks then
+        if self.background_glow_active then
+            self.bg_peaks:setColor(
+                BACKGROUND_GLOW_COLOR[1],
+                BACKGROUND_GLOW_COLOR[2],
+                BACKGROUND_GLOW_COLOR[3]
+            )
+        else
+            self.bg_peaks:setColor(1, 1, 1)
+        end
+    end
+end
+
 function Kris:triggerRechargeActVisuals(battler)
     Assets.playSound("vessel_charge")
     self:spawnRechargeRadialBurst(battler, {
@@ -2312,6 +2336,7 @@ function Kris:playRechargeActAnimation(battler)
 end
 
 function Kris:ensureRechargeVisuals(enemy, battler)
+    self:setBackgroundGlowColor(true)
     self:setPlatformSprite(PLATFORM_LIGHT_SPRITE, RECHARGE_PLATFORM_FADE_TIME)
 
     local texture = Assets.getTexture(RECHARGE_LIGHT_SPRITE)
@@ -2539,6 +2564,7 @@ function Kris:beginRechargeDrain()
 
     self:restoreRechargePlayerLight()
     self:removeRechargeSoul(true)
+    self:setBackgroundGlowColor(false)
 
     self:setPlatformSprite(PLATFORM_SPRITE, RECHARGE_PLATFORM_FADE_TIME)
 end
@@ -2578,6 +2604,7 @@ end
 function Kris:clearRecharge(instant)
     self:restoreRechargePlayerLight()
     self:removeRechargeSoul(instant, self.recharge and self.recharge.enemy)
+    self:setBackgroundGlowColor(false)
     self.recharge = nil
 end
 
@@ -2624,6 +2651,8 @@ function Kris:setupBackground(battle)
     self.bg_depth = KrisDepthBackground()
     self.bg_depth.layer = BATTLE_LAYERS["bottom"] - 0.5
     battle:addChild(self.bg_depth)
+
+    self:setBackgroundGlowColor(self.background_glow_active)
 
     self.bg_platform = Sprite(PLATFORM_SPRITE, 0, 0)
     self.bg_platform.layer = BATTLE_LAYERS["bottom"]

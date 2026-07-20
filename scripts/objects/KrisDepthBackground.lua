@@ -42,6 +42,8 @@ function KrisDepthBackground:init()
         extern Image peaksTexture;
         extern float nonPeaksAlpha;
         extern float peaksAlpha;
+        extern vec3 glowColor;
+        extern float glowAmount;
 
         vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
             vec2 uv = screen_coords / iResolution;
@@ -55,8 +57,11 @@ function KrisDepthBackground:init()
             vec4 depth = Texel(tex, texCoord);
             float peaksMask = Texel(peaksTexture, uv).a;
             float alpha = mix(nonPeaksAlpha, peaksAlpha, step(0.5, peaksMask));
+            float value = max(max(depth.r, depth.g), depth.b);
+            vec3 warmDepth = value * glowColor;
+            vec3 outputColor = mix(depth.rgb, warmDepth, glowAmount);
 
-            return vec4(depth.rgb * color.rgb, depth.a * alpha * color.a);
+            return vec4(outputColor * color.rgb, depth.a * alpha * color.a);
         }
     ]])
 
@@ -71,6 +76,13 @@ function KrisDepthBackground:init()
     self.shader:send("peaksTexture", self.peaks_texture)
     self.shader:send("nonPeaksAlpha", DEPTH_NON_PEAKS_ALPHA)
     self.shader:send("peaksAlpha", DEPTH_PEAKS_ALPHA)
+    self.shader:send("glowColor", { 1, 1, 1 })
+    self.shader:send("glowAmount", 0)
+end
+
+function KrisDepthBackground:setGlowColor(color, amount)
+    self.shader:send("glowColor", color)
+    self.shader:send("glowAmount", amount or 1)
 end
 
 function KrisDepthBackground:update()
