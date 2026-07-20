@@ -296,7 +296,7 @@ local KRISIS_RANDOM_MODULUS = 2147483647
 local KRISIS_RANDOM_MULTIPLIER = 48271
 local KRISIS_FINISHER_RESUME_FILE = "kris_finisher_resume"
 local KRISIS_FINISHER_RESUME_VERSION = 2
-local KRISIS_STATS_PAYLOAD_VERSION = 3
+local KRISIS_STATS_PAYLOAD_VERSION = 4
 local KRISIS_STATS_MAGIC = "KRS"
 local KRISIS_STATS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local KRISIS_STATS_ENCOUNTERS = {
@@ -351,6 +351,18 @@ local function newKrisisGameStats(previous_failures, seed_display)
         previous_failures = getNonNegativeInteger(previous_failures),
         elapsed_milliseconds = 0,
         seed_display = tostring(seed_display or ""),
+    }
+end
+
+local function getKrisisLanguageSettings()
+    if not Game then
+        return {}
+    end
+
+    return {
+        lang = Game.lang,
+        langNameStyle = Game.langNameStyle,
+        langDebugTermsTranslated = Game.langDebugTermsTranslated,
     }
 end
 
@@ -526,6 +538,17 @@ local function encodeKrisisGameStats(stats, context)
     end
     appendUint16(parts, seed_length)
     table.insert(parts, seed_display)
+    local language_settings = getKrisisLanguageSettings()
+    local language = tostring(stats.lang or language_settings.lang or "")
+    local name_style = tostring(stats.langNameStyle or language_settings.langNameStyle or "")
+    local language_length = math.min(#language, 65535)
+    local name_style_length = math.min(#name_style, 65535)
+    appendUint16(parts, language_length)
+    table.insert(parts, language:sub(1, language_length))
+    appendUint16(parts, name_style_length)
+    table.insert(parts, name_style:sub(1, name_style_length))
+    appendByte(parts, (stats.langDebugTermsTranslated == false
+        or language_settings.langDebugTermsTranslated == false) and 0 or 1)
     appendUint16(parts, math.min(#kris.no_hit_turns, 65535))
     for index = 1, math.min(#kris.no_hit_turns, 65535) do
         appendUint16(parts, kris.no_hit_turns[index])
@@ -556,8 +579,9 @@ local function decodeKrisisGameStats(payload, context)
     if not stored_checksum or checksumBytes(body, context) ~= stored_checksum then
         return nil
     end
+    local payload_version = string.byte(data, 4)
     if data:sub(1, 3) ~= KRISIS_STATS_MAGIC
-        or string.byte(data, 4) ~= KRISIS_STATS_PAYLOAD_VERSION
+        or (payload_version ~= 3 and payload_version ~= KRISIS_STATS_PAYLOAD_VERSION)
     then
         return nil
     end
@@ -578,8 +602,40 @@ local function decodeKrisisGameStats(payload, context)
         return nil
     end
     local seed_display = data:sub(position, position + seed_length - 1)
+    position = position + seed_length
+
+    local language
+    local name_style
+    local debug_terms_translated
+    if payload_version >= 4 then
+        local language_length
+        language_length, position = readUint16(data, position)
+        if not language_length or position + language_length - 1 > #body then
+            return nil
+        end
+        language = data:sub(position, position + language_length - 1)
+        position = position + language_length
+
+        local name_style_length
+        name_style_length, position = readUint16(data, position)
+        if not name_style_length or position + name_style_length - 1 > #body then
+            return nil
+        end
+        name_style = data:sub(position, position + name_style_length - 1)
+        position = position + name_style_length
+
+        local debug_terms_value
+        debug_terms_value, position = readByte(data, position)
+        if debug_terms_value ~= 0 and debug_terms_value ~= 1 then
+            return nil
+        end
+        debug_terms_translated = debug_terms_value == 1
+    end
 
     local stats = newKrisisGameStats(values[10], seed_display)
+    stats.lang = language ~= "" and language or nil
+    stats.langNameStyle = name_style ~= "" and name_style or nil
+    stats.langDebugTermsTranslated = debug_terms_translated
     stats.encounters.kris.bullet_damage = values[1]
     stats.encounters.kris.bullet_hits = values[2]
     stats.encounters.kris.no_hit_turns = {}
@@ -591,7 +647,6 @@ local function decodeKrisisGameStats(payload, context)
     stats.max_graze_combo = values[9]
     stats.total_grazes = values[11]
     stats.elapsed_milliseconds = values[12]
-    position = position + seed_length
     local kris_no_hit_count
     kris_no_hit_count, position = readUint16(data, position)
     if not kris_no_hit_count then
@@ -1289,7 +1344,32 @@ function Mod:restoreKrisisGameStats(stats, continue_run)
     else
         self.krisis_retry_stats = stats
     end
+
+    self.krisis_resume_language_settings = {
+        lang = stats.lang,
+        langNameStyle = stats.langNameStyle,
+        langDebugTermsTranslated = stats.langDebugTermsTranslated,
+    }
     return true
+end
+
+function Mod:applyKrisisResumeLanguageSettings()
+    local settings = self.krisis_resume_language_settings
+    if not settings or not Game then
+        return
+    end
+
+    if settings.lang and Game.setLanguage then
+        Game:setLanguage(settings.lang)
+    end
+    if settings.langNameStyle and Game.setNameStyle then
+        Game:setNameStyle(settings.langNameStyle)
+    end
+    if settings.langDebugTermsTranslated ~= nil and Game.setDebugTermsTranslated then
+        Game:setDebugTermsTranslated(settings.langDebugTermsTranslated)
+    end
+
+    self.krisis_resume_language_settings = nil
 end
 
 function Mod:startKrisisGameStats(encounter_id)
@@ -1712,6 +1792,7 @@ function Mod:init()
     self:initializeKrisisGameStats()
     self.krisis_finisher_resume_checked = false
     self.krisis_finisher_resume_pending = false
+    self.krisis_resume_language_settings = nil
     self:loadKrisisFinisherResume()
     self:getKrisisRunSeed()
     self:updateKrisisWindowTitle()
@@ -1748,6 +1829,8 @@ function Mod:init()
 end
 
 function Mod:postLoad()
+    self:applyKrisisResumeLanguageSettings()
+
     if self.krisis_run_started then
         self.krisis_stats_start_playtime = Game and Game.playtime or 0
     end
