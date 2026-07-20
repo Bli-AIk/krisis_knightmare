@@ -5,6 +5,8 @@ local TWO_PI = math.pi * 2
 local RECT_DURATION = 20 / 60
 local RECT_WIDTH = 24
 local RECT_HEIGHT = SCREEN_HEIGHT * 1.4
+local NORMAL_ARENA_SIZE = 142
+local ARENA_SIZE_SCALE = 1.125
 local RECT_ROTATION = math.rad(5)
 local RECT_LAYER = BATTLE_LAYERS["top"] + 1
 local ELLIPSE_START_DELAY = 8 / 60
@@ -49,6 +51,7 @@ local CHIP_BURST_MIN_COUNT = 4
 local CHIP_BURST_MAX_COUNT = 6
 local CHIP_QUADRANT_PADDING = math.rad(10)
 local CHIP_LIGHT_DURATION = 20 / 60
+local CHIP_LIGHT_MAX_ALPHA = 0.5
 local CHIP_LIGHT_LAYER = BATTLE_LAYERS["bullets"] - 2
 local RED_RECT_APPEAR_SOUND = "big_sword_appear"
 local CHIP_LIGHT_SPAWN_SOUND = "kris_phase1_07_swing"
@@ -199,6 +202,7 @@ end
 
 function KrisPhase1_07:init()
     super.init(self)
+    self:setArenaSize(NORMAL_ARENA_SIZE * ARENA_SIZE_SCALE)
     self.time = 10 + KRIS_SWORD_HALL_HOLD_SECONDS
     self.red_rect = nil
     self.black_ellipse_fill = nil
@@ -417,7 +421,7 @@ function KrisPhase1_07:spawnChipLight()
     self:addChild(light)
 
     self.timer:tween(CHIP_LIGHT_DURATION, light, {
-        alpha = 1,
+        alpha = CHIP_LIGHT_MAX_ALPHA,
         scale_x = 1.5,
         scale_y = 1.5,
     }, "linear", function()
