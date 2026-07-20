@@ -1,6 +1,6 @@
 local KrisPhase1_06, super = Class("kris_phase1_01")
 
-local ATTRACT_MAX_SPEED = 1.85
+local ATTRACT_MAX_SPEED = 1.25
 local ATTRACT_START_STRENGTH = 0.32
 local ATTRACT_RAMP_TIME = 0.18
 local ATTRACT_MIN_DISTANCE = 20
