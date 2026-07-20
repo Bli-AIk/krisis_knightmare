@@ -708,7 +708,7 @@ function Mod:getConfig(key)
 end
 
 function Mod:getKrisisRunSeed()
-    if self.krisis_run_seed then
+    if self.krisis_run_seed ~= nil then
         return self.krisis_run_seed
     end
 
