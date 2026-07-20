@@ -98,7 +98,7 @@ function KrisPhase1_11:spawnSoulDepthMask()
         star_burst_min_count = 1,
         star_burst_max_count = 2,
         finale_options = {
-            star_wave_count = 6,
+            star_wave_count = 4,
             star_wave_interval = 5 / 60 * 2,
             star_min_count = 8,
             star_max_count = 16,
