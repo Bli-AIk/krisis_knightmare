@@ -20,6 +20,8 @@ local RECHARGE_SOUL_START_OFFSET_X = 28
 local RECHARGE_SOUL_START_OFFSET_Y = 0
 local RECHARGE_RETURN_TARGET_OFFSET_X = -2
 local RECHARGE_RETURN_TARGET_OFFSET_Y = 1
+local PEAKS_SPRITE = "battle/backgrounds/kris_peaks"
+local PEAKS_ALPHA = 0.275
 local PLATFORM_SPRITE = "battle/backgrounds/kris_platform_adjusted"
 local PLATFORM_LIGHT_SPRITE = "battle/backgrounds/kris_platform_light"
 local FULL_MERCY = 100
@@ -2596,6 +2598,19 @@ function Kris:update()
 end
 
 function Kris:setupBackground(battle)
+    self.bg_peaks = Sprite(PEAKS_SPRITE, 0, 0)
+    self.bg_peaks.layer = BATTLE_LAYERS["bottom"] - 1
+    self.bg_peaks.alpha = PEAKS_ALPHA
+    self.bg_peaks:setScale(2, 2)
+    battle:addChild(self.bg_peaks)
+
+    -- The depth texture belongs to the distant background. Rendering it here
+    -- lets the opaque platform remain crisp while its transparent upper area
+    -- still exposes the stronger peaks-masked flow.
+    self.bg_depth = KrisDepthBackground()
+    self.bg_depth.layer = BATTLE_LAYERS["bottom"] - 0.5
+    battle:addChild(self.bg_depth)
+
     self.bg_platform = Sprite(PLATFORM_SPRITE, 0, 0)
     self.bg_platform.layer = BATTLE_LAYERS["bottom"]
     self.bg_platform:setScale(2, 2)
@@ -2604,10 +2619,6 @@ function Kris:setupBackground(battle)
     self.bg_platform_particles = KrisPlatformParticles(self.bg_platform, PLATFORM_SPRITE)
     self.bg_platform_particles.layer = BATTLE_LAYERS["bottom"] + 0.25
     battle:addChild(self.bg_platform_particles)
-
-    self.bg_depth = KrisDepthBackground()
-    self.bg_depth.layer = BATTLE_LAYERS["bottom"] + 0.5
-    battle:addChild(self.bg_depth)
 
     self.vignette = KrisVignette()
     self.vignette.layer = BATTLE_LAYERS["bottom"] + 1
