@@ -1997,7 +1997,10 @@ function Kris:onBattleStart()
         })
     end
 
-    if self:isFullMercy() then
+    local starts_at_full_mercy = initial_mercy ~= nil
+        and tonumber(initial_mercy) ~= nil
+        and tonumber(initial_mercy) >= FULL_MERCY
+    if self:isFullMercy() and not starts_at_full_mercy then
         self:tryStartMercyFinale("battle_start")
     end
 end

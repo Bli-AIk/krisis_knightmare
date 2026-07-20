@@ -86,6 +86,8 @@
   "actor_kris_name": "[name:actor:kris]",
   "enemy_kris_name": "[name:actor:kris]",
   "enemy_kris_mercy_finale_name": "",
+  "enemy_kris_spare": "* [name:chara:vessel]饶恕了[name:actor:kris]!",
+  "enemy_kris_spare_failed": "* 但是似乎不起作用...",
   "enemy_kris_check_1": "?? ATK ??? DEF",
   "enemy_kris_check_2": "黑暗给予其再生。\n[wait:5]* 化为了仅有攻击本能的怪物。",
   "enemy_kris_check_3": "用你的力量将其击败。",

@@ -93,6 +93,8 @@
     "actor_kris_name": "[name:actor:kris]",
     "enemy_kris_name": "[name:actor:kris]",
     "enemy_kris_mercy_finale_name": "",
+    "enemy_kris_spare": "* [name:chara:vessel] spared [name:actor:kris]!",
+    "enemy_kris_spare_failed": "* But it seems ineffective...",
     "enemy_kris_check_2": "Darkness grants them regeneration.[wait:5]\n* Transformed into a monster\nof pure aggressive instinct.",
     "enemy_kris_check_3": "Use your power to defeat them.",
     "enemy_kris_turn_1": "* [name:chara:kris] slashes into the combat.",

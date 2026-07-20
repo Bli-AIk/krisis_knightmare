@@ -127,8 +127,8 @@ function Kris:init()
     -- Enemy reward
     self.money = 100
 
-    -- Mercy given when sparing this enemy before its spareable (20% for basic enemies)
-    self.spare_points = 20
+    -- Mercy is earned through attacks; directly selecting MERCY should not add any.
+    self.spare_points = 0
 
     -- Used by the base battle code/debug paths; selectWave controls the actual order.
     self.waves = makeWaveList(1, 15)
@@ -551,6 +551,37 @@ function Kris:getEncounterText()
         return self.text[turn]
     end
     return self.text[#self.text]
+end
+
+function Kris:getSpareText(battler, success)
+    local spare_text = Game:loc(
+        "* [name:chara:vessel] spared [name:actor:kris]!",
+        "enemy_kris_spare"
+    )
+    if success then
+        return spare_text
+    end
+
+    return {
+        spare_text,
+        Game:loc("* But it seems ineffective...", "enemy_kris_spare_failed"),
+    }
+end
+
+function Kris:onMercy(battler)
+    if not self:canSpare() then
+        return false
+    end
+
+    local encounter = Game.battle and Game.battle.encounter
+    if encounter and encounter.tryStartMercyFinale
+        and encounter:tryStartMercyFinale("mercy")
+    then
+        return true
+    end
+
+    self:spare()
+    return true
 end
 
 function Kris:getAttackDamage(damage, battler, points)
