@@ -3,7 +3,7 @@ local KrisBusterBullet, super = Class(Bullet)
 
 local TWO_PI = math.pi * 2
 local FPS = 30
-local DAMAGE = 75
+local DAMAGE = 58
 local MIN_RANDOM_SPEED = 7.5
 local MAX_RANDOM_SPEED = 14
 local MIN_CHAIN_SPEED = 5.5

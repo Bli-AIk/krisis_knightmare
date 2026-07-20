@@ -94,7 +94,7 @@ function KrisBusterDiamond:init(x, y, direction, options)
 
     options = options or {}
 
-    self.damage = 75
+    self.damage = 58
     self.destroy_on_hit = false
     self.remove_offscreen = true
     self.physics.direction = direction or 0

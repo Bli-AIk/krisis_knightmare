@@ -1,6 +1,6 @@
 local SoulDepthStar, super = Class(Bullet)
 
-local DAMAGE = 50
+local DAMAGE = 38
 local START_SCALE = 0.9
 local END_SCALE = 0.2
 local FADE_IN_END = 0.3

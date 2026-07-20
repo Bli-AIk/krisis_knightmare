@@ -26,7 +26,7 @@ local LEFT_ROTATION = -math.pi / 2
 local STOP_FRAMES = 3
 local RETURN_FRAMES = 0.5 * 30
 local GRAZE_TP_MAX = 3
-local DAMAGE = 100
+local DAMAGE = 70
 
 local NORMAL_HITBOX_X = 25
 local NORMAL_HITBOX_Y = 4

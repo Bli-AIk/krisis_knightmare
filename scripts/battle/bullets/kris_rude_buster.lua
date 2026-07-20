@@ -3,7 +3,7 @@ local KrisRudeBuster, super = Class(Bullet)
 
 local TWO_PI = math.pi * 2
 local FPS = 30
-local DAMAGE = 100
+local DAMAGE = 70
 local MOVE_DURATION = 0.12
 local SHRINK_DURATION = 0.12
 local ROTATION = -math.pi / 2

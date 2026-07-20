@@ -1,7 +1,7 @@
 ---@class FlyingSwordChip : Bullet
 local FlyingSwordChip, super = Class(Bullet)
 
-local DAMAGE = 75
+local DAMAGE = 58
 local MOVE_DURATION = 2.0
 local SPEED_RANDOM_MIN = 0.96
 local SPEED_RANDOM_MAX = 1.04

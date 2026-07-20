@@ -145,7 +145,7 @@ function SmallSword:init(x, y, dir, min_speed, max_speed, accel_duration, option
 	options = options or {}
 
 	self:setScale(0.8, 0.8)
-	self.damage = 75
+	self.damage = 58
 	self.destroy_on_hit = false
 	self.alpha = 0
 

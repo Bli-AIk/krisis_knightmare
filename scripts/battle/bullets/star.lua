@@ -5,7 +5,7 @@ function Star:init(x, y, dir, min_speed, max_speed, accel_duration)
 	super.init(self, x, y, "bullets/star_invert")
 
 	self:setScale(0.8, 0.8)
-	self.damage = 50
+	self.damage = 38
 	self.inv_timer = Game:getConfig("defaultInvulnTime") / 30
 	self.destroy_on_hit = false
 	self.alpha = 0

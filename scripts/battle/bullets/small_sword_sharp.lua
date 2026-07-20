@@ -56,7 +56,7 @@ function SmallSwordSharp:init(x, y, scale_y, flip_y, min_speed, max_speed, accel
     self:setScale(1, scale_y or 1)
     self.flip_y = flip_y or false
     self:setHitbox(8, 8, self.width - 16, self.height - 16)
-    self.damage = 75
+    self.damage = 58
     self.destroy_on_hit = false
     self.alpha = 0
 
