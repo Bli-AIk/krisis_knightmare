@@ -550,6 +550,7 @@ function Kris:init()
     self.recharge_soul = nil
     self.recharge_light_radius = nil
     self.recharge_player_light = nil
+    self.peaks_revealed = false
     self.mercy_finale = nil
     self.mercy_finale_started = false
     self.mercy_finale_active = false
@@ -2272,9 +2273,21 @@ function Kris:triggerRechargeActVisuals(battler)
     Assets.playSound("vessel_charge")
     self:spawnRechargeRadialBurst(battler, {
         after_snapshot = function()
+            self:revealPeaks()
             self:spawnRechargeWhiteFlash(battler)
         end
     })
+end
+
+function Kris:revealPeaks()
+    if self.peaks_revealed then
+        return
+    end
+
+    self.peaks_revealed = true
+    if self.bg_peaks then
+        self.bg_peaks.visible = true
+    end
 end
 
 function Kris:playRechargeActAnimation(battler)
@@ -2601,6 +2614,7 @@ function Kris:setupBackground(battle)
     self.bg_peaks = Sprite(PEAKS_SPRITE, 0, 0)
     self.bg_peaks.layer = BATTLE_LAYERS["bottom"] - 1
     self.bg_peaks.alpha = PEAKS_ALPHA
+    self.bg_peaks.visible = self.peaks_revealed
     self.bg_peaks:setScale(2, 2)
     battle:addChild(self.bg_peaks)
 
