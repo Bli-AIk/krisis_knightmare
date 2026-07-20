@@ -701,7 +701,7 @@ function ChapterSelect:drawKrisShortcutPrompt()
         { text = loc("Hold ", "chapter_select.kris_shortcut_hold_left") },
         { text = z_text, color = KRIS_SHORTCUT_YELLOW },
         { text = loc(" to jump", "chapter_select.kris_shortcut_hold_right") },
-    }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 82, "right", 1)
+    }, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 58, "right", 1)
     drawPromptSegments({
         { text = loc("Press ", "chapter_select.kris_shortcut_return_left") },
         { text = x_text, color = KRIS_SHORTCUT_YELLOW },
