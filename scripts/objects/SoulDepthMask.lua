@@ -30,6 +30,7 @@ local STAR_TRAVEL_TIME_SCALE = 1.35
 local STAR_INDICATOR_ALPHA = 0.75
 local STAR_START_SCALE = 0.9
 local STAR_END_SCALE = 0.2
+local STAR_COLLISION_DELAY = 0.3
 local RADIAL_PARTICLE_INITIAL_COUNT = 100
 local RADIAL_PARTICLE_MAX_COUNT = 180
 local RADIAL_PARTICLE_MIN_INTERVAL = 0.018
@@ -108,6 +109,7 @@ function SoulDepthMask:init(start_diameter, target_diameter, options)
     self.star_burst_timer = randomFloat(STAR_BURST_MIN_INTERVAL, STAR_BURST_MAX_INTERVAL)
     self.star_bursts_enabled = true
     self.star_travel_time_scale = options.star_travel_time_scale or STAR_TRAVEL_TIME_SCALE
+    self.star_collision_delay = options.star_collision_delay or STAR_COLLISION_DELAY
     self.radial_particles_enabled = options.radial_particles == true
     self.radial_particles = {}
     self.star_indicator_particles = {}
@@ -318,7 +320,8 @@ function SoulDepthMask:spawnStarBurst()
             center_y,
             travel_time,
             STAR_START_SCALE,
-            STAR_END_SCALE
+            STAR_END_SCALE,
+            { collision_delay = self.star_collision_delay }
         )
     end
 end

@@ -6,6 +6,7 @@ local END_SCALE = 0.2
 local FADE_IN_END = 0.3
 local FADE_OUT_START = 0.52
 local SPIN_SPEED = 0
+local DEFAULT_COLLISION_DELAY = 0
 
 local function lerp(from, to, t)
     return from + (to - from) * t
@@ -27,6 +28,8 @@ function SoulDepthStar:init(x, y, target_x, target_y, duration, start_scale, end
     self.remove_offscreen = false
     self.fade = options.fade ~= false
     self.alpha = options.alpha or (self.fade and 0 or 1)
+    self.collision_delay = math.max(options.collision_delay or DEFAULT_COLLISION_DELAY, 0)
+    self.collidable = self.collision_delay <= 0
 
     self.start_x = x
     self.start_y = y
@@ -58,6 +61,10 @@ function SoulDepthStar:update()
     self.y = lerp(self.start_y, self.target_y, progress)
     self.rotation = self.rotation + self.spin_speed * DT
     self:setScale(lerp(self.start_scale, self.end_scale, progress))
+
+    if not self.collidable and self.elapsed >= self.collision_delay then
+        self.collidable = true
+    end
 
     if self.fade then
         local fade_in = clamp(progress / FADE_IN_END, 0, 1)

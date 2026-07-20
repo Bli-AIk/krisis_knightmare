@@ -56,6 +56,7 @@ function FixedInvertStarBursts:spawnBurst()
             STAR_END_SCALE,
             {
                 texture = "bullets/star_invert",
+                collision_delay = depth_mask.star_collision_delay,
             }
         )
     end
