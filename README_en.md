@@ -4,8 +4,6 @@
 
 ![KRISIS KNIGHTMARE](./cover.jpg)
 
-> Current Status: 🚧 Early Development
-
 **KRISIS KNIGHTMARE** — the authorized gamification project of the animation [KRISIS KNIGHTMARE](https://www.bilibili.com/video/BV1r7f1ByETC), built with the [Kristal](https://github.com/KristalTeam/Kristal).
 
 | English | 简体中文 |
