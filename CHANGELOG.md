@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.1](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.0...v1.0.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* 修复进入 finisher 时语言设置丢失 ([1fa8c32](https://github.com/Bli-AIk/krisis_knightmare/commit/1fa8c329e28bbe79f4158bb4f143382230fbd746))
+* 修复饶恕流程和文本显示 ([46886d3](https://github.com/Bli-AIk/krisis_knightmare/commit/46886d3742487cdd9987509abde63b979bfd7a9e))
+* 延迟第一回合内吸星星碰撞 ([98377f1](https://github.com/Bli-AIk/krisis_knightmare/commit/98377f122fd839be38872faf2aa3a1f544c572fc))
+* 调低第六回合吸力 ([25ce2f5](https://github.com/Bli-AIk/krisis_knightmare/commit/25ce2f51990a1e12ba1db53015442b5279ef4d78))
+* 调整弹幕伤害 ([2db9c65](https://github.com/Bli-AIk/krisis_knightmare/commit/2db9c65c29dc2371c413b0afdd250dbe5be76d33))
+* 调整第一回合内吸星星碰撞延迟 ([6aaca89](https://github.com/Bli-AIk/krisis_knightmare/commit/6aaca89721c5828ba5b838fddb9332488163d5d3))
+* 调整第一回合喷星前场地大小 ([e567284](https://github.com/Bli-AIk/krisis_knightmare/commit/e5672848cd445021d5ffb4c169dc2f7d4d24087f))
+
+
+### Code Refactoring
+
+* 调整第一回合场地与敌人soul速度 ([b571da6](https://github.com/Bli-AIk/krisis_knightmare/commit/b571da6206be786c85f6f969f1fa8d0464767990))
+* 调整第七回合和变体的场地、光效与弹幕速度 ([c91a6cc](https://github.com/Bli-AIk/krisis_knightmare/commit/c91a6ccbe270bb7651880be1a8c6efd8b400b2cb))
+* 调整第九回合弹幕间隔 ([2c47816](https://github.com/Bli-AIk/krisis_knightmare/commit/2c47816e7894a8b3a6304c5e239465c8274672f0))
+* 调整第四回合和变体的场地与速度 ([69e5ba6](https://github.com/Bli-AIk/krisis_knightmare/commit/69e5ba680d60faab8cf55cb0a783815c8b175818))
+
 ## [1.0.0](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.3.2...v1.0.0) (2026-07-20)
 
 
