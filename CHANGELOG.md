@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.3.2...v1.0.0) (2026-07-20)
+
+
+### chore
+
+* force release 1.0.0 ([545359e](https://github.com/Bli-AIk/krisis_knightmare/commit/545359ec37d405ed75bbd97990cedc44e85ff98e))
+
+
+### Features
+
+* 发光时背景波纹染色 ([aafd416](https://github.com/Bli-AIk/krisis_knightmare/commit/aafd4161c33d06bbcffc8791cc773650b22eaac5))
+
+
+### Code Refactoring
+
+* 重新调整背景并添加山丘 ([279300f](https://github.com/Bli-AIk/krisis_knightmare/commit/279300f5c920dc1adac777a31822c934d28a73e7))
+
 ## [0.3.2](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.3.1...v0.3.2) (2026-07-20)
 
 
