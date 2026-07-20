@@ -42,6 +42,17 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
           fetch-depth: 0
+          submodules: recursive
+
+      - name: Verify required submodules
+        run: |
+          set -euo pipefail
+
+          git submodule status --recursive
+          test -s libraries/langLib_zh_hans/lib.lua
+          test -s libraries/langLib_zh_hans/assets/fonts/lang/zh_hans/main.ttf
+          test -s libraries/langLib_zh_hans/assets/fonts/lang/zh_hans/main_mono.ttf
+          test -s libraries/wave-video-debug/lib.lua
 
       - name: Install build dependencies
         run: |
