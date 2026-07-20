@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.3.1...v0.3.2) (2026-07-20)
+
+
+### Bug Fixes
+
+* 修复CI未拉取子模块导致发布包缺少汉化资源的问题 ([4097bc5](https://github.com/Bli-AIk/krisis_knightmare/commit/4097bc5c5a119017d88f844a49cb78517c752a12))
+* 修复种子为0时重复初始化的问题 ([6b98b17](https://github.com/Bli-AIk/krisis_knightmare/commit/6b98b17d38ece79bbcf91f442bcfbee1f99f103d))
+
 ## [0.3.1](https://github.com/Bli-AIk/krisis_knightmare/compare/v0.3.0...v0.3.1) (2026-07-19)
 
 
