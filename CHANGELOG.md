@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.2](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.1...v1.0.2) (2026-07-21)
+
+
+### chore
+
+* force release 1.0.2 ([5ea633c](https://github.com/Bli-AIk/krisis_knightmare/commit/5ea633cd905fb34e814d0af0387a0ede7a43a7d2))
+
+
+### Features
+
+* 添加 Game Jolt 和 GameBanana 发布工具 ([f8cb808](https://github.com/Bli-AIk/krisis_knightmare/commit/f8cb80893a037623a95d44ed24e34018c79ebc9b))
+
+
+### Bug Fixes
+
+* 修复finisher失败重试状态未重置的问题 ([3429423](https://github.com/Bli-AIk/krisis_knightmare/commit/3429423fcefd8ae926eecf518dbbcd619f8aac0a))
+
 ## [1.0.1](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.0...v1.0.1) (2026-07-20)
 
 
