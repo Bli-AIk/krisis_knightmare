@@ -6,3 +6,8 @@
 /dist/
 .worktree/
 __pycache__/
+# Keep local publisher config, profiles, and staging files out of Git.
+/publish/*
+!/publish/README.md
+!/publish/config.example.json
+!/publish/publish_release.js

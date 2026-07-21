@@ -258,6 +258,16 @@ clean-build:
 artifacts:
     @find dist -maxdepth 1 -type f -print 2>/dev/null | sort || true
 
+# Publish already-built files through the local Chrome publisher.
+publish *args:
+    @node publish/publish_release.js {{ args }}
+
+# Build all release/debug packages, then open the local publisher.
+publish-build *args:
+    @{{ build_script }}
+    @./.github/scripts/build_mod.sh
+    @node publish/publish_release.js {{ args }}
+
 alias l := run
 alias t := term
 alias L := hold
