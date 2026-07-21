@@ -18,7 +18,7 @@ This project is a fan-game adaptation of the Bilibili animation [KRISIS KNIGHTMA
 
 ## Download and Run
 
-This project is distributed both as a Kristal project package (mod form) and as standalone builds. [GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases), GameBanana, and Gamejolt are all **official distribution sources** for this game. GitHub Releases is currently available; the GameBanana and Gamejolt pages are being prepared and will be available soon.
+This project is distributed both as a Kristal project package (mod form) and as standalone builds. [GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases), [GameBanana](https://gamebanana.com/mods/695877), and [GameJolt](https://gamejolt.com/games/krisis_knightmare/1085393) are all **official distribution sources** for this game.
 
 - **Kristal project package (mod form, experimental)**: Download `krisis-knightmare-mod.zip` from a release, install Kristal `v0.10.0`, place the ZIP directly in the projects folder opened from Kristal's main menu (the source version uses the `mods/` directory), and select `krisis_knightmare` from the project list. Do not wrap the ZIP in another outer folder.
 - **Standalone**: Windows users can download `*-win64.zip`, extract it, and run the game directly. Other platforms may use the `.love` file with the appropriate LÖVE runtime.

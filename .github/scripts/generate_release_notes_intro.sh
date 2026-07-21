@@ -30,7 +30,7 @@ cat > "$temporary_output" <<EOF
 <!-- KRISIS-KNIGHTMARE-RELEASE-INTRO-START -->
 ## 中文
 
-**GitHub Releases、GameBanana 和 Gamejolt 都是本游戏的官方发布源。目前 GitHub Releases 已开放，GameBanana 和 Gamejolt 页面正在准备中，即将发布。**
+**[GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases)、[GameBanana](https://gamebanana.com/mods/695877) 和 [GameJolt](https://gamejolt.com/games/krisis_knightmare/1085393) 都是本游戏的官方发布源。**
 
 本游戏是开源的。请务必在官方发布源下载游戏，以确保你获得的是未经篡改、来源明确、版本正确的官方构建，避免第三方重新打包带来的安全风险。
 ${pre_1_notice_zh}
@@ -64,7 +64,7 @@ cat >> "$temporary_output" <<EOF
 
 ## English
 
-**GitHub Releases, GameBanana, and Gamejolt are all official distribution sources for this game. GitHub Releases is currently available; the GameBanana and Gamejolt pages are being prepared and will be available soon.**
+**[GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases), [GameBanana](https://gamebanana.com/mods/695877), and [GameJolt](https://gamejolt.com/games/krisis_knightmare/1085393) are all official distribution sources for this game.**
 
 This game is open source. Please download it only from official sources to make sure you get an untampered, clearly sourced, correct official build, and to avoid security risks from third-party repackaging.
 ${pre_1_notice_en}

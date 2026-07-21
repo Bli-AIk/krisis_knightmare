@@ -18,7 +18,7 @@
 
 ## 下载与运行
 
-本项目保留 Kristal 项目包（mod 形式）和 standalone 两种分发方式。[GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases)、GameBanana 和 Gamejolt 都是本游戏的**官方发布源**。目前 GitHub Releases 已开放，GameBanana 和 Gamejolt 页面正在准备中，即将发布。
+本项目保留 Kristal 项目包（mod 形式）和 standalone 两种分发方式。[GitHub Releases](https://github.com/Bli-AIk/krisis_knightmare/releases)、[GameBanana](https://gamebanana.com/mods/695877) 和 [GameJolt](https://gamejolt.com/games/krisis_knightmare/1085393) 都是本游戏的**官方发布源**。
 
 - **Kristal 项目包（mod 形式，实验性）**：下载 release 中的 `krisis-knightmare-mod.zip`，安装 Kristal `v0.10.0`，将 ZIP 直接放入 Kristal 主菜单打开的 projects 文件夹（源码运行时对应 `mods/` 目录），然后在项目列表中选择 `krisis_knightmare`。不要在 ZIP 外再套一层目录。
 - **Standalone**：Windows 用户可以下载 `*-win64.zip`，解压后直接运行；其他平台可以根据需要使用 `.love` 文件和对应的 LÖVE 运行时。
