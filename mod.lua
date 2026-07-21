@@ -296,6 +296,7 @@ local KRISIS_RANDOM_MODULUS = 2147483647
 local KRISIS_RANDOM_MULTIPLIER = 48271
 local KRISIS_FINISHER_RESUME_FILE = "kris_finisher_resume"
 local KRISIS_FINISHER_RESUME_VERSION = 2
+local KRISIS_FINISHER_FINAL_TP = 100
 local KRISIS_STATS_PAYLOAD_VERSION = 4
 local KRISIS_STATS_MAGIC = "KRS"
 local KRISIS_STATS_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -1319,6 +1320,7 @@ function Mod:initializeKrisisGameStats()
     self.krisis_stats_elapsed_base = 0
     self.krisis_finisher_resume_saved = false
     self.krisis_gameover_resume_pending = false
+    self.krisis_gameover_resume_save = nil
 end
 
 function Mod:restoreKrisisGameStats(stats, continue_run)
@@ -1404,6 +1406,14 @@ function Mod:beginKrisisBattle(battle)
     local encounter_id = encounter and encounter.id
     if not self:startKrisisGameStats(encounter_id) then
         return
+    end
+
+    self.krisis_failure_recorded = false
+
+    -- A finisher resume only stores run statistics. Do not carry party HP from
+    -- the save/world state that happened to be reconstructed before it.
+    if encounter_id == "kris_finisher" and self.krisis_finisher_resume_pending then
+        self:resetKrisisPartyHealth()
     end
 
     battle.krisis_stats_encounter_id = encounter_id
@@ -1506,7 +1516,31 @@ end
 
 function Mod:prepareKrisisGameOverResume(battle)
     local encounter = battle and battle.encounter
-    self.krisis_gameover_resume_pending = not encounter or encounter.id ~= "kris_finisher"
+    local is_finisher = encounter and encounter.id == "kris_finisher"
+    local reached_final_tp = is_finisher
+        and Game
+        and Game.getTension
+        and Game:getTension() >= KRISIS_FINISHER_FINAL_TP
+    local retry_finisher = is_finisher and not reached_final_tp
+
+    self.krisis_gameover_resume_pending = not retry_finisher
+    self.krisis_finisher_resume_pending = retry_finisher
+    self.krisis_gameover_resume_save = retry_finisher
+        and "kris_finisher"
+        or reached_final_tp and "none"
+        or "retry"
+
+    if retry_finisher then
+        -- Before TP 100, a death retries the finisher from its opening.
+        self:setTemporaryDefaultBattleEntry("kris_finisher")
+    else
+        -- TP 100 has completed the finisher state. The next retry starts over.
+        self.krisis_finisher_resume_saved = false
+        self:clearTemporaryDefaultBattleEntry()
+        if reached_final_tp then
+            self:clearKrisisFinisherResumeFile()
+        end
+    end
 end
 
 function Mod:getKrisisGameStatsElapsedMilliseconds()
@@ -1584,15 +1618,19 @@ function Mod:recordKrisisGameOver()
     self.krisis_failure_recorded = true
     self.krisis_game_stats.previous_failures = self.krisis_game_stats.previous_failures + 1
     self:onKrisisBattleGameOver(Game and Game.battle)
-    self:saveKrisisRunState("retry")
+    local resume_save = self.krisis_gameover_resume_save or "retry"
+    if resume_save ~= "none" then
+        self:saveKrisisRunState(resume_save)
+    end
 end
 
 function Mod:completeKrisisGameStats()
     self.krisis_run_completed = true
     self.krisis_retry_stats = nil
-    if Kristal and Kristal.eraseData then
-        pcall(Kristal.eraseData, KRISIS_FINISHER_RESUME_FILE)
-    end
+    self.krisis_finisher_resume_pending = false
+    self.krisis_finisher_resume_saved = false
+    self:clearTemporaryDefaultBattleEntry()
+    self:clearKrisisFinisherResumeFile()
 end
 
 function Mod:setTemporaryDefaultBattleEntry(encounter)
@@ -1603,6 +1641,44 @@ function Mod:setTemporaryDefaultBattleEntry(encounter)
     if self.info then
         self.info.encounter = encounter
     end
+end
+
+function Mod:clearTemporaryDefaultBattleEntry()
+    self.krisis_default_battle_entry = nil
+    if Kristal then
+        Kristal.krisis_default_battle_entry = nil
+    end
+    if self.info then
+        self.info.encounter = nil
+    end
+end
+
+function Mod:resetKrisisPartyHealth()
+    if not Game then
+        return
+    end
+
+    for _, chara in pairs(Game.party_data or {}) do
+        local max_health = chara.getStat and chara:getStat("health")
+        if max_health and chara.setHealth then
+            chara:setHealth(max_health)
+        end
+    end
+end
+
+function Mod:clearKrisisFinisherResumeFile()
+    if not Kristal or not Kristal.eraseData then
+        return false
+    end
+
+    local ok, err = pcall(function()
+        Kristal.eraseData(KRISIS_FINISHER_RESUME_FILE)
+    end)
+    if not ok then
+        print("[KRISIS] Failed to clear finisher resume: " .. tostring(err))
+        return false
+    end
+    return true
 end
 
 function Mod:saveKrisisFinisherResume()
@@ -1679,19 +1755,24 @@ function Mod:consumeKrisisFinisherResume()
         return
     end
 
-    local ok, err = pcall(function()
-        Kristal.eraseData(KRISIS_FINISHER_RESUME_FILE)
-    end)
-    if not ok then
-        print("[KRISIS] Failed to clear finisher resume: " .. tostring(err))
+    if not self:clearKrisisFinisherResumeFile() then
         return
     end
 
     self.krisis_finisher_resume_pending = false
+    self.krisis_finisher_resume_saved = false
     self.krisis_finisher_resume_consumed = true
+    self:clearTemporaryDefaultBattleEntry()
 end
 
 function Mod:startKrisisBattlePrep(skip_intro)
+    self.krisis_failure_recorded = false
+    self:resetKrisisPartyHealth()
+    if Game and Game.setTension then
+        -- A phase-one retry must not inherit finisher TP from the failed run.
+        Game:setTension(0)
+    end
+
     if Game and Game.world and Game.world.music then
         Game.world.music:stop()
     end
@@ -1782,6 +1863,9 @@ function Mod:getKrisisRunWaveOptions()
 end
 
 function Mod:init()
+    -- Kristal keeps custom fields on the global object when returning to the
+    -- title screen, so clear a previous resume entry before reading options.
+    self:clearTemporaryDefaultBattleEntry()
     self:hookTemporaryDefaultBattleEntry()
     self:hookChapterSelectLocalization()
     self:hookChapterSeedInput()
