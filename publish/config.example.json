@@ -4,18 +4,21 @@
         "builds": [
             {
                 "package_id": "1109746",
-                "release_id": "REPLACE_WITH_GAME_JOLT_RELEASE_ID",
-                "path": "dist/krisis-knightmare-release-win64.zip"
+                "release_id": "new",
+                "path": "dist/krisis-knightmare-release-win64.zip",
+                "platforms": ["windows_64"]
             },
             {
                 "package_id": "1109746",
-                "release_id": "REPLACE_WITH_GAME_JOLT_RELEASE_ID",
-                "path": "dist/krisis-knightmare-release.love"
+                "release_id": "new",
+                "path": "dist/krisis-knightmare-release.love",
+                "platforms": ["other"]
             },
             {
                 "package_id": "1109746",
-                "release_id": "REPLACE_WITH_GAME_JOLT_RELEASE_ID",
-                "path": "dist/krisis-knightmare-mod.zip"
+                "release_id": "new",
+                "path": "dist/krisis-knightmare-mod.zip",
+                "platforms": ["other"]
             }
         ]
     },

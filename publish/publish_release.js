@@ -13,7 +13,7 @@ const os = require("node:os");
 const path = require("node:path");
 const net = require("node:net");
 const readline = require("node:readline");
-const {spawn} = require("node:child_process");
+const {execFileSync, spawn} = require("node:child_process");
 
 const repoRoot = path.resolve(__dirname, "..");
 const defaultConfigPath = path.join(repoRoot, "publish", "config.local.json");
@@ -33,6 +33,7 @@ Options:
   --site SITE         gamejolt, gamebanana, or all (default: all)
   --login             Open the selected sites' login pages and wait for manual login
   --dry-run           Open pages and inspect them without selecting or uploading files
+  --review-only       Prepare GameBanana Media, then stop before Save and Update
   --keep-browser      Leave the isolated Chrome window open after the script exits
   --help              Show this help
 
@@ -46,6 +47,7 @@ function parseArgs(argv) {
         site: "all",
         login: false,
         dryRun: false,
+        reviewOnly: false,
         keepBrowser: false
     };
 
@@ -60,6 +62,10 @@ function parseArgs(argv) {
         }
         if (argument === "--dry-run") {
             options.dryRun = true;
+            continue;
+        }
+        if (argument === "--review-only") {
+            options.reviewOnly = true;
             continue;
         }
         if (argument === "--login") {
@@ -159,6 +165,68 @@ function requireString(value, name) {
     return value.trim();
 }
 
+function getProjectVersion() {
+    const modPath = path.join(repoRoot, "mod.json");
+    const contents = fs.readFileSync(modPath, "utf8");
+    const match = contents.match(/^\s*"version"\s*:\s*"v?([^"\r\n]+)"/m);
+    if (!match) throw new Error(`Could not determine project version from ${displayPath(modPath)}`);
+    return match[1].trim();
+}
+
+function getGithubRepositorySlug() {
+    try {
+        const remote = execFileSync("git", ["config", "--get", "remote.origin.url"], {
+            cwd: repoRoot,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"]
+        }).trim();
+        const match = remote.match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?$/i);
+        return match ? match[1] : null;
+    } catch {
+        return null;
+    }
+}
+
+function generateGameBananaChangelog() {
+    const scriptPath = path.join(repoRoot, ".github", "scripts", "generate_release_notes.sh");
+    if (!fs.existsSync(scriptPath)) {
+        throw new Error(`Release notes generator not found: ${displayPath(scriptPath)}`);
+    }
+    const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "krisis-gamebanana-notes-"));
+    const outputPath = path.join(temporaryDirectory, "release-notes.md");
+    try {
+        const environment = {...process.env};
+        if (!environment.GITHUB_REPOSITORY) {
+            environment.GITHUB_REPOSITORY = getGithubRepositorySlug() || "local/local";
+        }
+        execFileSync(scriptPath, [`v${getProjectVersion()}`, outputPath], {
+            cwd: repoRoot,
+            env: environment,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+            maxBuffer: 4 * 1024 * 1024
+        });
+        const generated = fs.readFileSync(outputPath, "utf8");
+        const changelog = generated.match(/<summary><strong>CHANGELOG<\/strong><\/summary>\s*([\s\S]*?)\s*<\/details>/i)?.[1]?.trim();
+        if (!changelog) throw new Error("Generated release notes do not contain a CHANGELOG section");
+        return changelog;
+    } catch (error) {
+        throw new Error(`Could not generate GameBanana changelog: ${error.message}`);
+    } finally {
+        fs.rmSync(temporaryDirectory, {recursive: true, force: true});
+    }
+}
+
+function getGameJoltPlatforms(value, filePath, name) {
+    const platforms = value === undefined
+        ? (/(?:release-win64|windows-?64)/i.test(path.basename(filePath)) ? ["windows_64"] : ["other"])
+        : value;
+    if (!Array.isArray(platforms) || platforms.length === 0 || platforms.some((platform) => !["windows", "windows_64", "mac", "mac_64", "linux", "linux_64", "other"].includes(platform))) {
+        throw new Error(`${name} must contain valid Game Jolt platforms`);
+    }
+    return [...new Set(platforms)];
+}
+
 function requireSiteUrl(value, name, hostname) {
     const url = requireString(value, name);
     let parsed;
@@ -179,18 +247,29 @@ function requireSiteUrl(value, name, hostname) {
 function getGameJoltBuilds(config) {
     const gamejolt = requireObject(config.gamejolt, "gamejolt");
     const gameId = requireString(gamejolt.game_id, "gamejolt.game_id");
+    const versionNumber = requireString(gamejolt.version_number || getProjectVersion(), "gamejolt.version_number");
+    const updateVersion = gamejolt.update_version === true;
     if (!Array.isArray(gamejolt.builds) || gamejolt.builds.length === 0) {
         throw new Error("gamejolt.builds must contain at least one upload entry");
     }
 
     return gamejolt.builds.map((build, index) => {
         const item = requireObject(build, `gamejolt.builds[${index}]`);
+        const releaseId = requireString(item.release_id, `gamejolt.builds[${index}].release_id`);
+        if (releaseId !== "new" && !/^\d+$/.test(releaseId)) {
+            throw new Error(`gamejolt.builds[${index}].release_id must be a numeric Game Jolt release ID or "new"`);
+        }
+        const filePath = resolveFile(item.path);
         return {
             gameId,
+            versionNumber,
+            updateVersion,
             packageId: requireString(item.package_id, `gamejolt.builds[${index}].package_id`),
-            releaseId: requireString(item.release_id, `gamejolt.builds[${index}].release_id`),
-            filePath: resolveFile(item.path),
-            pageUrl: requireSiteUrl(item.page_url || `https://gamejolt.com/dashboard/games/${encodeURIComponent(gameId)}/packages/${encodeURIComponent(item.package_id)}/releases/${encodeURIComponent(item.release_id)}/edit`, `gamejolt.builds[${index}].page_url`, "gamejolt.com")
+            releaseId,
+            filePath,
+            platforms: getGameJoltPlatforms(item.platforms, filePath, `gamejolt.builds[${index}].platforms`),
+            skipUpload: item.skip_upload === true,
+            pageUrl: releaseId === "new" ? null : requireSiteUrl(item.page_url || `https://gamejolt.com/dashboard/games/${encodeURIComponent(gameId)}/packages/${encodeURIComponent(item.package_id)}/releases/${encodeURIComponent(releaseId)}/edit`, `gamejolt.builds[${index}].page_url`, "gamejolt.com")
         };
     });
 }
@@ -205,6 +284,10 @@ function getGameBananaConfig(config) {
     return {
         modId,
         filePaths: configuredPaths.map(resolveFile),
+        version: `v${gamebanana.version || getProjectVersion()}`.replace(/^vv/, "v"),
+        title: gamebanana.title || `Update v${gamebanana.version || getProjectVersion()}`.replace(/^vv/, "v"),
+        blurb: gamebanana.blurb || gamebanana.changelog || generateGameBananaChangelog(),
+        significant: gamebanana.significant_update !== false,
         updatePageUrl: requireSiteUrl(gamebanana.update_page_url || gamebanana.page_url || `https://gamebanana.com/mods/updates/${encodeURIComponent(modId)}`, "gamebanana.update_page_url", "gamebanana.com"),
         fileManagerUrl: requireSiteUrl(gamebanana.file_manager_url || `https://gamebanana.com/mods/edit/${encodeURIComponent(modId)}`, "gamebanana.file_manager_url", "gamebanana.com")
     };
@@ -425,6 +508,420 @@ async function waitForUser(message) {
     input.close();
 }
 
+async function openGameBananaUpdateForm(cdp) {
+    const formReady = waitForGameBananaUpdateForm(cdp);
+    const clicked = await evaluate(cdp, `(() => {
+        if (document.getElementById("UpsertUpdateForm")) return true;
+        const button = [...document.querySelectorAll("button")].find((candidate) =>
+            /^add update$/i.test((candidate.innerText || "").replace(/\\s+/g, " ").trim())
+        );
+        if (!button) return false;
+        button.click();
+        return true;
+    })()`, {userGesture: true});
+    if (!clicked.value) {
+        formReady.cancel();
+        await formReady.promise.catch(() => {});
+        throw new Error("Could not find GameBanana's Add Update button");
+    }
+    await formReady.promise;
+}
+
+function waitForGameBananaUpdateForm(cdp, timeoutMilliseconds = 60000) {
+    let cancel;
+    const promise = new Promise((resolve, reject) => {
+        const deadline = Date.now() + timeoutMilliseconds;
+        const check = async () => {
+            try {
+                const ready = await evaluateValue(cdp, `(() => {
+                    const form = document.getElementById("UpsertUpdateForm");
+                    const editor = form?.querySelector('[contenteditable="true"]');
+                    return Boolean(form && form.querySelector("#_sName") && form.querySelector("#_sVersion") && editor);
+                })()`);
+                if (ready) {
+                    finish(null);
+                    return;
+                }
+                if (Date.now() >= deadline) {
+                    finish(new Error(`GameBanana Add Update form did not load within ${timeoutMilliseconds / 1000} seconds`));
+                    return;
+                }
+                timer = setTimeout(check, 300);
+            } catch (error) {
+                finish(error);
+            }
+        };
+        let timer = setTimeout(check, 0);
+
+        function finish(error) {
+            clearTimeout(timer);
+            if (error) reject(error);
+            else resolve();
+        }
+
+        cancel = () => finish(new Error("GameBanana Add Update form watcher cancelled"));
+    });
+    return {promise, cancel: () => cancel()};
+}
+
+async function waitForGameBananaMedia(cdp, timeoutMilliseconds = 60000) {
+    const deadline = Date.now() + timeoutMilliseconds;
+    while (Date.now() < deadline) {
+        const state = await evaluateValue(cdp, `(() => {
+            const tab = [...document.querySelectorAll("li.CategoryTab, [role=tab]")].find((candidate) =>
+                /^media(?:\\s|$)/i.test((candidate.innerText || candidate.textContent || "").replace(/\\s+/g, " ").trim())
+            );
+            const pane = [...document.querySelectorAll(".MediaPane")].find((candidate) => candidate.classList.contains("Selected"));
+            const files = document.getElementById("Files");
+            return {
+                tab: Boolean(tab),
+                selected: Boolean(tab && (tab.classList.contains("Selected") || pane)),
+                files: Boolean(files && files.querySelector('input[type="file"]') && files.querySelector("ul.AdvancedUploadedFiles"))
+            };
+        })()`);
+        if (state.tab && !state.selected) {
+            await evaluate(cdp, `(() => {
+                const tab = [...document.querySelectorAll("li.CategoryTab, [role=tab]")].find((candidate) =>
+                    /^media(?:\\s|$)/i.test((candidate.innerText || candidate.textContent || "").replace(/\\s+/g, " ").trim())
+                );
+                if (!tab) return false;
+                tab.click();
+                return true;
+            })()`, {userGesture: true});
+        }
+        if (state.files) return;
+        await sleep(500);
+    }
+    throw new Error(`GameBanana Media form did not load within ${timeoutMilliseconds / 1000} seconds`);
+}
+
+async function getGameBananaMediaRows(cdp) {
+    return evaluateValue(cdp, `(() => {
+        const list = document.querySelector("ul.AdvancedUploadedFiles");
+        if (!list) return [];
+        return [...list.children].map((row, index) => {
+            const link = row.querySelector('a[title="Download"]');
+            const size = row.querySelector("itemcount")?.getAttribute("title") || "";
+            return {
+                index,
+                filename: (link?.textContent || "").trim(),
+                href: link?.href || null,
+                size: /^(\\d+)/.test(size) ? Number(size.match(/^(\\d+)/)[1]) : null,
+                version: row.querySelector(".VersionInput")?.value || "",
+                fileId: row.querySelector('input[name="_idFileRow"]')?.value || "",
+                added: row.querySelector(".RedColor")?.textContent?.trim() || ""
+            };
+        }).filter((row) => row.filename);
+    })()`);
+}
+
+function gameBananaFileNameMatches(actualName, expectedName) {
+    const actual = actualName.toLowerCase();
+    const expected = path.basename(expectedName).toLowerCase();
+    if (actual === expected) return true;
+    const extension = path.extname(expected);
+    const stem = expected.slice(0, -extension.length).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedExtension = extension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`^${stem}_[a-z0-9-]+${escapedExtension}$`, "i").test(actual);
+}
+
+function findGameBananaMediaRow(rows, filePath) {
+    const fileSize = fs.statSync(filePath).size;
+    return rows.filter((row) => row.size === fileSize && gameBananaFileNameMatches(row.filename, path.basename(filePath))).at(-1) || null;
+}
+
+async function findGameBananaFileInput(cdp) {
+    const result = await evaluate(cdp, `(() => document.getElementById("Files")?.querySelector('input[type="file"]') || null)()`, {returnByValue: false});
+    if (!result.objectId) return null;
+    const description = await cdp.call("DOM.describeNode", {objectId: result.objectId});
+    await cdp.call("Runtime.releaseObject", {objectId: result.objectId});
+    return description.node?.backendNodeId || null;
+}
+
+async function chooseGameBananaFiles(cdp, filePaths) {
+    const backendNodeId = await findGameBananaFileInput(cdp);
+    if (!backendNodeId) return false;
+    await cdp.call("DOM.setFileInputFiles", {backendNodeId, files: filePaths});
+    await evaluate(cdp, `(() => {
+        const input = document.getElementById("Files")?.querySelector('input[type="file"]');
+        if (!input) return false;
+        input.dispatchEvent(new Event("input", {bubbles: true}));
+        input.dispatchEvent(new Event("change", {bubbles: true}));
+        return true;
+    })()`, {userGesture: true});
+    return true;
+}
+
+async function uploadGameBananaFiles(cdp, gamebanana) {
+    await navigate(cdp, gamebanana.fileManagerUrl);
+    await ensureLoggedIn(cdp, "GameBanana file manager");
+    await waitForGameBananaMedia(cdp);
+
+    let rows = await getGameBananaMediaRows(cdp);
+    const missing = gamebanana.filePaths.filter((filePath) => !findGameBananaMediaRow(rows, filePath));
+    for (const filePath of missing) {
+        console.log(`Uploading GameBanana file: ${displayPath(filePath)}`);
+        if (!await chooseGameBananaFiles(cdp, [filePath])) {
+            throw new Error("Could not find GameBanana's Media file input");
+        }
+        const deadline = Date.now() + 600000;
+        while (Date.now() < deadline) {
+            rows = await getGameBananaMediaRows(cdp);
+            if (findGameBananaMediaRow(rows, filePath)) break;
+            await sleep(1000);
+        }
+        if (!findGameBananaMediaRow(rows, filePath)) {
+            throw new Error(`GameBanana did not finish uploading ${path.basename(filePath)} within 600 seconds`);
+        }
+        console.log(`GameBanana upload finished: ${path.basename(filePath)}.`);
+    }
+
+    rows = await getGameBananaMediaRows(cdp);
+    const targetRows = gamebanana.filePaths.map((filePath) => findGameBananaMediaRow(rows, filePath));
+    if (targetRows.some((row) => !row)) {
+        throw new Error("Could not identify all GameBanana files after upload");
+    }
+    return targetRows;
+}
+
+async function configureGameBananaMedia(cdp, gamebanana, targetRows) {
+    const targetDescriptors = gamebanana.filePaths.map((filePath) => ({
+        filename: path.basename(filePath),
+        size: fs.statSync(filePath).size
+    }));
+    const version = gamebanana.version;
+    const result = await evaluate(cdp, `(() => {
+        const list = document.querySelector("ul.AdvancedUploadedFiles");
+        if (!list) return {error: "missing file list"};
+        const descriptors = ${JSON.stringify(targetDescriptors)};
+        const rows = [...list.children];
+        const matchesName = (actual, expected) => {
+            const actualLower = actual.toLowerCase();
+            const expectedLower = expected.toLowerCase();
+            if (actualLower === expectedLower) return true;
+            const extensionIndex = expectedLower.lastIndexOf(".");
+            const stem = expectedLower.slice(0, extensionIndex);
+            const extension = expectedLower.slice(extensionIndex);
+            const suffix = actualLower.slice(stem.length + 1, actualLower.length - extension.length);
+            return actualLower.startsWith(stem + "_") && actualLower.endsWith(extension) && /^[a-z0-9-]+$/.test(suffix);
+        };
+        const matches = (row, descriptor) => {
+            const link = row.querySelector('a[title="Download"]');
+            const rawSize = row.querySelector("itemcount")?.getAttribute("title") || "";
+            const size = rawSize.match(/^(\\d+)/)?.[1];
+            return Boolean(link && size && Number(size) === descriptor.size && matchesName(link.textContent.trim(), descriptor.filename));
+        };
+        const targets = descriptors.map((descriptor) => rows.filter((row) => matches(row, descriptor)).at(-1));
+        if (targets.some((row) => !row)) return {error: "missing target file row"};
+        for (const row of targets) {
+            const input = row.querySelector(".VersionInput");
+            if (!input) return {error: "missing version input"};
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+            setter.call(input, ${JSON.stringify(version)});
+            input.dispatchEvent(new Event("input", {bubbles: true}));
+            input.dispatchEvent(new Event("change", {bubbles: true}));
+        }
+        const anchor = list.firstElementChild;
+        let insertionPoint = anchor;
+        for (const row of targets) {
+            list.insertBefore(row, insertionPoint);
+            insertionPoint = row.nextElementSibling;
+        }
+        const jq = window.jQuery || window.$;
+        if (jq && jq.fn?.sortable) jq(list).sortable("refreshPositions");
+        list.dispatchEvent(new Event("change", {bubbles: true}));
+        const state = [...list.children].slice(0, ${targetDescriptors.length}).map((row) => ({
+            fileId: row.querySelector('input[name="_idFileRow"]')?.value || "",
+            filename: row.querySelector('a[title="Download"]')?.textContent?.trim() || "",
+            size: Number((row.querySelector("itemcount")?.getAttribute("title") || "").match(/^(\\d+)/)?.[1] || 0),
+            version: row.querySelector(".VersionInput")?.value || ""
+        }));
+        return {
+            state,
+            valid: state.length === descriptors.length && state.every((row, index) => {
+                const descriptor = descriptors[index];
+                const actual = row.filename.toLowerCase();
+                const expected = descriptor.filename.toLowerCase();
+                const extensionIndex = expected.lastIndexOf(".");
+                const stem = expected.slice(0, extensionIndex);
+                const extension = expected.slice(extensionIndex);
+                const suffix = actual.slice(stem.length + 1, actual.length - extension.length);
+                const nameMatches = actual === expected || (actual.startsWith(stem + "_") && actual.endsWith(extension) && /^[a-z0-9-]+$/.test(suffix));
+                return nameMatches && row.size === descriptor.size && row.version === ${JSON.stringify(version)};
+            })
+        };
+    })()`, {userGesture: true});
+    if (result.value?.error || !result.value?.valid) {
+        throw new Error(`Could not set GameBanana file versions/order: ${result.value?.error || "verification failed"}`);
+    }
+    console.log(`GameBanana files set to ${version}; order is ${gamebanana.filePaths.map((filePath) => path.basename(filePath)).join(", ")}.`);
+}
+
+function waitForGameBananaPost(cdp, modId, kind, timeoutMilliseconds = 120000) {
+    let cancel;
+    const promise = new Promise((resolve, reject) => {
+        let requestId = null;
+        let settled = false;
+        const pathPrefix = kind === "media" ? `/mods/edit/${modId}` : `/mods/updates/${modId}`;
+        const timer = setTimeout(() => finish(new Error(`Timed out waiting for GameBanana ${kind} save`)), timeoutMilliseconds);
+        const removeRequestListener = cdp.on("Network.requestWillBeSent", (event) => {
+            const request = event.request;
+            if (request?.method === "POST") {
+                try {
+                    const url = new URL(request.url);
+                    if (url.hostname === "gamebanana.com" && url.pathname === pathPrefix) requestId = event.requestId;
+                } catch {
+                    // Ignore non-URL requests.
+                }
+            }
+        });
+        const removeResponseListener = cdp.on("Network.responseReceived", (event) => {
+            if (requestId && event.requestId === requestId) finish(null, event.response);
+        });
+
+        function finish(error, response) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            removeRequestListener();
+            removeResponseListener();
+            if (error) reject(error);
+            else resolve(response);
+        }
+
+        cancel = () => finish(new Error(`GameBanana ${kind} save watcher cancelled`));
+    });
+    return {promise, cancel: () => cancel()};
+}
+
+async function saveGameBananaMedia(cdp, gamebanana) {
+    const saveFinished = waitForGameBananaPost(cdp, gamebanana.modId, "media");
+    const clicked = await evaluate(cdp, `(() => {
+        const form = document.querySelector("form.MainForm");
+        const button = form && [...form.querySelectorAll('button[type="submit"]')].find((candidate) =>
+            /^save$/i.test((candidate.innerText || candidate.value || "").replace(/\\s+/g, " ").trim())
+        );
+        if (!button || button.disabled) return false;
+        button.click();
+        return true;
+    })()`, {userGesture: true});
+    if (!clicked.value) {
+        saveFinished.cancel();
+        await saveFinished.promise.catch(() => {});
+        throw new Error("Could not find GameBanana's Media Save button");
+    }
+    const response = await saveFinished.promise;
+    if (response.status < 200 || response.status >= 400) {
+        throw new Error(`GameBanana Media save returned HTTP ${response.status}`);
+    }
+    await navigate(cdp, gamebanana.fileManagerUrl);
+    await ensureLoggedIn(cdp, "GameBanana file manager");
+    await waitForGameBananaMedia(cdp);
+    const rows = await getGameBananaMediaRows(cdp);
+    console.log("GameBanana Media changes saved.");
+    return rows;
+}
+
+async function setGameBananaUpdateFields(cdp, gamebanana, targetRows) {
+    const targetFileIds = targetRows.map((row) => row.fileId);
+    const result = await evaluate(cdp, `(async () => {
+        const form = document.getElementById("UpsertUpdateForm");
+        if (!form) return {error: "missing update form"};
+        const setInput = (selector, value) => {
+            const input = form.querySelector(selector);
+            if (!input) return false;
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+            setter.call(input, value);
+            input.dispatchEvent(new Event("input", {bubbles: true}));
+            input.dispatchEvent(new Event("change", {bubbles: true}));
+            return input.value === value;
+        };
+        if (!setInput("#_sName", ${JSON.stringify(gamebanana.title)}) || !setInput("#_sVersion", ${JSON.stringify(gamebanana.version)})) {
+            return {error: "missing title or version input"};
+        }
+        const targetIds = new Set(${JSON.stringify(targetFileIds)});
+        const fileValues = [...form.querySelectorAll('input[id^="File_"]')].map((input) => input.value);
+        for (const value of fileValues) {
+            const currentForm = document.getElementById("UpsertUpdateForm");
+            const input = [...currentForm.querySelectorAll('input[id^="File_"]')].find((candidate) => candidate.value === value);
+            if (input && input.checked !== targetIds.has(value)) {
+                input.click();
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+        }
+        const currentForm = document.getElementById("UpsertUpdateForm");
+        const selected = [...currentForm.querySelectorAll('input[id^="File_"]')]
+            .filter((input) => input.checked)
+            .map((input) => input.value);
+        if (selected.length !== targetIds.size || selected.some((value) => !targetIds.has(value))) {
+            return {error: "could not select all related files", selected};
+        }
+        const significance = currentForm.querySelector("#UpdateSignificance");
+        if (significance && significance.checked !== ${gamebanana.significant ? "true" : "false"}) significance.click();
+        const editor = [...currentForm.querySelectorAll('[contenteditable="true"]')].find((candidate) =>
+            /^blurb(?:\s|$)/i.test(candidate.closest(".StrangeBerryInput")?.querySelector("label")?.textContent?.trim() || "")
+        );
+        if (!editor) return {error: "missing Blurb editor"};
+        editor.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return {title: currentForm.querySelector("#_sName").value, version: currentForm.querySelector("#_sVersion").value, selected, editorReady: true};
+    })()`, {userGesture: true, awaitPromise: true});
+    if (result.value?.error) throw new Error(`Could not fill GameBanana Add Update form: ${result.value.error}`);
+
+    await cdp.call("Input.insertText", {text: gamebanana.blurb});
+    const editorText = await evaluateValue(cdp, `(() => {
+        const form = document.getElementById("UpsertUpdateForm");
+        const editor = [...form.querySelectorAll('[contenteditable="true"]')].find((candidate) =>
+            /^blurb(?:\s|$)/i.test(candidate.closest(".StrangeBerryInput")?.querySelector("label")?.textContent?.trim() || "")
+        );
+        return editor?.innerText || "";
+    })()`);
+    if (!editorText || editorText.length < Math.min(gamebanana.blurb.length, 1)) {
+        throw new Error("Could not fill GameBanana Blurb editor");
+    }
+    console.log(`GameBanana Add Update filled: ${gamebanana.title}, ${gamebanana.version}; CI release notes placed in Blurb (${gamebanana.blurb.length} characters).`);
+}
+
+async function waitForGameBananaUpdateSaved(cdp, gamebanana, timeoutMilliseconds = 120000) {
+    const deadline = Date.now() + timeoutMilliseconds;
+    while (Date.now() < deadline) {
+        const state = await evaluateValue(cdp, `(() => {
+            const expected = ${JSON.stringify(gamebanana.title)}.replace(/\\s+/g, " ").trim().toLowerCase();
+            const headers = [...document.querySelectorAll(".UpdateHeader strong")].map((node) =>
+                (node.textContent || "").replace(/\\s+/g, " ").trim().toLowerCase()
+            );
+            return {
+                form: Boolean(document.getElementById("UpsertUpdateForm")),
+                update: headers.includes(expected)
+            };
+        })()`);
+        if (!state.form && state.update) return;
+        await sleep(500);
+    }
+    throw new Error(`GameBanana update did not appear within ${timeoutMilliseconds / 1000} seconds`);
+}
+
+async function saveGameBananaUpdate(cdp, gamebanana) {
+    const clicked = await evaluate(cdp, `(() => {
+        const button = document.querySelector('button[type="submit"][form="UpsertUpdateForm"]') ||
+            [...document.querySelectorAll("button")].find((candidate) =>
+                candidate.type === "submit" && /^save$/i.test((candidate.innerText || candidate.value || "").trim()) && candidate.form?.id === "UpsertUpdateForm"
+            );
+        if (!button || button.disabled) return false;
+        button.click();
+        return true;
+    })()`, {userGesture: true});
+    if (!clicked.value) {
+        throw new Error("Could not find GameBanana Add Update Save button");
+    }
+    await waitForGameBananaUpdateSaved(cdp, gamebanana);
+    console.log("GameBanana update saved.");
+}
+
 async function ensureLoggedIn(cdp, siteName) {
     const info = await pageInfo(cdp);
     if (info.loginPage) {
@@ -435,6 +932,180 @@ async function ensureLoggedIn(cdp, siteName) {
             throw new Error(`${siteName} still appears to be on a login page`);
         }
     }
+}
+
+async function waitForFileInputs(cdp, siteName, timeoutMilliseconds = 60000) {
+    const deadline = Date.now() + timeoutMilliseconds;
+    let info;
+    while (Date.now() < deadline) {
+        info = await pageInfo(cdp);
+        if (info.loginPage) {
+            throw new Error(`${siteName} redirected to a login page while loading`);
+        }
+        if (info.fileInputs.length > 0) return info;
+        await sleep(500);
+    }
+    throw new Error(`${siteName} file form did not load within ${timeoutMilliseconds / 1000} seconds`);
+}
+
+async function waitForGameJoltNewReleaseButton(cdp, timeoutMilliseconds = 60000) {
+    const deadline = Date.now() + timeoutMilliseconds;
+    const expression = `(() => [...document.querySelectorAll("button")].some((button) => {
+        const text = (button.innerText || "").replace(/\\s+/g, " ").trim();
+        return button.classList.contains("button") &&
+            button.classList.contains("-primary") &&
+            button.classList.contains("-outline") &&
+            button.classList.contains("-block") &&
+            /new|release|version|發行|发行|版本/i.test(text);
+    }))()`;
+    while (Date.now() < deadline) {
+        if (await evaluateValue(cdp, expression)) return;
+        await sleep(500);
+    }
+    throw new Error(`Game Jolt package page did not load the new-release button within ${timeoutMilliseconds / 1000} seconds`);
+}
+
+async function waitForGameJoltVersionInput(cdp, timeoutMilliseconds = 60000) {
+    const deadline = Date.now() + timeoutMilliseconds;
+    while (Date.now() < deadline) {
+        const value = await evaluateValue(cdp, "document.querySelector('input[name=version_number]')?.value ?? null");
+        if (value !== null) return;
+        await sleep(500);
+    }
+    throw new Error(`Game Jolt release editor did not load the version field within ${timeoutMilliseconds / 1000} seconds`);
+}
+
+function isGameJoltReleaseSaveRequest(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.hostname === "gamejolt.com" && /\/site-api\/web\/dash\/developer\/games\/releases\/save\//.test(parsed.pathname);
+    } catch {
+        return false;
+    }
+}
+
+function waitForGameJoltReleaseSave(cdp) {
+    let cancel;
+    const promise = new Promise((resolve, reject) => {
+        let requestId = null;
+        let settled = false;
+        const timer = setTimeout(() => finish(new Error("Timed out waiting for Game Jolt release version save")), 120000);
+        const removeRequestListener = cdp.on("Network.requestWillBeSent", (event) => {
+            if (event.request?.method === "POST" && isGameJoltReleaseSaveRequest(event.request.url)) {
+                requestId = event.requestId;
+            }
+        });
+        const removeResponseListener = cdp.on("Network.responseReceived", (event) => {
+            if (requestId && event.requestId === requestId) finish(null, event.response);
+        });
+
+        function finish(error, response) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            removeRequestListener();
+            removeResponseListener();
+            if (error) reject(error);
+            else resolve(response);
+        }
+
+        cancel = () => finish(new Error("Game Jolt release save watcher cancelled"));
+    });
+    return {promise, cancel: () => cancel()};
+}
+
+async function saveGameJoltVersion(cdp, versionNumber) {
+    await waitForGameJoltVersionInput(cdp);
+    const saveFinished = waitForGameJoltReleaseSave(cdp);
+    const result = await evaluate(cdp, `(() => {
+        const input = document.querySelector('input[name="version_number"]');
+        if (!input) return false;
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+        setter.call(input, ${JSON.stringify(versionNumber)});
+        input.dispatchEvent(new Event("input", {bubbles: true}));
+        input.dispatchEvent(new Event("change", {bubbles: true}));
+        input.blur();
+        return input.value === ${JSON.stringify(versionNumber)};
+    })()`, {userGesture: true});
+    if (!result.value) {
+        saveFinished.cancel();
+        await saveFinished.promise.catch(() => {});
+        throw new Error("Could not set the Game Jolt release version field");
+    }
+    await sleep(300);
+
+    const saveButtonExpression = `(() => {
+        const button = [...document.querySelectorAll("button")].find((candidate) => {
+            const text = (candidate.innerText || "").replace(/\\s+/g, " ").trim();
+            return /save|儲存|保存/i.test(text) && /draft|release|草稿|發行|发行/i.test(text);
+        });
+        return Boolean(button && !button.disabled);
+    })()`;
+    const buttonDeadline = Date.now() + 60000;
+    while (Date.now() < buttonDeadline && !await evaluateValue(cdp, saveButtonExpression)) {
+        await sleep(500);
+    }
+
+    const clicked = await evaluate(cdp, `(() => {
+        const button = [...document.querySelectorAll("button")].find((candidate) => {
+            const text = (candidate.innerText || "").replace(/\\s+/g, " ").trim();
+            return /save|儲存|保存/i.test(text) && /draft|release|草稿|發行|发行/i.test(text);
+        });
+        if (!button || button.disabled) return false;
+        button.click();
+        return true;
+    })()`, {userGesture: true});
+    if (!clicked.value) {
+        saveFinished.cancel();
+        await saveFinished.promise.catch(() => {});
+        throw new Error("Could not find the Game Jolt release save button");
+    }
+
+    const response = await saveFinished.promise;
+    if (response.status < 200 || response.status >= 300) {
+        throw new Error(`Game Jolt release save request returned HTTP ${response.status}`);
+    }
+    console.log(`Game Jolt release version saved: ${versionNumber}`);
+}
+
+async function createGameJoltRelease(cdp, build, dryRun) {
+    const packageUrl = `https://gamejolt.com/dashboard/games/${encodeURIComponent(build.gameId)}/packages/${encodeURIComponent(build.packageId)}`;
+    await navigate(cdp, packageUrl);
+    await ensureLoggedIn(cdp, "Game Jolt");
+    await waitForGameJoltNewReleaseButton(cdp);
+    if (dryRun) {
+        console.log("Game Jolt new-release button is ready; dry run will not create a release.");
+        return null;
+    }
+
+    const clicked = await evaluate(cdp, `(() => {
+        const button = [...document.querySelectorAll("button")].find((candidate) => {
+            const text = (candidate.innerText || "").replace(/\\s+/g, " ").trim();
+            return candidate.classList.contains("button") &&
+                candidate.classList.contains("-primary") &&
+                candidate.classList.contains("-outline") &&
+                candidate.classList.contains("-block") &&
+                /new|release|version|發行|发行|版本/i.test(text);
+        });
+        if (!button) return false;
+        button.click();
+        return true;
+    })()`, {userGesture: true});
+    if (!clicked.value) throw new Error("Could not find Game Jolt's new-release button");
+
+    const deadline = Date.now() + 60000;
+    const releasePattern = new RegExp(`/dashboard/games/${encodeURIComponent(build.gameId)}/packages/${encodeURIComponent(build.packageId)}/releases/(\\d+)/edit`);
+    while (Date.now() < deadline) {
+        const currentUrl = await evaluateValue(cdp, "location.href");
+        const match = currentUrl.match(releasePattern);
+        if (match) {
+            const release = {releaseId: match[1], pageUrl: currentUrl};
+            console.log(`Game Jolt new release created: ${release.releaseId}`);
+            return release;
+        }
+        await sleep(500);
+    }
+    throw new Error("Game Jolt did not open the new release editor within 60 seconds");
 }
 
 async function initializeLogin(cdp, siteName) {
@@ -477,6 +1148,57 @@ async function chooseFiles(cdp, filePaths) {
     return true;
 }
 
+async function setGameJoltBuildPlatforms(cdp, build) {
+    const fileName = path.basename(build.filePath);
+    const desiredNames = build.platforms.map((platform) => `os_${platform}`);
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+        const state = await evaluateValue(cdp, `(() => {
+            const buildForm = [...document.querySelectorAll(".game-build-form")]
+                .find((form) => [...form.querySelectorAll("h5")].some((heading) => (heading.innerText || "").includes(${JSON.stringify(fileName)})));
+            if (!buildForm) return null;
+            const checkboxes = [...buildForm.querySelectorAll('input[type="checkbox"][name^="os_"]')];
+            return {
+                found: true,
+                checked: checkboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.name),
+                names: checkboxes.map((checkbox) => checkbox.name)
+            };
+        })()`);
+        if (state && desiredNames.every((name) => state.checked.includes(name)) && state.checked.every((name) => desiredNames.includes(name))) {
+            console.log(`Game Jolt platforms set for ${fileName}: ${build.platforms.join(", ")}.`);
+            return;
+        }
+        if (state) {
+            await evaluate(cdp, `(() => {
+                const buildForm = [...document.querySelectorAll(".game-build-form")]
+                    .find((form) => [...form.querySelectorAll("h5")].some((heading) => (heading.innerText || "").includes(${JSON.stringify(fileName)})));
+                if (!buildForm) return false;
+                const desired = new Set(${JSON.stringify(desiredNames)});
+                for (const checkbox of buildForm.querySelectorAll('input[type="checkbox"][name^="os_"]')) {
+                    if (checkbox.checked !== desired.has(checkbox.name)) checkbox.click();
+                }
+                return true;
+            })()`, {userGesture: true});
+            await sleep(1000);
+        } else {
+            await sleep(500);
+        }
+    }
+    throw new Error(`Game Jolt build platform controls did not become ready for ${fileName}`);
+}
+
+async function prepareExistingGameJoltBuild(cdp, build) {
+    const formReady = waitForGameJoltBuildForm(cdp, build);
+    await navigate(cdp, requireString(build.pageUrl, "gamejolt page_url"));
+    await ensureLoggedIn(cdp, "Game Jolt");
+    await waitForFileInputs(cdp, "Game Jolt release page");
+    const formResponse = await formReady.promise;
+    if (formResponse.status < 200 || formResponse.status >= 300) {
+        throw new Error(`Game Jolt build form request returned HTTP ${formResponse.status}`);
+    }
+    await setGameJoltBuildPlatforms(cdp, build);
+}
+
 function isGameJoltUploadRequest(url) {
     try {
         const parsed = new URL(url);
@@ -484,6 +1206,46 @@ function isGameJoltUploadRequest(url) {
     } catch {
         return false;
     }
+}
+
+function isGameJoltBuildFormRequest(url, build) {
+    try {
+        const parsed = new URL(url);
+        return parsed.hostname === "gamejolt.com" &&
+            parsed.pathname === `/site-api/web/dash/developer/games/builds/save/${build.gameId}/${build.packageId}/${build.releaseId}`;
+    } catch {
+        return false;
+    }
+}
+
+function waitForGameJoltBuildForm(cdp, build) {
+    let cancel;
+    const promise = new Promise((resolve, reject) => {
+        let requestId = null;
+        let settled = false;
+        const timer = setTimeout(() => finish(new Error("Timed out waiting for Game Jolt build form configuration")), 60000);
+        const removeRequestListener = cdp.on("Network.requestWillBeSent", (event) => {
+            if (event.request?.method === "GET" && isGameJoltBuildFormRequest(event.request.url, build)) {
+                requestId = event.requestId;
+            }
+        });
+        const removeResponseListener = cdp.on("Network.responseReceived", (event) => {
+            if (requestId && event.requestId === requestId) finish(null, event.response);
+        });
+
+        function finish(error, response) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            removeRequestListener();
+            removeResponseListener();
+            if (error) reject(error);
+            else resolve(response);
+        }
+
+        cancel = () => finish(new Error("Game Jolt build form watcher cancelled"));
+    });
+    return {promise, cancel: () => cancel()};
 }
 
 function waitForGameJoltUpload(cdp) {
@@ -518,10 +1280,16 @@ function waitForGameJoltUpload(cdp) {
 
 async function uploadGameJoltBuild(cdp, build, dryRun) {
     const pageUrl = requireString(build.pageUrl, "gamejolt page_url");
+    const formReady = waitForGameJoltBuildForm(cdp, build);
     await navigate(cdp, pageUrl);
     await ensureLoggedIn(cdp, "Game Jolt");
 
-    const info = await pageInfo(cdp);
+    const info = await waitForFileInputs(cdp, "Game Jolt release page");
+    const formResponse = await formReady.promise;
+    if (formResponse.status < 200 || formResponse.status >= 300) {
+        throw new Error(`Game Jolt build form request returned HTTP ${formResponse.status}`);
+    }
+    await sleep(1000);
     console.log("Game Jolt release page is ready.");
     console.log(`File: ${displayPath(build.filePath)}`);
     console.log(`File inputs found: ${info.fileInputs.length}`);
@@ -534,6 +1302,7 @@ async function uploadGameJoltBuild(cdp, build, dryRun) {
         throw new Error("Could not find a Game Jolt file input. Open the release edit page and check its form.");
     }
     console.log("File selected; waiting for Game Jolt to finish its upload...");
+    await setGameJoltBuildPlatforms(cdp, build);
 
     const response = await uploadFinished.promise;
     if (response.status < 200 || response.status >= 300) {
@@ -542,35 +1311,37 @@ async function uploadGameJoltBuild(cdp, build, dryRun) {
     console.log(`Game Jolt upload finished (HTTP ${response.status}).`);
 }
 
-async function assistGameBanana(cdp, gamebanana, dryRun) {
-    await navigate(cdp, gamebanana.updatePageUrl);
-    await ensureLoggedIn(cdp, "GameBanana");
-
-    const info = await pageInfo(cdp);
-    console.log("GameBanana updates page is ready.");
+async function assistGameBanana(cdp, gamebanana, dryRun, reviewOnly) {
     console.log(`Files to upload: ${gamebanana.filePaths.map(displayPath).join(", ")}`);
-    console.log(`File inputs found before opening the update form: ${info.fileInputs.length}`);
     if (dryRun) {
         await navigate(cdp, gamebanana.fileManagerUrl);
         await ensureLoggedIn(cdp, "GameBanana file manager");
-        const fileManagerInfo = await pageInfo(cdp);
-        console.log(`GameBanana file manager is ready; file inputs found: ${fileManagerInfo.fileInputs.length}`);
+        await waitForGameBananaMedia(cdp);
+        const rows = await getGameBananaMediaRows(cdp);
+        console.log(`GameBanana Media is ready; visible file rows: ${rows.length}.`);
+        await navigate(cdp, gamebanana.updatePageUrl);
+        await ensureLoggedIn(cdp, "GameBanana updates");
+        console.log("GameBanana Updates page is ready; dry run will not open or save Add Update.");
         return;
     }
 
-    await waitForUser("第 1 步：在 GameBanana 窗口打开 Add Update，填写 changelog 并提交 update。提交完成后回到这里按回车。");
-
-    await navigate(cdp, gamebanana.fileManagerUrl);
-    await ensureLoggedIn(cdp, "GameBanana file manager");
-    const fileManagerInfo = await pageInfo(cdp);
-    console.log("GameBanana file manager is ready.");
-    console.log(`File inputs found: ${fileManagerInfo.fileInputs.length}`);
-    await waitForUser("第 2 步：在文件管理页确认上传区域已显示，然后按回车选择新文件。");
-    if (!await chooseFiles(cdp, gamebanana.filePaths)) {
-        throw new Error("Could not find a GameBanana file input. Leave the file manager open and run the command again.");
+    let targetRows = await uploadGameBananaFiles(cdp, gamebanana);
+    await configureGameBananaMedia(cdp, gamebanana, targetRows);
+    if (reviewOnly) {
+        await waitForUser("Review-only：请在浏览器中检查 Media 文件、版本号和排序；脚本不会点击 Save。检查完成后按回车退出。");
+        return;
     }
-    console.log("Files selected in GameBanana. Wait for all uploads to finish in the browser.");
-    await waitForUser("确认所有新文件上传完成后，把它们拖到文件列表顶部；完成后按回车结束。");
+    const savedRows = await saveGameBananaMedia(cdp, gamebanana);
+    targetRows = gamebanana.filePaths.map((filePath) => findGameBananaMediaRow(savedRows, filePath));
+    if (targetRows.some((row) => !row)) {
+        throw new Error("Could not re-identify GameBanana files after Media save");
+    }
+
+    await navigate(cdp, gamebanana.updatePageUrl);
+    await ensureLoggedIn(cdp, "GameBanana updates");
+    await openGameBananaUpdateForm(cdp);
+    await setGameBananaUpdateFields(cdp, gamebanana, targetRows);
+    await saveGameBananaUpdate(cdp, gamebanana);
 }
 
 async function main() {
@@ -584,7 +1355,7 @@ async function main() {
     if (options.dryRun) console.log("Dry run: no local file will be selected and no upload will be triggered.");
     const browser = await launchChrome();
     const cdp = new CdpConnection(browser.target.webSocketDebuggerUrl);
-    let keepBrowser = options.keepBrowser;
+    let keepBrowser = options.keepBrowser || options.reviewOnly;
     try {
         await cdp.call("Page.enable");
         await cdp.call("Runtime.enable");
@@ -596,12 +1367,52 @@ async function main() {
             if (needsGameBanana) await initializeLogin(cdp, "gamebanana");
             console.log("Manual login setup finished. No files were selected or uploaded.");
         } else if (needsGameJolt) {
+            let newGameJoltRelease = null;
+            let checkedNewGameJoltRelease = false;
             for (const build of gamejoltBuilds) {
-                await uploadGameJoltBuild(cdp, build, options.dryRun);
+                if (build.releaseId === "new") {
+                    if (options.dryRun) {
+                        if (!checkedNewGameJoltRelease) {
+                            await createGameJoltRelease(cdp, build, true);
+                            checkedNewGameJoltRelease = true;
+                        }
+                        console.log(`Dry run: a new Game Jolt release would receive ${displayPath(build.filePath)}.`);
+                        continue;
+                    }
+                    if (!newGameJoltRelease) {
+                        newGameJoltRelease = await createGameJoltRelease(cdp, build, false);
+                    }
+                    if (build.skipUpload) {
+                        throw new Error('gamejolt.builds cannot use skip_upload with release_id "new"');
+                    }
+                    await uploadGameJoltBuild(cdp, {
+                        ...build,
+                        releaseId: newGameJoltRelease.releaseId,
+                        pageUrl: newGameJoltRelease.pageUrl
+                    }, false);
+                    if (!checkedNewGameJoltRelease) {
+                        await saveGameJoltVersion(cdp, build.versionNumber);
+                        checkedNewGameJoltRelease = true;
+                    }
+                } else {
+                    if (build.skipUpload) {
+                        if (options.dryRun) {
+                            console.log(`Dry run: would configure existing Game Jolt build ${displayPath(build.filePath)} without uploading.`);
+                        } else {
+                            await prepareExistingGameJoltBuild(cdp, build);
+                        }
+                    } else {
+                        await uploadGameJoltBuild(cdp, build, options.dryRun);
+                    }
+                    if (!options.dryRun && build.updateVersion && !checkedNewGameJoltRelease) {
+                        await saveGameJoltVersion(cdp, build.versionNumber);
+                        checkedNewGameJoltRelease = true;
+                    }
+                }
             }
         }
         if (!options.login && needsGameBanana) {
-            await assistGameBanana(cdp, gamebanana, options.dryRun);
+            await assistGameBanana(cdp, gamebanana, options.dryRun, options.reviewOnly);
         }
         console.log("Publishing workflow finished.");
     } finally {
