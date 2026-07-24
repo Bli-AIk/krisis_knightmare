@@ -11,3 +11,6 @@
 	path = .emacs
 	url = https://github.com/Bli-AIk/kristal-emacs-config.git
 	branch = stable/lua
+[submodule "libraries/terminal-cli"]
+	path = libraries/terminal-cli
+	url = https://github.com/Bli-AIk/kristal-terminal-cli.git
