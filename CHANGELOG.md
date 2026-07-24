@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.2...v1.1.0) (2026-07-24)
+
+
+### Features
+
+* 完善发布流程自动化 ([46ed221](https://github.com/Bli-AIk/krisis_knightmare/commit/46ed2218f876a0be93d60ca9d2009d7b325bba25))
+
 ## [1.0.2](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.1...v1.0.2) (2026-07-21)
 
 
