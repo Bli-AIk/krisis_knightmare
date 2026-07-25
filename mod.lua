@@ -34,6 +34,16 @@ end
 
 ensureLocalizationFallbacks()
 
+local function hookFrozenEnemyText()
+    HookSystem.hook(Interactable, "onInteract", function(orig, self, ...)
+        if type(self.text) == "table" and self.text[1] == "* (It's frozen solid...)" then
+            self.text_id = self.text_id or {}
+            self.text_id[1] = "frozen_enemy_text"
+        end
+        return orig(self, ...)
+    end)
+end
+
 local function loc(default, id, var)
     ensureLocalizationFallbacks()
     if Game and Game.loc then
@@ -1863,6 +1873,7 @@ function Mod:getKrisisRunWaveOptions()
 end
 
 function Mod:init()
+    hookFrozenEnemyText()
     -- Kristal keeps custom fields on the global object when returning to the
     -- title screen, so clear a previous resume entry before reading options.
     self:clearTemporaryDefaultBattleEntry()
