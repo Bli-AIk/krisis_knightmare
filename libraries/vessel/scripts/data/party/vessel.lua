@@ -92,7 +92,7 @@ function character:drawPowerStat(index, x, y, menu)
     if index == 3 then
         local icon = Assets.getTexture("ui/menu/icon/fire")
         Draw.draw(icon, x - 26, y + 6, 0, 2, 2)
-        love.graphics.print("Guts:", x, y)
+        love.graphics.print(Game:loc("Guts:", "guts_stat"), x, y)
         Draw.draw(icon, x + 90, y + 6, 0, 2, 2)
         return true
     end

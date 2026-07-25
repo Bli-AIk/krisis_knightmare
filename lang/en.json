@@ -49,6 +49,7 @@
     "chara_vessel_name": "Vessel",
     "chara_vessel_title_chapter_4": "Dark Hero\nCarries out fate\nwith the blade.",
     "chara_vessel_xactName": "V-Action",
+    "guts_stat": "Guts:",
 
     "item_emerfood_name": "Emerfood",
     "item_emerfood_effect": "Heals\n80%HP",
@@ -73,6 +74,7 @@
 
     "actor_kris_name": "[name:actor:kris]",
     "enemy_kris_name": "[name:actor:kris]",
+    "enemy_kris_check_1": "?? ATK ??? DEF",
     "enemy_kris_mercy_finale_name": "",
     "enemy_kris_check_2": "Darkness grants them regeneration.[wait:5]\n* Transformed into a monster\nof pure aggressive instinct.",
     "enemy_kris_check_3": "Use your power to defeat them.",
