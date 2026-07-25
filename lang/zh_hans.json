@@ -1,6 +1,7 @@
 {
     "mod.loaded": "已加载 [var:name]！",
-    "mod.language_switched": "语言已切换至 [var:language]。",
+  "mod.language_switched": "语言已切换至 [var:language]。",
+  "frozen_enemy_text": "* （冻得很结实...）",
 
     "chapter_select.info_author": "TEAM KRISIS",
     "chapter_select.info_project": "KRISIS: KNIGHTMARE",
@@ -112,7 +113,7 @@
     "act_kris_heartbeat_repeat_text": "* 你的心跳加快了。",
 
     "update_check.current_version_label": "当前版本：[var:version]",
-    "update_check.checking": "正在检测新版本……",
+    "update_check.checking": "正在检测新版本......",
     "update_check.new_found_prefix": "发现新版本 ",
     "update_check.copy_prompt_left": "按 ",
     "update_check.copy_prompt_right": " 复制下载链接",
