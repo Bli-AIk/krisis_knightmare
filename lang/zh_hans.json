@@ -1,6 +1,6 @@
 {
-  "mod.loaded": "Loaded [var:name]!",
-  "mod.language_switched": "Language switched to [var:language].",
+  "mod.loaded": "已加载 [var:name]！",
+  "mod.language_switched": "语言已切换至 [var:language]。",
   "intro.chapter5_weird_ending": "第五章怪异线结尾",
   "intro.connection_lost": "连接已断开",
   "battle_prep.in_shelter": "在避难所里...",
