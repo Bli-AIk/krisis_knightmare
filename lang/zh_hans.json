@@ -26,8 +26,9 @@
     "chapter_select.kris_shortcut_return_right": " 返回章节选择",
 
     "chara_vessel_name": "容器",
-    "chara_vessel_title_chapter_4": "Dark Hero\nCarries out fate\nwith the blade.",
-    "chara_vessel_xactName": "V-行动",
+  "chara_vessel_title_chapter_4": "黑暗英雄\n以利刃\n践行命运。",
+  "chara_vessel_xactName": "V-行动",
+  "guts_stat": "胆量:",
 
     "item_emerfood_name": "应急食品",
     "item_emerfood_effect": "回复\n80%HP",
@@ -53,7 +54,7 @@
     "actor_kris_name": "[name:actor:kris]",
     "enemy_kris_name": "[name:actor:kris]",
     "enemy_kris_check_1": "?? ATK ??? DEF",
-    "enemy_kris_check_2": "黑暗给予其再生。\n[wait:5]* 化为了仅有攻击本能的怪物。",
+    "enemy_kris_check_2": "黑暗给予其再生。[wait:5]\n* 化为了仅有攻击本能的怪物。",
     "enemy_kris_check_3": "用你的力量将其击败。",
     "enemy_kris_turn_1": "* [name:chara:kris]执剑来袭。",
     "enemy_kris_turn_2": "* 肆意滋长的黑暗凝固在剑刃上。",
