@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.0](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.2...v1.1.0) (2026-07-26)
+
+
+### Features
+
+* 完善发布流程自动化 ([46ed221](https://github.com/Bli-AIk/krisis_knightmare/commit/46ed2218f876a0be93d60ca9d2009d7b325bba25))
+
+
+### Bug Fixes
+
+* **i18n:** align reference translations ([2be9dc3](https://github.com/Bli-AIk/krisis_knightmare/commit/2be9dc301cfd07e433c24bd235df8489321f1a5d))
+* 修复物品中文翻译加载时序 ([dfd6e03](https://github.com/Bli-AIk/krisis_knightmare/commit/dfd6e038b34154e320e00a18312b05ae329bba34))
+* 修正中文翻译文本 ([fd5288e](https://github.com/Bli-AIk/krisis_knightmare/commit/fd5288ee37f2765c8f72464126d44c352361c049))
+* 修正中文翻译文本 ([da0426f](https://github.com/Bli-AIk/krisis_knightmare/commit/da0426f18d43c8119dbec2a970848effe39b276d))
+* 修正中文翻译文本 ([78e0a6e](https://github.com/Bli-AIk/krisis_knightmare/commit/78e0a6e2bd61ac61e8b04e9ecc59bb30e5e1bee2))
+* 修正中文翻译文本 ([0725b1d](https://github.com/Bli-AIk/krisis_knightmare/commit/0725b1d2d7486b90c99bd27fbabd751da45fd30e))
+
 ## [1.0.2](https://github.com/Bli-AIk/krisis_knightmare/compare/v1.0.1...v1.0.2) (2026-07-21)
 
 
